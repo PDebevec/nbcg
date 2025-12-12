@@ -5,118 +5,159 @@ set -euo pipefail
 # Ensure requirements
 ########################################
 command -v git >/dev/null 2>&1 || { echo "Git not installed"; exit 1; }
-command -v docker >/dev/null 2>&1 || { echo "docker not installed"; exit 1; }
-command -v node >/dev/null 2>&1 || { echo "node not installed"; exit 1; }
+command -v docker >/dev/null 2>&1 || { echo "Docker not installed"; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "Node not installed"; exit 1; }
 command -v npm >/dev/null 2>&1 || { echo "npm not installed"; exit 1; }
-
+command -v npx >/dev/null 2>&1 || { echo "npx not installed"; exit 1; }
 
 ########################################
-# INSTALL custom command for run.sh
+# Parse arguments
 ########################################
-cmd_name="${1:-}"
-action="${2:-install}"
-env="${3:-dev}"  # optional third argument: 'dev' (default) or 'prod'
-
-if [ -z "$cmd_name" ]; then
+if [ $# -lt 1 ]; then
     echo "Usage:"
-    echo "  $0 <command-name> [rm] [dev|prod]"
+    echo "  $0 <dev|prod> [command]         # initialize + install command"
+    echo "  $0 rm <command>                 # remove installed command"
     exit 1
 fi
 
-wrapper="$HOME/.local/bin/$cmd_name"
-project_dir="$(pwd)"
-run_script="$project_dir/run.sh"
+MODE="$1"
+CMD="${2:-}"
 
-# Check if the command already exists
-if [ -f "$wrapper" ]; then
-    # Read the environment baked in
-    EXISTING_ENV=$(grep -oP '(?<=NDCG_COMPOSE_FILE=").*' "$wrapper" | grep -oP '(?<=docker-compose).*\.yml' || echo "")
-    if [[ "$EXISTING_ENV" == *"prod"* ]]; then
-        EXISTING_ENV="prod"
+ENV_FILE=".env.environment"
+PROJECT_DIR="$(pwd)"
+RUN_SCRIPT="$PROJECT_DIR/run.sh"
+
+DOCKER_DIR="./docker"
+VOLUME_DIR="$DOCKER_DIR/volumes"
+
+########################################
+# Command uninstallation
+########################################
+if [ "$MODE" = "rm" ]; then
+    if [ -z "$CMD" ]; then
+        echo "Error: rm requires a command name."
+        echo "Usage: $0 rm <command>"
+        exit 1
+    fi
+
+    WRAPPER="$HOME/.local/bin/$CMD"
+
+    if [ -f "$WRAPPER" ]; then
+        rm -f "$WRAPPER"
+        echo "Removed command '$CMD'."
     else
-        EXISTING_ENV="dev"
+        echo "Command '$CMD' not found; nothing to remove."
     fi
 
-    if [ "$action" != "rm" ]; then
-        if [ "$EXISTING_ENV" = "$env" ]; then
-            echo "Command '$cmd_name' is already installed with environment '$env'. Nothing to do."
-            exit 1
-        else
-            echo "Error: Command '$cmd_name' already exists with environment '$EXISTING_ENV'. Cannot install with environment '$env'."
-            exit 1
-        fi
-    fi
-fi
-
-########################################
-# Ensure ~/.local/bin exists
-########################################
-mkdir -p "$HOME/.local/bin"
-
-########################################
-# Ensure ~/.local/bin is in PATH
-########################################
-if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    SHELL_RC=""
-    if [ -n "${BASH_VERSION:-}" ]; then
-        SHELL_RC="$HOME/.bashrc"
-    elif [ -n "${ZSH_VERSION:-}" ]; then
-        SHELL_RC="$HOME/.zshrc"
-    fi
-
-    if [ -n "$SHELL_RC" ]; then
-        echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$SHELL_RC"
-        export PATH="$HOME/.local/bin:$PATH"
-    else
-        echo "Warning: Could not detect shell rc file. Add ~/.local/bin to PATH manually."
-    fi
-fi
-
-########################################
-# Uninstall (remove command)
-########################################
-if [ "$action" = "rm" ]; then
-    if [ -f "$wrapper" ]; then
-        rm -f "$wrapper"
-        echo "Removed command '$cmd_name' from ~/.local/bin"
-    else
-        echo "Command '$cmd_name' does not exist, nothing to remove."
-    fi
     exit 0
 fi
 
 ########################################
-# Install
+# Validate environment mode
 ########################################
-if [ ! -f "$run_script" ]; then
-    echo "Error: run.sh not found in $project_dir"
+if [[ "$MODE" != "dev" && "$MODE" != "prod" ]]; then
+    echo "Error: environment must be 'dev' or 'prod'."
     exit 1
 fi
 
-# Create wrapper with environment baked in
-cat > "$wrapper" <<EOF
-#!/usr/bin/env bash
-# Default docker compose files
-COMPOSE_DIR="\$(dirname "$run_script")/docker"
-COMPOSE_DEV="\$COMPOSE_DIR/docker-compose.yml"
-COMPOSE_PROD="\$COMPOSE_DIR/docker-compose.prod.yml"
+########################################
+# Prevent double initialization
+########################################
+if [ -f "$ENV_FILE" ]; then
+    EXISTING_ENV=$(cat "$ENV_FILE")
 
-# Select compose file based on environment
-if [ "$env" = "prod" ]; then
-    SELECTED_COMPOSE="\$COMPOSE_PROD"
+    if [ "$EXISTING_ENV" != "$MODE" ]; then
+        echo "ERROR: already initialized for '$EXISTING_ENV'."
+        echo "Cannot reinitialize as '$MODE'. Delete $ENV_FILE to force."
+        exit 1
+    fi
 else
-    SELECTED_COMPOSE="\$COMPOSE_DEV"
+    echo "$MODE" > "$ENV_FILE"
+    mkdir -p "$VOLUME_DIR"
+    echo "Environment '$MODE' initialized."
 fi
 
-# Run the main run.sh with the selected compose file baked in
-export NDCG_COMPOSE_FILE="\$SELECTED_COMPOSE"
+########################################
+# Optional: install command
+########################################
+if [ -n "$CMD" ]; then
+    WRAPPER="$HOME/.local/bin/$CMD"
 
-exec "$run_script" "\$@"
+    # Ensure directory exists
+    mkdir -p "$HOME/.local/bin"
+
+    # Add PATH if needed
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        if [ -n "${BASH_VERSION:-}" ]; then
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+        elif [ -n "${ZSH_VERSION:-}" ]; then
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
+        fi
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
+
+    # Prevent overwrite with different environment
+    if [ -f "$WRAPPER" ]; then
+        BAKED_ENV=$(grep -oP '(?<=NDCG_ENV=").*?(?=")' "$WRAPPER" || echo "")
+
+        if [ "$BAKED_ENV" != "$MODE" ]; then
+            echo "Error: command already installed for '$BAKED_ENV'."
+            exit 1
+        else
+            echo "Command '$CMD' already installed for '$MODE'. Nothing to do."
+            exit 0
+        fi
+    fi
+
+    ########################################
+    # Install
+    ########################################
+    if [ ! -f "$RUN_SCRIPT" ]; then
+        echo "Error: run.sh not found in $PROJECT_DIR"
+        exit 1
+    fi
+
+    ########################################
+    # Install frontend + backend dependencies
+    ########################################
+    
+    ########## FRONTEND ##########
+    FRONTEND_DIR="$PROJECT_DIR/frontend"
+
+    if [ -d "$FRONTEND_DIR" ]; then
+        echo "Installing frontend dependencies..."
+        ( cd "$FRONTEND_DIR" && npm install )
+
+        if [ "$MODE" = "prod" ]; then
+            echo "Building frontend for production..."
+            ( cd "$FRONTEND_DIR" && npx quasar build )
+        else
+            echo "Frontend initialized for development environment (no build)."
+        fi
+    else
+        echo "Error: frontend directory not found."
+        exit 1
+    fi
+
+    ####### backedn npm install in kar koli druzga je treba se
+    # # # # if [ -d "$project_dir/backend" ]; then
+    # # # #     echo "Installing backend dependencies..."
+    # # # #     ( cd "$project_dir/backend" && npm install )
+    # # # # else
+    # # # #     echo "Warning: backend directory not found — skipping npm install"
+    # # # # fi
+
+    ########################################
+    # Create wrapper
+    ########################################
+    cat > "$WRAPPER" <<EOF
+#!/usr/bin/env bash
+export NDCG_ENV="$MODE"
+exec "$RUN_SCRIPT" "\$@"
 EOF
 
-chmod +x "$wrapper"
+    chmod +x "$WRAPPER"
+    echo "Installed command '$CMD' (env=$MODE)"
+fi
 
-echo "Installed command '$cmd_name' — it runs:"
-echo "  $run_script"
-echo "Environment: $env"
-echo "You can now run '$cmd_name' from anywhere."
+echo "Initialization complete."
