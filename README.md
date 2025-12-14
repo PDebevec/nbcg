@@ -18,12 +18,12 @@ Digital Library for National Library of Montenegro "Đurđe Crnojević"
 
 ```./run.sh```
 
-## Start Developemnt
+## Start Development
 1. initalize
 
 ```./init.sh dev nbcg```
 
-3. create / install dockers & npm packages
+3. create / install docker containers & npm packages
 
 ```nbcg create```
 
