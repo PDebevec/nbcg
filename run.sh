@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ensure at least one argument
+########################################
+# Validate args
+########################################
 if [ $# -lt 1 ]; then
     echo "Usage: $0 <action>"
-    echo "Actions: create, start, stop, restart, clean, env"
+    echo ""
+    echo "Docker actions:  create, start, stop, restart, clean"
+    echo "Environment:     env"
     exit 1
 fi
 
 ACTION="$1"
 
-# Determine the compose file from environment variable
+########################################
+# Resolve environment & compose file
+########################################
+# If wrapper didn't set NDCG_COMPOSE_FILE, fallback to dev
 if [ -z "${NDCG_COMPOSE_FILE:-}" ]; then
-    # Fallback if the wrapper didn't set it
     DOCKER_DIR="$(dirname "$0")/docker"
     NDCG_COMPOSE_FILE="$DOCKER_DIR/docker-compose.yml"
 fi
@@ -22,74 +28,142 @@ if [ ! -f "$NDCG_COMPOSE_FILE" ]; then
     exit 1
 fi
 
-# Environment check
+# Determine environment from compose file
+ENV="dev"
+if [[ "$(basename "$NDCG_COMPOSE_FILE")" == *prod* ]]; then
+    ENV="prod"
+fi
+
+########################################
+# Environment info
+########################################
 if [ "$ACTION" = "env" ]; then
-    BASENAME=$(basename "$NDCG_COMPOSE_FILE")
-    if [[ "$BASENAME" == *"prod"* ]]; then
-        echo "Current environment: prod"
-    else
-        echo "Current environment: dev"
-    fi
+    echo "Current environment: $ENV"
     exit 0
 fi
 
-# Run docker-compose commands from the compose file's directory
+########################################
+# Switch to docker directory
+########################################
 DOCKER_DIR="$(dirname "$NDCG_COMPOSE_FILE")"
 pushd "$DOCKER_DIR" >/dev/null
 
-########################################
-# Section 1: Create containers
-########################################
-if [ "$ACTION" = "create" ]; then
-    echo "Building and creating containers using $(basename "$NDCG_COMPOSE_FILE")..."
-    docker compose -f "$NDCG_COMPOSE_FILE" create
-    popd >/dev/null
-    exit 0
-fi
+echo "Using compose file: $(basename "$NDCG_COMPOSE_FILE")"
 
-########################################
-# Section 2: Start containers
-########################################
-if [ "$ACTION" = "start" ]; then
-    echo "Starting containers using $(basename "$NDCG_COMPOSE_FILE")..."
-    docker compose -f "$NDCG_COMPOSE_FILE" start
-    popd >/dev/null
-    exit 0
-fi
+############################################################
+# DOCKER + FRONTEND ACTIONS
+############################################################
+FRONTEND_DIR="../frontend"
+BACKEND_DIR="../backend"
 
-########################################
-# Section 3: Stop containers
-########################################
-if [ "$ACTION" = "stop" ]; then
-    echo "Stopping containers using $(basename "$NDCG_COMPOSE_FILE")..."
-    docker compose -f "$NDCG_COMPOSE_FILE" stop
-    popd >/dev/null
-    exit 0
-fi
+case "$ACTION" in
 
-########################################
-# Section 4: Restart containers
-########################################
-if [ "$ACTION" = "restart" ]; then
-    echo "Restarting containers using $(basename "$NDCG_COMPOSE_FILE")..."
-    docker compose -f "$NDCG_COMPOSE_FILE" restart
-    popd >/dev/null
-    exit 0
-fi
+    create)
+        echo "Creating & building Docker containers..."
+        docker compose -f "$NDCG_COMPOSE_FILE" create
 
-########################################
-# Section 5: Clean everything
-########################################
-if [ "$ACTION" = "clean" ]; then
-    echo "Stopping containers and removing all volumes using $(basename "$NDCG_COMPOSE_FILE")..."
-    docker compose -f "$NDCG_COMPOSE_FILE" down -v --remove-orphans
-    popd >/dev/null
-    echo "All containers, volumes, and orphaned data removed."
-    exit 0
-fi
+        if [ "$ENV" = "prod" ]; then
+            echo "Building frontend..."
+            pushd "$FRONTEND_DIR" >/dev/null
+            npx quasar build || true
+            popd >/dev/null
+
+            echo "Building backend..."
+            pushd "$BACKEND_DIR" >/dev/null
+            npm run build || true
+            popd >/dev/null
+        fi
+
+        ;;
+
+    start)
+        echo "Starting Docker containers..."
+        docker compose -f "$NDCG_COMPOSE_FILE" start
+
+        if [ "$ENV" = "dev" ]; then
+            echo "Starting frontend (Quasar dev) using PM2..."
+            pushd "$FRONTEND_DIR" >/dev/null
+            pm2 start frontend || {
+                pm2 start "npx quasar dev" --name frontend
+            } || true
+            popd >/dev/null
+
+            pushd "$BACKEND_DIR" >/dev/null
+            pm2 start backend || {
+                pm2 start "node ./dist/index.js" --name backend
+            } || true
+            popd >/dev/null
+        fi
+
+        ;;
+
+    stop)
+        echo "Stopping Docker containers..."
+        docker compose -f "$NDCG_COMPOSE_FILE" stop
+
+        if [ "$ENV" = "dev" ]; then
+            echo "Stopping frontend (PM2 Quasar)..."
+            pushd "$FRONTEND_DIR" >/dev/null
+            pm2 stop frontend 2>/dev/null || echo "Frontend not running"
+            popd >/dev/null
+
+            pushd "$BACKEND_DIR" >/dev/null
+            pm2 stop backend || echo "Backend not running"
+            popd >/dev/null
+        fi
+
+        ;;
+
+    restart)
+        echo "Restarting Docker containers..."
+        docker compose -f "$NDCG_COMPOSE_FILE" restart
+
+        if [ "$ENV" = "dev" ]; then
+            echo "Restarting frontend (PM2 Quasar)..."
+            pm2 restart quasar-dev 2>/dev/null || {
+                echo "Frontend was not running — starting it now"
+                pushd "$FRONTEND_DIR" >/dev/null
+                pm2 start "npx quasar dev" --name quasar-dev
+                popd >/dev/null
+            }
+
+            pm2 restart backend 2>/dev/null || {
+                echo "Backend was not running — starting it now"
+                pushd "$BACKEND_DIR" >/dev/null
+                pm2 start "node ./dist/index.js" --name quasar-dev
+                popd >/dev/null
+            }
+        fi
+
+        ;;
+
+    clean)
+        echo "Removing Docker containers, volumes & orphans..."
+        docker compose -f "$NDCG_COMPOSE_FILE" down -v --remove-orphans
+        echo "Docker environment fully cleaned."
+
+        if [ "$ENV" = "dev" ]; then
+            echo "Stopping frontend (PM2 Quasar)..."
+            pushd "$FRONTEND_DIR" >/dev/null
+            pm2 stop frontend 2>/dev/null || echo "Frontend not running"
+            pm2 delete frontend 2>/dev/null || true
+            popd >/dev/null
+
+            echo "Stopping frontend (PM2 Quasar)..."
+            pushd "$BACKEND_DIR" >/dev/null
+            pm2 stop backend 2>/dev/null || echo "Frontend not running"
+            pm2 delete backend 2>/dev/null || true
+            popd >/dev/null
+        fi
+
+        ;;
+
+    *)
+        echo "Unknown action: $ACTION"
+        echo "Valid docker actions: create, start, stop, restart, clean, env"
+        exit 1
+        ;;
+esac
 
 popd >/dev/null
-# Unknown action
-echo "Unknown action: $ACTION"
-echo "Valid actions: create, start, stop, restart, clean, env"
-exit 1
+exit 0
