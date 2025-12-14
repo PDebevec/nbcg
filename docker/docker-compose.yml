@@ -158,28 +158,6 @@ services:
     networks:
       - docker-net
 
-##### BACKEND #####
-  backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
-    container_name: backend
-    restart: unless-stopped
-
-    env_file:
-      - ./.env
-
-    ports:
-      - "3000:3000" # remove later when nginx is wired
-
-    depends_on:
-      - db
-      - minio
-      - keycloak
-
-    networks:
-      - docker-net
-
 ##### volumes
 volumes:
   nginx_data:

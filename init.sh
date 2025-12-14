@@ -17,6 +17,7 @@ if [ $# -lt 1 ]; then
     echo "Usage:"
     echo "  $0 <dev|prod> [command]         # initialize + install command"
     echo "  $0 rm <command>                 # remove installed command"
+    echo ""
     exit 1
 fi
 
@@ -121,31 +122,24 @@ if [ -n "$CMD" ]; then
     # Install frontend + backend dependencies
     ########################################
     
+    ########## PM2 ##########
+    npm i -g pm2 || exit 1 
+
     ########## FRONTEND ##########
     FRONTEND_DIR="$PROJECT_DIR/frontend"
+    BACKEND_DIR="$PROJECT_DIR/backend"
 
     if [ -d "$FRONTEND_DIR" ]; then
         echo "Installing frontend dependencies..."
         ( cd "$FRONTEND_DIR" && npm install )
 
-        if [ "$MODE" = "prod" ]; then
-            echo "Building frontend for production..."
-            ( cd "$FRONTEND_DIR" && npx quasar build )
-        else
-            echo "Frontend initialized for development environment (no build)."
-        fi
+        echo "Installing backend dependencies..."
+        ( cd "$BACKEND_DIR" && npm install )
+
     else
         echo "Error: frontend directory not found."
         exit 1
     fi
-
-    ####### backedn npm install in kar koli druzga je treba se
-    # # # # if [ -d "$project_dir/backend" ]; then
-    # # # #     echo "Installing backend dependencies..."
-    # # # #     ( cd "$project_dir/backend" && npm install )
-    # # # # else
-    # # # #     echo "Warning: backend directory not found — skipping npm install"
-    # # # # fi
 
     ########################################
     # Create wrapper

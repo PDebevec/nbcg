@@ -2,44 +2,6 @@
 set -euo pipefail
 
 ########################################
-# Validate project directory structure
-########################################
-
-PROJECT_ROOT="$(dirname "$(realpath "$0")")"
-
-cd "$PROJECT_ROOT"
-
-# Required files
-REQUIRED_FILES=(
-    "run.sh"
-    ".env.environment"
-)
-
-# Required directories
-REQUIRED_DIRS=(
-    "docker"
-    "frontend"
-)
-
-# Check files
-for file in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "$PROJECT_ROOT/$file" ]; then
-        echo "ERROR: Required file missing: $file"
-        echo "Make sure you are running this script from the project root."
-        exit 1
-    fi
-done
-
-# Check directories
-for dir in "${REQUIRED_DIRS[@]}"; do
-    if [ ! -d "$PROJECT_ROOT/$dir" ]; then
-        echo "ERROR: Required directory missing: $dir/"
-        echo "Make sure you are running this script from the project root."
-        exit 1
-    fi
-done
-
-########################################
 # Validate args
 ########################################
 if [ $# -lt 1 ]; then
@@ -92,12 +54,26 @@ echo "Using compose file: $(basename "$NDCG_COMPOSE_FILE")"
 # DOCKER + FRONTEND ACTIONS
 ############################################################
 FRONTEND_DIR="../frontend"
+BACKEND_DIR="../backend"
 
 case "$ACTION" in
 
     create)
         echo "Creating & building Docker containers..."
         docker compose -f "$NDCG_COMPOSE_FILE" create
+
+        if [ "$ENV" = "prod" ]; then
+            echo "Building frontend..."
+            pushd "$FRONTEND_DIR" >/dev/null
+            npx quasar build || true
+            popd >/dev/null
+
+            echo "Building backend..."
+            pushd "$BACKEND_DIR" >/dev/null
+            npm run build || true
+            popd >/dev/null
+        fi
+
         ;;
 
     start)
@@ -107,12 +83,18 @@ case "$ACTION" in
         if [ "$ENV" = "dev" ]; then
             echo "Starting frontend (Quasar dev) using PM2..."
             pushd "$FRONTEND_DIR" >/dev/null
+            pm2 start frontend || {
+                pm2 start "npx quasar dev" --name frontend
+            } || true
+            popd >/dev/null
 
-            # Start Quasar dev in background under PM2
-            pm2 start "npx quasar dev" --name quasar-dev || true
-
+            pushd "$BACKEND_DIR" >/dev/null
+            pm2 start backend || {
+                pm2 start "node ./dist/index.js" --name backend
+            } || true
             popd >/dev/null
         fi
+
         ;;
 
     stop)
@@ -122,9 +104,14 @@ case "$ACTION" in
         if [ "$ENV" = "dev" ]; then
             echo "Stopping frontend (PM2 Quasar)..."
             pushd "$FRONTEND_DIR" >/dev/null
-            pm2 stop quasar-dev 2>/dev/null || echo "Frontend not running"
+            pm2 stop frontend 2>/dev/null || echo "Frontend not running"
+            popd >/dev/null
+
+            pushd "$BACKEND_DIR" >/dev/null
+            pm2 stop backend || echo "Backend not running"
             popd >/dev/null
         fi
+
         ;;
 
     restart)
@@ -139,7 +126,15 @@ case "$ACTION" in
                 pm2 start "npx quasar dev" --name quasar-dev
                 popd >/dev/null
             }
+
+            pm2 restart backend 2>/dev/null || {
+                echo "Backend was not running — starting it now"
+                pushd "$BACKEND_DIR" >/dev/null
+                pm2 start "node ./dist/index.js" --name quasar-dev
+                popd >/dev/null
+            }
         fi
+
         ;;
 
     clean)
@@ -150,10 +145,17 @@ case "$ACTION" in
         if [ "$ENV" = "dev" ]; then
             echo "Stopping frontend (PM2 Quasar)..."
             pushd "$FRONTEND_DIR" >/dev/null
-            pm2 stop quasar-dev 2>/dev/null || echo "Frontend not running"
-            pm2 delete quasar-dev 2>/dev/null || true
+            pm2 stop frontend 2>/dev/null || echo "Frontend not running"
+            pm2 delete frontend 2>/dev/null || true
+            popd >/dev/null
+
+            echo "Stopping frontend (PM2 Quasar)..."
+            pushd "$BACKEND_DIR" >/dev/null
+            pm2 stop backend 2>/dev/null || echo "Frontend not running"
+            pm2 delete backend 2>/dev/null || true
             popd >/dev/null
         fi
+
         ;;
 
     *)
