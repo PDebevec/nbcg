@@ -1,14 +1,18 @@
-FROM node:20-alpine
+FROM node:20
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 
-RUN npm run build
+# Generate Prisma client
+RUN npx prisma generate
+
+# Push schema to DB (creates tables without migrations; use 'migrate dev' for dev with history)
+RUN npx prisma db push --accept-data-loss
 
 EXPOSE 3000
 
-CMD ["node", "dist/index.js"]
+CMD ["npm", "start"]

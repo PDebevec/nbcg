@@ -1,0 +1,190 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "./prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum VisibilityStatus {
+  PUBLIC
+  PRIVATE
+  HIDDEN
+}
+
+enum WorkflowStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+}
+
+model Record {
+  id               String            @id @default(cuid())
+  externalId       String?           @unique
+  title            String
+  subtitle         String?
+  publicationYear  Int?
+  publisher        String?
+  recordTypeId     String
+  visibilityStatus VisibilityStatus
+  workflowStatus   WorkflowStatus
+  searchText       String?
+  metadata         Json?
+  sourceMetadata   Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  recordType       RecordType        @relation(fields: [recordTypeId], references: [id])
+  recordAuthors    RecordAuthor[]
+  recordCollections RecordCollection[]
+  recordLanguages  RecordLanguage[]
+  fileAssets       FileAsset[]
+
+  @@map("records")
+}
+
+model RecordType {
+  id    String  @id @default(cuid())
+  code  String  @unique
+  label String
+
+  records Record[]
+
+  @@map("record_types")
+}
+
+model Author {
+  id         String   @id @default(cuid())
+  fullName   String
+  familyName String?
+  givenName  String?
+  type       String   // PERSON or ORGANIZATION
+
+  recordAuthors RecordAuthor[]
+
+  @@map("authors")
+}
+
+model RecordAuthor {
+  recordId String
+  authorId String
+  role     String?
+
+  record Record @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  author Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@id([recordId, authorId])
+  @@map("record_authors")
+}
+
+model Collection {
+  id               String              @id @default(cuid())
+  title            String
+  description      String?
+  metadata         Json?
+  visibilityStatus VisibilityStatus
+  createdAt        DateTime            @default(now())
+
+  parentRelations  CollectionRelation[] @relation("ParentCollection")
+  childRelations   CollectionRelation[] @relation("ChildCollection")
+  recordCollections RecordCollection[]
+
+  @@map("collections")
+}
+
+model CollectionRelation {
+  parentCollectionId String
+  childCollectionId  String
+
+  parentCollection Collection @relation("ParentCollection", fields: [parentCollectionId], references: [id], onDelete: Cascade)
+  childCollection  Collection @relation("ChildCollection", fields: [childCollectionId], references: [id], onDelete: Cascade)
+
+  @@id([parentCollectionId, childCollectionId])
+  @@map("collection_relations")
+}
+
+model RecordCollection {
+  recordId    String
+  collectionId String
+
+  record    Record     @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@id([recordId, collectionId])
+  @@map("record_collections")
+}
+
+model FileAsset {
+  id               String   @id @default(cuid())
+  recordId         String
+  bucket           String
+  objectKey        String
+  mimeType         String
+  size             Int
+  originalFilename String
+  createdAt        DateTime @default(now())
+
+  record Record @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@map("file_assets")
+}
+
+model Language {
+  id    String @id @default(cuid())
+  code  String @unique
+  label String
+
+  recordLanguages RecordLanguage[]
+
+  @@map("languages")
+}
+
+model RecordLanguage {
+  recordId   String
+  languageId String
+
+  record   Record   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [languageId], references: [id], onDelete: Cascade)
+
+  @@id([recordId, languageId])
+  @@map("record_languages")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  userRoles UserRole[]
+
+  @@map("users")
+}
+
+model Role {
+  id   String @id @default(cuid())
+  name String @unique
+
+  userRoles UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
