@@ -1,0 +1,13 @@
+services:
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    # admin UI intentionally NOT exposed in prod
+
+  keycloak:
+    environment:
+      KC_HOSTNAME: auth.yourdomain.com
+      KC_PROXY: edge
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "true"

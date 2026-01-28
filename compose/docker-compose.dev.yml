@@ -1,0 +1,69 @@
+services:
+  nginx:
+    ports:
+      - "81:81"     # NPM admin UI
+
+  db:
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init_db:/docker-entrypoint-initdb.d:ro
+
+  pgadmin:
+    image: dpage/pgadmin4:9.11
+    restart: always
+
+    ports:
+      - "8888:80"
+
+    env_file:
+      - .env
+
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+
+    depends_on:
+      - db
+
+    networks:
+      - docker-net
+
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+
+  opensearch-node1:
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:3.4
+    depends_on:
+      - opensearch-node1
+      - opensearch-node2
+
+    ports:
+      - "5601:5601"
+
+    environment:
+      OPENSEARCH_HOSTS: '["https://opensearch-node1:9200","https://opensearch-node2:9200"]'
+
+    networks:
+      - docker-net
+
+
+  keycloak:
+    command: start-dev
+    ports:
+      - "8080:8080"
+    environment:
+      KC_HOSTNAME_STRICT: "false"
+
+
+volumes:
+  pgadmin_data:
