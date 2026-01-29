@@ -12,3 +12,23 @@ set -a
 . "$ENV_FILE"
 set +a
 
+if [ ! $STAGE = 1 ]; then
+  exit $STAGE
+fi
+
+docker compose -f docker-compose.yml -f compose/docker-compose.$ENV.yml create
+
+cd "$PWD/frontend"
+npm install
+cd ..
+
+cd "$PWD/backend"
+npm install
+cd ..
+
+STAGE=$(( ${STAGE:-0} + 1 ))
+
+tmp=$(mktemp)
+grep -v '^STAGE=' "$ENV_FILE" > "$tmp"
+echo "STAGE=$STAGE" >> "$tmp"
+mv "$tmp" "$ENV_FILE"

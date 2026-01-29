@@ -21,6 +21,10 @@ stop:
 restart:
 	./scripts/restart.sh
 
+########## STATUS ##########
+status:
+	./scripts/status.sh
+
 ########## DESTROY ##########
 destroy:
 	./scripts/destroy.sh

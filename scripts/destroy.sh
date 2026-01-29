@@ -12,17 +12,14 @@ set -a
 . "$ENV_FILE"
 set +a
 
-if [ $ENV == "prod" ]; then
-    docker compose -f compose/docker-compose.prod.yml stop
-    docker compose -f compose/docker-compose.prod.yml down -v --remove-orphans
-else
-    docker compose -f compose/docker-compose.prod.yml -f compose/docker-compose.dev.yml stop
-    docker compose -f compose/docker-compose.prod.yml -f compose/docker-compose.dev.yml down -v --remove-orphans
-fi
+docker system prune -f --volumes
+
+docker compose -f docker-compose.yml -f compose/docker-compose.$ENV.yml stop
+docker compose -f docker-compose.yml -f compose/docker-compose.$ENV.yml down -v --remove-orphans
 
 
 if [ -f "$PWD/.env" ]; then
     rm "$PWD/.env"
 
-    echo "No evironment!"
+    echo "evironment cleared"
 fi

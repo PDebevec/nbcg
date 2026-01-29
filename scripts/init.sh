@@ -15,14 +15,30 @@ command -v npx >/dev/null 2>&1 || { echo "npx not installed"; exit 1; }
 # command git pull >/dev/null 2>&1 || { echo "git pull errored"; exit 1; }
 
 if [ -f "$PWD/.env" ]; then
+    ENV_FILE="$PWD/.env"
+
+    if [ ! -f "$ENV_FILE" ]; then
+        echo "Missing $ENV_FILE"
+        exit 1
+    fi
+
+    set -a
+    . "$ENV_FILE"
+    set +a
+
+    if [ $STAGE  -gt 1 ]; then
+        echo 'Make destroy before making new environment'
+        exit 2
+    fi
+
     printf "This will override current ENVironment file! Continue? (Y/n): "
-    read confirm || exit 1
+    read confirm || exit 3
 
     case "${confirm:-}" in
         ""|y|Y)
             ;;
         *)
-            exit 1
+            exit 4
             ;;
     esac
 fi
@@ -37,7 +53,9 @@ if [ $1 == "dev" ]; then
 
     ##### DOCKER #####
     cat >> "$PWD/.env" <<EOF
-    
+
+STAGE=1
+
 ENV=dev
 EOF
 
@@ -48,6 +66,8 @@ elif [ $1 == "prod" ]; then
     ##### ENV #####
     cp "$PWD/env/.env.template" "$PWD/.env"
     cat >> "$PWD/.env" << EOF
+
+STAGE=1
 
 ENV=prod
 
@@ -60,19 +80,9 @@ MINIO_ROOT_PASSWORD=$(tr -dc 'A-Za-z0-9!?%=' < /dev/urandom | head -c 16)
 OPENSEARCH_INITIAL_ADMIN_PASSWORD=$(tr -dc 'A-Za-z0-9!?%=' < /dev/urandom | head -c 16)
 KEYCLOAK_PASSWORD=$(tr -dc 'A-Za-z0-9!?%=' < /dev/urandom | head -c 16)
 EOF
-
-    ##### DOCKER #####
-    cat >> "$PWD/.env" <<EOF
-    
-DOCKER_FILES=docker-compose.prod.yml
-EOF
     
 else
     echo "Incorrect environment specified or non given!"
 fi
 
-cd "$PWD/frontend"
-npm install
-
-cd "$PWD/backend"
-npm install
+git pull

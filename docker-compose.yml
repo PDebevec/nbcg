@@ -50,7 +50,7 @@ services:
 
   ##### OPENSEARCH NODE 1 #####
   opensearch-node1:
-    image: opensearchproject/opensearch:3.4
+    image: opensearchproject/opensearch:3.4.0
     restart: unless-stopped
 
     env_file:
@@ -81,7 +81,7 @@ services:
 
   ##### OPENSEARCH NODE 2 #####
   opensearch-node2:
-    image: opensearchproject/opensearch:3.4
+    image: opensearchproject/opensearch:3.4.0
     restart: unless-stopped
 
     env_file:

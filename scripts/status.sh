@@ -17,10 +17,4 @@ if [ ! $STAGE = 2 ]; then
     exit 2
 fi
 
-docker compose -f docker-compose.yml -f compose/docker-compose.$ENV.yml start
-
-##### FRONTEND #####
-
-
-##### BACKEND #####
-
+##### DOCKER #####
