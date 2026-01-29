@@ -18,8 +18,15 @@ docker compose -f docker-compose.yml -f compose/docker-compose.$ENV.yml stop
 docker compose -f docker-compose.yml -f compose/docker-compose.$ENV.yml down -v --remove-orphans
 
 
-if [ -f "$PWD/.env" ]; then
-    rm "$PWD/.env"
+STAGE=$(( ${STAGE:-0} - 1 ))
 
-    echo "evironment cleared"
-fi
+tmp=$(mktemp)
+grep -v '^STAGE=' "$ENV_FILE" > "$tmp"
+echo "STAGE=$STAGE" >> "$tmp"
+mv "$tmp" "$ENV_FILE"
+
+# if [ -f "$PWD/.env" ]; then
+#     rm "$PWD/.env"
+
+#     echo "evironment cleared"
+# fi

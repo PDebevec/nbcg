@@ -18,3 +18,4 @@ if [ ! $STAGE = 2 ]; then
 fi
 
 ##### DOCKER #####
+docker compose ps -a

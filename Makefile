@@ -28,3 +28,15 @@ status:
 ########## DESTROY ##########
 destroy:
 	./scripts/destroy.sh
+
+########## RELOAD ##########
+reload:
+	./scripts/destroy.sh
+	./scripts/create.sh
+	./scripts/start.sh
+
+########## QUICKSTART ##########
+qs:
+	./scripts/init.sh dev
+	./scripts/create.sh
+	./scripts/start.sh
