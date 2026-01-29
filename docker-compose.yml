@@ -121,7 +121,7 @@ services:
       POSTGRES_PASSWORD: ${KEYCLOAK_PASSWORD}
 
     volumes:
-      - keycloak_db_data:/var/lib/postgresql/data
+      - keycloak_db_data:/var/lib/postgresql
 
     networks:
       - docker-net
