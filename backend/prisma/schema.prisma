@@ -6,7 +6,7 @@
 
 generator client {
   provider = "prisma-client"
-  output   = "./prisma"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -40,6 +40,8 @@ model Record {
   sourceMetadata   Json?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  createdByUserId  String
+  updatedByUserId  String?
 
   recordType       RecordType        @relation(fields: [recordTypeId], references: [id])
   recordAuthors    RecordAuthor[]
@@ -155,36 +157,4 @@ model RecordLanguage {
 
   @@id([recordId, languageId])
   @@map("record_languages")
-}
-
-model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-
-  userRoles UserRole[]
-
-  @@map("users")
-}
-
-model Role {
-  id   String @id @default(cuid())
-  name String @unique
-
-  userRoles UserRole[]
-
-  @@map("roles")
-}
-
-model UserRole {
-  userId String
-  roleId String
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  @@id([userId, roleId])
-  @@map("user_roles")
 }
