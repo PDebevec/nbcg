@@ -9,24 +9,24 @@ Digital Library for National Library of Montenegro "Đurđe Crnojević"
 - PostgreSQL
 ### frontend
 - Vue.js
+- Quasar
 ### backend
 - Express.js
+- Prisma
 
 # Quick start
 
-```./init.sh```
-
-```./run.sh```
+```make qs```
 
 ## Start Development
 1. initalize
 
-```./init.sh dev nbcg```
+```make init```
 
 3. create / install docker containers & npm packages
 
-```nbcg create```
+```make create```
 
 3. start dockers, frontend and backend in dev environment
 
-```nbcg start```
+```make start```
