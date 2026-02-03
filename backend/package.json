@@ -27,6 +27,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
+    "@xmldom/xmldom": "^0.8.11",
     "jwks-rsa": "^3.2.2",
     "keycloak-connect": "^26.1.1",
     "passport": "^0.7.0",
