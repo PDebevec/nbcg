@@ -1,4 +1,4 @@
-import { fetchCobissRecord } from './cobiss/cobiss-fetch';
+import { fetchCobissRecord } from '../shared/cobiss/cobiss-fetch';
 
 async function main() {
   const cobissId = process.argv[2];
@@ -14,7 +14,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(JSON.stringify(result.recordJson, null, 2));
+  console.log(JSON.stringify(result, null, 2));
 }
 
 main();

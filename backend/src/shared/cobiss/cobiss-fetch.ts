@@ -1,5 +1,5 @@
 import { extractFirstRecordXml, recordXmlToJson } from './cobiss-parser';
-import { CobissFetchResult } from './cobiss.types';
+import { DomainRecord } from './cobiss.types';
 
 const COBISS_ENDPOINT =
   'https://ws.cobiss.net/sru_rest/search/COBCG';
@@ -25,7 +25,7 @@ async function safeFetch(url: string): Promise<{ contentType: string; body: stri
 
 export async function fetchCobissRecord(
   cobissId: number | string,
-): Promise<CobissFetchResult | null> {
+): Promise<DomainRecord | null> {
   const url =
     `${COBISS_ENDPOINT}?query=+ID = ${cobissId}` +
     '&operation=searchRetrieve' +
@@ -42,10 +42,5 @@ export async function fetchCobissRecord(
 
   const recordJson = recordXmlToJson(recordXml);
 
-  return {
-    contentType: response.contentType,
-    rawXml: response.body,
-    recordXml,
-    recordJson,
-  };
+  return recordJson;
 }

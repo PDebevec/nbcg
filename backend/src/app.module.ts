@@ -7,15 +7,16 @@ import { RolesGuard } from './auth/roles.guard';
 
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { ImportModule } from './modules/import/import.module';
 
 
 @Module({
-  imports: [AuthModule, HealthModule],
+  imports: [AuthModule, HealthModule, ImportModule],
   controllers: [AppController],
   providers: [
     AppService,
-    { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: RolesGuard },
+    // { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}
