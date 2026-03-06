@@ -1,1 +1,6 @@
+infrastructure/docker/nginx/certs/*
+
 .env
+
+./docker-compose.yml
+./docker-compose.ext.yml

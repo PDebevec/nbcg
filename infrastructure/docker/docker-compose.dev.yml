@@ -1,0 +1,51 @@
+##### DEVELOPEMNT #####
+networks:
+  backend:
+    driver: bridge
+
+services:
+##### POSTGRES #####
+  db:
+    ports:
+      - "${EXTERNAL_DB}:${INTERNAL_POSTGRES}"
+
+##### PGADMIN #####
+  pgadmin:
+    ports:
+      - "${EXTERNAL_PGADMIN}:${INTERNAL_HTTP}"
+    environment:
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+
+##### KEYCLOAK
+  keycloak:
+    command: start-dev
+    ports:
+      - "${EXTERNAL_KEYCLOAK}:${INTERNAL_HTTPHTTP}"
+    environment:
+      KC_HOSTNAME_STRICT_BACKCHANNEL: false
+      KC_HTTP_ENABLED: true
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_LOG_LEVEL: debug
+    networks:
+      - backend
+
+  keycloak-db:
+    ports:
+      - "${EXTERNAL_KEYCLOAK_DB}:${INTERNAL_POSTGRES}"
+    networks:
+      - backend
+
+##### OPENSEARCH
+  opensearch-node:
+    ports:
+      - ${EXTERNAL_OPENSEARCH_NODE_P1}:${INTERNAL_OPENSEARCH_NODE_P1}
+      - ${EXTERNAL_OPENSEARCH_NODE_P2}:${INTERNAL_OPENSEARCH_NODE_P2}
+    networks:
+      - backend
+
+  opensearch-dashboards:
+    ports:
+      - ${EXTERNAL_OPENSEARCH_DASHBOARDS}:${INTERNAL_OPENSEARCH_DASHBOARDS}
+    networks:
+      - backend
