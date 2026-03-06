@@ -13,8 +13,10 @@ env:
 	./infrastructure/scripts/generate-env.sh ${ENV}
 
 #####
-# generate backend and frontend env
+# generate env for frontend and backend, only specific to those
 #####
+end-env:
+	./infrastructure/scripts/gen-end-env.sh
 
 #####
 # apply config
@@ -23,7 +25,7 @@ apply-conf:
 	./infrastructure/scripts/apply-conf.sh
 
 #####
-# apply config
+# apply env
 #####
 apply-env:
 	./infrastructure/scripts/apply-env.sh
@@ -36,22 +38,44 @@ docker:
 	cp infrastructure/docker/docker-compose.${ENV}.yml ./docker-compose.ext.yml
 
 #####
+# initialize backend and frontend env
+#####
+back-end:
+	cd backend && npm ci
+	cd backend && npx prisma generate
+	cd backend && npm run build
+	cd backend && npm audit fix
+
+front-end:
+	cd frontend && npm ci
+
+#####
 # startup scripts
 #####
 init-dev:
 	make env ENV=dev
-	make docker ENV=dev
 	make apply-conf
+	make end-env
 	make apply-env
+	make docker ENV=dev
+	make backend/
+	make frontend/
 	make create
 
 init-prod:
 	make env ENV=prod
-	make docker ENV=prod
 	make apply-conf
+	make end-env
 	make apply-env
+	make docker ENV=prod
 	make cert-gen
 	make create
+
+#####
+# quich create
+#####
+qc:
+	make init-dev
 
 #####
 # quich start
@@ -97,7 +121,10 @@ clear:
 	rm docker-compose.yml
 	rm docker-compose.ext.yml
 	rm .env
+	rm backend/.env
+	rm frontend/.env
 	rm -f infrastructure/docker/nginx/certs/*
+	rm -f infrastructure/docker/pgadmin/servers.json
 
 qd:
 	make down-v

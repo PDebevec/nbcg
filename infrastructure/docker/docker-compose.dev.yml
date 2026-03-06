@@ -9,6 +9,11 @@ services:
     ports:
       - "${EXTERNAL_DB}:${INTERNAL_POSTGRES}"
 
+##### REDIS #####
+  redis:
+    ports:
+      - "${EXTERNAL_REDIS}:${INTERNAL_REDIS}"
+
 ##### PGADMIN #####
   pgadmin:
     ports:

@@ -29,13 +29,21 @@ check python3
 check docker
 check docker compose
 check node
+check npx
+check npm
 check pip
 check git
 check openssl
 check yq
 
+check_folder backend
+check_folder frontend
 check_folder infrastructure
 check_folder infrastructure/docker
+check_folder infrastructure/docker/nginx
+check_folder infrastructure/docker/pgadmin
+check_folder infrastructure/docker/backend
+check_folder infrastructure/docker/frontend
 check_folder infrastructure/env
 check_folder infrastructure/scripts
 

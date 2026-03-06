@@ -15,6 +15,7 @@ ports:
   opensearch-node-p2: 9600
   opensearch-dashboards: 5601
   metadata-db: 15432
+  redis-db: 6379
   keycloak-db: 25432
 
 zfs:

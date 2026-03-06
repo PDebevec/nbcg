@@ -7,6 +7,8 @@ volumes:
   keycloak-data:
 ##### OPENSEARCH
   opensearch-data:
+##### REDIS
+  redis-data:
 
 services:
   ##### POSTGRESQL #####
@@ -36,6 +38,12 @@ services:
         condition: service_started
       keycloak-db:
         condition: service_started
+
+  redis:
+    image: redis:8.6.1
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
 
 ##### KEYCLOAK DATABASE
   keycloak-db:

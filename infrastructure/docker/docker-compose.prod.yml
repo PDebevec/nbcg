@@ -79,7 +79,18 @@ services:
     networks:
       - backend
 
+  redis:
+    networks:
+      - backend
+    healthcheck:
+        test: ["CMD", "redis-cli", "ping"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+
   db:
+    networks:
+      - backend
     healthcheck:
       test: ["CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}'"]
       interval: 30s
@@ -87,6 +98,8 @@ services:
       retries: 3
 
   keycloak-db:
+    networks:
+      - backend
     healthcheck:
       test: ["CMD-SHELL", "sh -c 'pg_isready -U ${KEYCLOAK_POSTGRES_USER} -d ${KEYCLOAK_POSTGRES_DB}'"]
       interval: 30s
