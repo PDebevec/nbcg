@@ -11,11 +11,6 @@ export class HealthController {
   getHealth(@Req() req: any) {
     return {
       ...this.healthService.getStatus(),
-      user: {
-        sub: req.user.sub,
-        username: req.user.preferred_username,
-        roles: req.user.realm_access?.roles ?? [],
-      },
     };
   }
 }
