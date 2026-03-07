@@ -44,7 +44,6 @@ services:
       PGADMIN_DEFAULT_PASSWORD: admin
     volumes:
       - pgadmin_data:/var/lib/pgadmin
-      - ./pgadmin-servers.json:/var/lib/pgadmin/servers.json:ro
     depends_on:
       postgres:
         condition: service_healthy

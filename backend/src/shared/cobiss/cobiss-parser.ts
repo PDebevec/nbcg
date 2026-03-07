@@ -1,5 +1,6 @@
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
-import { DomainRecord } from './cobiss.types.js';
+import { DomainRecord } from './cobiss.types';
+import { resolveLanguage, resolveCountry, resolveRecordType, resolveBibliographicLevel, resolveMaterialType, resolveIllustrationCode, resolveContentType, resolveLiteraryForm, resolveBiographyCode, resolveRelatorCode } from './cobiss-code-map';
 
 export function extractFirstRecordXml(xml: string): string | null {
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
@@ -20,34 +21,50 @@ export function extractFirstRecordXml(xml: string): string | null {
  * Comprehensive COMARC XML → semantic JSON converter
  * Based on COMARC/B Format for Bibliographic Data
  * https://home.izum.si/izum/e_manuals_html/COMARC_B/eng/
+ *
+ * Only fields marked RED in the COMARC/B spec are mapped.
  */
 
+// ---------------------------------------------------------------------------
+// Raw field helpers
+// ---------------------------------------------------------------------------
+
+type RawField = {
+  ind1: string;
+  ind2: string;
+  subfields: Record<string, string[]>;
+};
+
+type RawRecord = Record<string, RawField[]>;
+
 /**
- * Helper to get first occurrence of a subfield from the first field instance
- * Use this for: non-repeatable subfields in non-repeatable fields
+ * First value of a subfield from the first occurrence of a field.
+ * Use for: non-repeatable subfield in a non-repeatable field.
  */
-function first(raw: Record<string, any[]>, tag: string, code: string): string | undefined {
+function first(raw: RawRecord, tag: string, code: string): string | undefined {
   return raw[tag]?.[0]?.subfields?.[code]?.[0];
 }
 
 /**
- * Helper to get all occurrences of a subfield from all field instances
- * Use this for: repeatable subfields OR when the field itself can repeat
+ * All values of a subfield across every occurrence of a field.
+ * Use for: repeatable fields where each occurrence contributes one value
+ * (e.g. 010/a – each 010 field carries one ISBN).
  */
-function all(raw: Record<string, any[]>, tag: string, code: string): string[] {
+function all(raw: RawRecord, tag: string, code: string): string[] {
   return raw[tag]?.flatMap((f) => f.subfields[code] ?? []) ?? [];
 }
 
 /**
- * Helper to get all occurrences from the first field instance only
- * Use this for: repeatable subfields within a non-repeatable field
+ * All values of a subfield from the first occurrence of a field only.
+ * Use for: repeatable subfields within a non-repeatable field
+ * (e.g. 200/d – multiple parallel titles inside a single title field).
  */
-function allFromFirst(raw: Record<string, any[]>, tag: string, code: string): string[] {
+function allFromFirst(raw: RawRecord, tag: string, code: string): string[] {
   return raw[tag]?.[0]?.subfields?.[code] ?? [];
 }
 
 /**
- * Helper to parse year from string (handles formats like "1999", "c1999", "1999-2000", etc.)
+ * Parse a 4-digit year out of strings like "1999", "c1999", "1999-2000".
  */
 function parseYear(yearStr?: string): number | undefined {
   if (!yearStr) return undefined;
@@ -55,36 +72,36 @@ function parseYear(yearStr?: string): number | undefined {
   return match ? parseInt(match[1], 10) : undefined;
 }
 
+// ---------------------------------------------------------------------------
+// Main converter
+// ---------------------------------------------------------------------------
+
 /**
- * Convert COMARC XML to semantic JSON
+ * Convert a COMARC/B XML record string to a DomainRecord.
  */
-export function recordXmlToJson(xml: string): DomainRecord {
+export function recordXmlToJson(xml: string, cobissId?: string): DomainRecord {
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
   const recordNode = doc.getElementsByTagName('record')[0];
   if (!recordNode) {
-    throw new Error('Invalid COMARC record XML');
+    throw new Error('Invalid COMARC record XML: no <record> element found');
   }
 
-  const datafields = Array.from(recordNode.getElementsByTagName('datafield'));
+  // Build raw lookup: tag → array of { ind1, ind2, subfields }
+  const raw: RawRecord = {};
 
-  // Parse all datafields into a structured format
-  const raw: Record<string, any[]> = {};
-
-  for (const field of datafields) {
+  for (const field of Array.from(recordNode.getElementsByTagName('datafield'))) {
     const tag = field.getAttribute('tag');
     if (!tag) continue;
 
-    const entry = {
+    const entry: RawField = {
       ind1: field.getAttribute('ind1') ?? ' ',
       ind2: field.getAttribute('ind2') ?? ' ',
-      subfields: {} as Record<string, string[]>,
+      subfields: {},
     };
 
-    const subfields = Array.from(field.getElementsByTagName('subfield'));
-    for (const sf of subfields) {
+    for (const sf of Array.from(field.getElementsByTagName('subfield'))) {
       const code = sf.getAttribute('code');
       if (!code) continue;
-
       entry.subfields[code] ??= [];
       entry.subfields[code].push(sf.textContent?.trim() ?? '');
     }
@@ -93,284 +110,182 @@ export function recordXmlToJson(xml: string): DomainRecord {
     raw[tag].push(entry);
   }
 
-  // Build the semantic record
+  // Parse controlfields (001, etc.) — positional string fields without subfield tags
+  const field001 = raw['001']?.[0]?.subfields ?? {};
+
+  // ---------------------------------------------------------------------------
+  // Map raw fields → DomainRecord (red fields only)
+  // ---------------------------------------------------------------------------
+
   const record: DomainRecord = {
-    // ===== IDENTIFICATION BLOCK (0XX) =====
-    externalId: first(raw, '001', 'x'),
-    
+
+    cobissId, 
+
+    // ===== 0XX – IDENTIFICATION BLOCK =====
+
+    recordType:         field001['b']?.[0] ? resolveRecordType(field001['b'][0])         : undefined,
+    bibliographicLevel: field001['c']?.[0] ? resolveBibliographicLevel(field001['c'][0]) : undefined,
+    materialType:       (field001['b']?.[0] && field001['c']?.[0])
+      ? resolveMaterialType(field001['b'][0], field001['c'][0])
+      : undefined,
+    documentTypology:   field001['t']?.[0],
+
+    // 010 – ISBN (field is repeatable; each carries one ISBN in /a)
     isbn: all(raw, '010', 'a'),
-    isbnQualifications: all(raw, '010', 'b'),
-    
+
+    // 011 – ISSN (field is repeatable; each carries one ISSN in /a)
     issn: all(raw, '011', 'a'),
-    issnKeyTitle: first(raw, '011', 'e'),
-    
-    fingerprint: all(raw, '013', 'a'),
-    
-    isrc: all(raw, '016', 'a'),
-    isrcQualifications: all(raw, '016', 'b'),
-    
-    otherIdentifiers: raw['017']?.map(f => ({
-      identifier: f.subfields['a']?.[0] ?? '',
-      type: f.subfields['b']?.[0],
-    })).filter(x => x.identifier) ?? [],
-    
-    nationalBibNumber: all(raw, '020', 'a'),
-    countryCode: all(raw, '020', 'b'),
-    
-    publisherNumber: raw['071']?.map(f => ({
-      number: f.subfields['a']?.[0] ?? '',
-      publisher: f.subfields['b']?.[0],
-      type: f.ind1,
-    })).filter(x => x.number) ?? [],
 
-    // ===== CODED INFORMATION BLOCK (1XX) =====
-    language: all(raw, '101', 'a'),
-    originalLanguage: all(raw, '101', 'c'),
-    translationLanguages: all(raw, '101', 'd'),
-    tableOfContentsLanguages: all(raw, '101', 'f'),
-    subtitleLanguages: all(raw, '101', 'g'),
-    
-    country: all(raw, '102', 'a'),
-    locality: all(raw, '102', 'b'),
-    
-    textualMaterialCodes: raw['105']?.[0] ? {
-      illustrationCodes: first(raw, '105', 'a'),
-      formOfContent: first(raw, '105', 'b'),
-      conferencePublication: first(raw, '105', 'c'),
-      festschrift: first(raw, '105', 'd'),
-      indexIndicator: first(raw, '105', 'e'),
-      literaryFormCode: first(raw, '105', 'f'),
-      biographyCode: first(raw, '105', 'g'),
-    } : undefined,
+    // 013 – ISMN (field is repeatable; each carries one ISMN in /a)
+    ismn: all(raw, '013', 'a'),
 
-    // ===== DESCRIPTIVE INFORMATION BLOCK (2XX) =====
-    title: first(raw, '200', 'a'),
-    titleMediumDesignation: first(raw, '200', 'b'),
-    titleByAnotherAuthor: first(raw, '200', 'c'),
-    parallelTitle: allFromFirst(raw, '200', 'd'),           // Repeatable within field
-    subtitle: first(raw, '200', 'e'),
-    parallelSubtitle: allFromFirst(raw, '200', 'f'),         // Repeatable within field
-    firstResponsibility: first(raw, '200', 'g'),
-    subsequentResponsibility: allFromFirst(raw, '200', 'h'), // Repeatable within field
+    // ===== 1XX – CODED INFORMATION BLOCK =====
 
+    // 100 – Date of publication, production, etc.
+    publicationDate1:    first(raw, '100', 'c'),
+    publicationDate2:    first(raw, '100', 'd'),
+
+    // 101 – Language of the item (ISO 639-2/B codes → resolved to full names)
+    language:             all(raw, '101', 'a').map(resolveLanguage),
+    originalLanguage:     all(raw, '101', 'c').map(resolveLanguage),
+    translationLanguages: all(raw, '101', 'd').map(resolveLanguage),
+
+    // 102 – Country of publication (UNIMARC country codes → resolved to full names)
+    country: all(raw, '102', 'a').map(resolveCountry),
+
+    // 105 – Textual material codes (non-repeatable field, all subfields single-value)
+    textualMaterialCodes: (() => {
+      const f = raw['105']?.[0];
+      if (!f) return undefined;
+      return {
+        illustrationCodes: f.subfields['a']?.map(resolveIllustrationCode),
+        contentTypeCodes:  f.subfields['b']?.map(resolveContentType),
+        conferencePublication: f.subfields['c']?.[0] === '1' ? true : undefined,
+        festschrift:           f.subfields['d']?.[0] === '1' ? true : undefined,
+        indexIndicator:        f.subfields['e']?.[0] === '1' ? true : undefined,
+        literaryForm:  f.subfields['f']?.[0] ? resolveLiteraryForm(f.subfields['f'][0]) : undefined,
+        biographyCode: f.subfields['g']?.[0] ? resolveBiographyCode(f.subfields['g'][0]) : undefined,
+      };
+    })(),
+
+    // ===== 2XX – DESCRIPTIVE INFORMATION BLOCK =====
+
+    // 200 – Title and statement of responsibility (non-repeatable field)
+    //   /a  title proper
+    //   /b  general material designation
+    //   /c  title proper by another author
+    //   /d  parallel title (repeatable subfield)
+    //   /e  other title information / subtitle
+    //   /f  first statement of responsibility
+    //   /g  subsequent statement(s) of responsibility (repeatable subfield)
+    title:                    first(raw, '200', 'a'),
+    titleMediumDesignation:   first(raw, '200', 'b'),
+    titleByAnotherAuthor:     first(raw, '200', 'c'),
+    parallelTitle:            allFromFirst(raw, '200', 'd'),
+    subtitle:                 first(raw, '200', 'e'),
+    firstResponsibility:      first(raw, '200', 'f'),
+    subsequentResponsibility: allFromFirst(raw, '200', 'g'),
+
+    // 205 – Edition statement (non-repeatable field)
     edition: first(raw, '205', 'a'),
-    editionResponsibility: first(raw, '205', 'f'),
-    parallelEdition: first(raw, '205', 'd'),
 
-    publication: {
-      place: first(raw, '210', 'a'),
-      publisher: first(raw, '210', 'c'),
-      year: parseYear(first(raw, '210', 'd')),
+    // 206 – Cartographic material – mathematical data
+    cartographicMathematicalData: first(raw, '206', 'a'),
+
+    // 207 – Continuing sources – numbering
+    numberingAndDates: first(raw, '207', 'a'),
+
+    // 208 – Music edition statement
+    musicEditionStatement: first(raw, '208', 'a'),
+
+    // 210 – Publication, distribution, etc. (non-repeatable field)
+    publication: raw['210']?.[0] ? {
+      place:            first(raw, '210', 'a'),
+      publisher:        first(raw, '210', 'c'),
+      year:             first(raw, '210', 'd'),
       placeOfManufacture: first(raw, '210', 'e'),
       manufacturerName: first(raw, '210', 'g'),
-      manufacturerDate: first(raw, '210', 'h'),
-    },
+    } : undefined,
 
-    physicalDescription: [
-      first(raw, '215', 'a'),
-      first(raw, '215', 'd'),
-    ]
-      .filter(Boolean)
-      .join(', '),
+    // 215 – Physical description (non-repeatable field)
+    physicalDescription: first(raw, '215', 'a'),
     otherPhysicalDetails: first(raw, '215', 'c'),
-    dimensions: first(raw, '215', 'd'),
-    accompanyingMaterial: first(raw, '215', 'e'),
+    dimensions:          first(raw, '215', 'd'),
 
-    seriesTitle: first(raw, '225', 'a'),
-    seriesSubtitle: first(raw, '225', 'e'),
+    // 225 – Series (non-repeatable field)
+    seriesTitle:          first(raw, '225', 'a'),
+    seriesSubtitle:       first(raw, '225', 'e'),
     seriesResponsibility: first(raw, '225', 'f'),
-    seriesIssn: first(raw, '225', 'x'),
-    seriesVolume: first(raw, '225', 'v'),
+    seriesIssn:           first(raw, '225', 'x'),
+    seriesVolume:         first(raw, '225', 'v'),
 
-    // ===== NOTES BLOCK (3XX) =====
+    // ===== 3XX – NOTES BLOCK =====
+
+    // 300 – General notes (field is repeatable; collect all /a values)
     notes: all(raw, '300', 'a'),
-    notesOnIdentifiers: all(raw, '301', 'a'),
-    notesOnTitle: all(raw, '304', 'a'),
-    notesOnEdition: all(raw, '305', 'a'),
-    notesOnPublication: all(raw, '306', 'a'),
-    notesOnLinkingFields: all(raw, '311', 'a'),
-    notesOnIntellectualResp: all(raw, '314', 'a'),
-    notesOnLanguage: all(raw, '316', 'a'),
-    notesOnPhysicalDesc: all(raw, '317', 'a'),
-    notesOnContents: all(raw, '327', 'a'),
-    notesOnContinuation: all(raw, '320', 'a'),
-    notesOnBinding: all(raw, '321', 'a'),
-    notesOnFrequency: all(raw, '326', 'a'),
-    
-    abstract: first(raw, '330', 'a'),
-    notesOnUsers: first(raw, '333', 'a'),
-    notesOnAwards: all(raw, '334', 'a'),
-    notesOnElectronicResource: first(raw, '336', 'a'),
-    systemRequirements: first(raw, '337', 'a'),
-    financingNotes: all(raw, '338', 'a'),
 
-    // ===== LINKING ENTRY BLOCK (4XX) =====
-    series: raw['410']?.map(f => ({
-      title: f.subfields['t']?.[0] ?? '',
-      issn: f.subfields['x']?.[0],
-      volume: f.subfields['v']?.[0],
-    })).filter(x => x.title) ?? [],
-    
-    supplementTo: raw['421']?.map(f => ({
-      title: f.subfields['t']?.[0] ?? '',
-      issn: f.subfields['x']?.[0],
-    })).filter(x => x.title) ?? [],
-    
-    issuedWith: raw['422']?.map(f => ({
-      title: f.subfields['t']?.[0] ?? '',
-    })).filter(x => x.title) ?? [],
+    // ===== 5XX – NOTES BLOCK =====
 
-    // ===== RELATED TITLES BLOCK (5XX) =====
-    uniformTitle: first(raw, '500', 'a'),
-    uniformTitleQualifiers: first(raw, '500', 'h'),
-    titleLatex: first(raw, '539', 'a'),
+    // 518 – Title in another script (field is repeatable; collect all /a values)
+    titleInOtherScript: all(raw, '518', 'a'),
 
-    // ===== SUBJECT ANALYSIS BLOCK (6XX) =====
-    personalNameSubjects: raw['600']?.map(f => ({
-      familyName: f.subfields['a']?.[0] ?? '',
-      firstName: f.subfields['b']?.[0],
-      dates: f.subfields['f']?.[0],
-      numeration: f.subfields['d']?.[0],
-      qualifier: f.subfields['c']?.[0],
-    })).filter(x => x.familyName) ?? [],
+    // ===== 7XX – INTELLECTUAL RESPONSIBILITY BLOCK =====
 
-    corporateBodySubjects: raw['601']?.map(f => ({
-      name: f.subfields['a']?.[0] ?? '',
-      subdivision: f.subfields['b'] ?? [],
-      location: f.subfields['e']?.[0],
-      dates: f.subfields['f']?.[0],
-    })).filter(x => x.name) ?? [],
-
-    familyNameSubjects: raw['602']?.map(f => ({
-      familyName: f.subfields['a']?.[0] ?? '',
-      dates: f.subfields['f']?.[0],
-    })).filter(x => x.familyName) ?? [],
-
-    uniformTitleSubjects: raw['605']?.map(f => ({
-      title: f.subfields['a']?.[0] ?? '',
-    })).filter(x => x.title) ?? [],
-
-    subjects: all(raw, '606', 'a'),
-    subjectSubdivisions: raw['606']?.map(f => [
-      ...(f.subfields['x'] ?? []),
-      ...(f.subfields['y'] ?? []),
-      ...(f.subfields['z'] ?? []),
-    ]).filter(arr => arr.length > 0) ?? [],
-
-    geographicalSubjects: raw['607']?.map(f => ({
-      name: f.subfields['a']?.[0] ?? '',
-      subdivision: [
-        ...(f.subfields['x'] ?? []),
-        ...(f.subfields['y'] ?? []),
-        ...(f.subfields['z'] ?? []),
-      ],
-    })).filter(x => x.name) ?? [],
-
-    formGenreSubjects: raw['608']?.map(f => ({
-      term: f.subfields['a']?.[0] ?? '',
-    })).filter(x => x.term) ?? [],
-
-    uncontrolledKeywords: raw['610']?.map(f => ({
-      term: f.subfields['a']?.[0] ?? '',
-    })).filter(x => x.term) ?? [],
-
-    // ===== CLASSIFICATION BLOCK (67X) =====
-    classifications: all(raw, '675', 'a'),
-    udcAccessCodes: all(raw, '675', 'c'),
-    udcShortCodes: all(raw, '675', 'v'),
-    
-    deweyClassification: all(raw, '676', 'a'),
-    lcClassification: all(raw, '680', 'a'),
-    
-    otherClassifications: raw['686']?.map(f => ({
-      code: f.subfields['a']?.[0] ?? '',
-      system: f.subfields['2']?.[0],
-    })).filter(x => x.code) ?? [],
-
-    // ===== INTELLECTUAL RESPONSIBILITY BLOCK (7XX) =====
+    // 700 / 701 / 702 – Personal names (primary / alternative / secondary)
     authors: [
-      // 700 - Primary responsibility
       ...(raw['700']?.map((f) => ({
-        familyName: f.subfields['a']?.[0],
-        firstName: f.subfields['b']?.[0],
-        fullName: [f.subfields['b']?.[0], f.subfields['a']?.[0]]
-          .filter(Boolean)
-          .join(' '),
-        prefix: f.subfields['c']?.[0],
+        familyName:    f.subfields['a']?.[0],
+        firstName:     f.subfields['b']?.[0],
+        prefix:        f.subfields['c']?.[0],
         romanNumerals: f.subfields['d']?.[0],
-        dates: f.subfields['f']?.[0],
-        role: f.subfields['4']?.[0] ?? 'author',
+        dates:         f.subfields['f']?.[0],
+        role: f.subfields['4']?.[0] ? resolveRelatorCode(f.subfields['4'][0]) : undefined,
         responsibility: 'primary' as const,
       })) ?? []),
-      // 701 - Alternative responsibility
       ...(raw['701']?.map((f) => ({
-        familyName: f.subfields['a']?.[0],
-        firstName: f.subfields['b']?.[0],
-        fullName: [f.subfields['b']?.[0], f.subfields['a']?.[0]]
-          .filter(Boolean)
-          .join(' '),
-        prefix: f.subfields['c']?.[0],
+        familyName:    f.subfields['a']?.[0],
+        firstName:     f.subfields['b']?.[0],
+        prefix:        f.subfields['c']?.[0],
         romanNumerals: f.subfields['d']?.[0],
-        dates: f.subfields['f']?.[0],
-        role: f.subfields['4']?.[0] ?? 'author',
+        dates:         f.subfields['f']?.[0],
+        role: f.subfields['4']?.[0] ? resolveRelatorCode(f.subfields['4'][0]) : undefined,
         responsibility: 'alternative' as const,
       })) ?? []),
-      // 702 - Secondary responsibility
       ...(raw['702']?.map((f) => ({
-        familyName: f.subfields['a']?.[0],
-        firstName: f.subfields['b']?.[0],
-        fullName: [f.subfields['b']?.[0], f.subfields['a']?.[0]]
-          .filter(Boolean)
-          .join(' '),
-        prefix: f.subfields['c']?.[0],
+        familyName:    f.subfields['a']?.[0],
+        firstName:     f.subfields['b']?.[0],
+        prefix:        f.subfields['c']?.[0],
         romanNumerals: f.subfields['d']?.[0],
-        dates: f.subfields['f']?.[0],
-        role: f.subfields['4']?.[0] ?? 'contributor',
+        dates:         f.subfields['f']?.[0],
+        role: f.subfields['4']?.[0] ? resolveRelatorCode(f.subfields['4'][0]) : undefined,
         responsibility: 'secondary' as const,
       })) ?? []),
-    ],
+    ].filter((a) => a.familyName || a.firstName),
 
+    // 710 – Corporate body primary responsibility
     corporateBodies: [
-      // 710 - Primary responsibility
       ...(raw['710']?.map((f) => ({
-        name: f.subfields['a']?.[0] ?? '',
-        subdivision: f.subfields['b'] ?? [],
-        location: f.subfields['e']?.[0],
-        dates: f.subfields['f']?.[0],
-        role: f.subfields['4']?.[0],
+        name:           f.subfields['a']?.[0] ?? '',
         responsibility: 'primary' as const,
       })) ?? []),
-      // 711 - Alternative responsibility
-      ...(raw['711']?.map((f) => ({
-        name: f.subfields['a']?.[0] ?? '',
-        subdivision: f.subfields['b'] ?? [],
-        location: f.subfields['e']?.[0],
-        dates: f.subfields['f']?.[0],
-        role: f.subfields['4']?.[0],
-        responsibility: 'alternative' as const,
-      })) ?? []),
-      // 712 - Secondary responsibility
-      ...(raw['712']?.map((f) => ({
-        name: f.subfields['a']?.[0] ?? '',
-        subdivision: f.subfields['b'] ?? [],
-        location: f.subfields['e']?.[0],
-        dates: f.subfields['f']?.[0],
-        role: f.subfields['4']?.[0],
-        responsibility: 'secondary' as const,
-      })) ?? []),
-    ].filter(x => x.name),
+    ].filter((c) => c.name),
 
-    // ===== INTERNATIONAL USE BLOCK (8XX) =====
-    electronicLocation: raw['856']?.map(f => ({
-      url: f.subfields['u']?.[0] ?? '',
-      accessMethod: f.subfields['2']?.[0],
-      linkText: f.subfields['y']?.[0],
-      publicNote: f.subfields['z']?.[0],
-    })).filter(x => x.url) ?? [],
+    // ===== 8XX – INTERNATIONAL USE BLOCK =====
+
+    // 856 – Electronic location and access (field is repeatable)
+    electronicLocation: raw['856']
+      ?.map((f) => ({
+        url: f.subfields['u']?.[0] ?? '',
+      }))
+      .filter((e) => e.url),
   };
 
   return pruneEmpty(record);
 }
+
+// ---------------------------------------------------------------------------
+// Utility: remove undefined / empty arrays / empty objects recursively
+// ---------------------------------------------------------------------------
 
 function pruneEmpty<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -379,30 +294,27 @@ function pruneEmpty<T>(value: T): T {
       .filter(
         (v) =>
           v !== undefined &&
+          v !== null &&
           !(Array.isArray(v) && v.length === 0) &&
-          !(typeof v === 'object' && v !== null && Object.keys(v).length === 0)
+          !(typeof v === 'object' && Object.keys(v as object).length === 0),
       );
-
-    return cleaned.length > 0 ? (cleaned as T) : (undefined as T);
+    return (cleaned.length > 0 ? cleaned : undefined) as T;
   }
 
   if (typeof value === 'object' && value !== null) {
-    const result: any = {};
-
-    for (const [key, val] of Object.entries(value)) {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as object)) {
       const cleaned = pruneEmpty(val);
       if (
         cleaned !== undefined &&
+        cleaned !== null &&
         !(Array.isArray(cleaned) && cleaned.length === 0) &&
-        !(typeof cleaned === 'object' &&
-          cleaned !== null &&
-          Object.keys(cleaned).length === 0)
+        !(typeof cleaned === 'object' && Object.keys(cleaned as object).length === 0)
       ) {
         result[key] = cleaned;
       }
     }
-
-    return Object.keys(result).length > 0 ? result : (undefined as T);
+    return (Object.keys(result).length > 0 ? result : undefined) as T;
   }
 
   return value;

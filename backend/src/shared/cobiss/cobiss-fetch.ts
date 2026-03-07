@@ -24,7 +24,7 @@ async function safeFetch(url: string): Promise<{ contentType: string; body: stri
 }
 
 export async function fetchCobissRecord(
-  cobissId: number | string,
+  cobissId: string,
 ): Promise<DomainRecord | null> {
   const url =
     `${COBISS_ENDPOINT}?query=+ID = ${cobissId}` +
@@ -40,7 +40,7 @@ export async function fetchCobissRecord(
   const recordXml = extractFirstRecordXml(response.body);
   if (!recordXml) return null;
 
-  const recordJson = recordXmlToJson(recordXml);
+  const recordJson = recordXmlToJson(recordXml, cobissId);
 
   return recordJson;
 }
