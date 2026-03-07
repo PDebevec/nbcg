@@ -5,3 +5,5 @@ infrastructure/docker/pgadmin/servers.json
 
 docker-compose.yml
 docker-compose.ext.yml
+
+lib-data/*

@@ -35,11 +35,9 @@ if [ "$ENV" = "prod" ]; then
     set_env "HOST_API" "$(yq -r '.hostnames.api' $CONFIG)$(yq -r '.hostnames.fqdn' $CONFIG)"
     set_env "HOST_AUTH" "$(yq -r '.hostnames.keycloak' $CONFIG)$(yq -r '.hostnames.fqdn' $CONFIG)"
     set_env "HOST_SEARCH" "$(yq -r '.hostnames.opensearch' $CONFIG)$(yq -r '.hostnames.fqdn' $CONFIG)"
-    set_env "POSTGRES_PORT" "5432"
 elif [ "$ENV" = "dev" ]; then
     set_env "EXTERNAL_PGADMIN" "$(yq -r '.ports.pgadmin' $CONFIG)"
-    set_env "EXTERNAL_DB" "$(yq -r '.ports.metadata-db' $CONFIG)"
-    set_env "POSTGRES_PORT" "$(yq -r '.ports.metadata-db' $CONFIG)"
+    set_env "EXTERNAL_POSTGRES" "$(yq -r '.ports.metadata-db' $CONFIG)"
     set_env "EXTERNAL_REDIS" "$(yq -r '.ports.redis-db' $CONFIG)"
     set_env "EXTERNAL_KEYCLOAK_DB" "$(yq -r '.ports.keycloak-db' $CONFIG)"
     set_env "EXTERNAL_KEYCLOAK" "$(yq -r '.ports.keycloak' $CONFIG)"

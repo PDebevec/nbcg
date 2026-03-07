@@ -4,15 +4,35 @@ networks:
     driver: bridge
 
 services:
+##### TEMP ##### TODO: move to prod
+  # backend:
+  #   build:
+  #     context: "backend/"
+  #     dockerfile: dockerfile
+  #   env_file:
+  #     - backend/.env
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - "./lib-data:/lib-data"
+  #   networks:
+  #     - backend
+  #   depends_on:
+  #     - db
+
 ##### POSTGRES #####
   db:
     ports:
-      - "${EXTERNAL_DB}:${INTERNAL_POSTGRES}"
+      - "${EXTERNAL_POSTGRES}:${INTERNAL_POSTGRES}"
+    networks:
+      - backend
 
 ##### REDIS #####
   redis:
     ports:
       - "${EXTERNAL_REDIS}:${INTERNAL_REDIS}"
+    networks:
+      - backend
 
 ##### PGADMIN #####
   pgadmin:
@@ -21,6 +41,8 @@ services:
     environment:
       - PGADMIN_CONFIG_SERVER_MODE=False
       - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    networks:
+      - backend
 
 ##### KEYCLOAK
   keycloak:

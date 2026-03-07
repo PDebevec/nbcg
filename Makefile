@@ -71,6 +71,9 @@ init-prod:
 	make cert-gen
 	make create
 
+migrate:
+	./infrastructure/scripts/migrate.sh
+
 #####
 # quich create
 #####
@@ -83,6 +86,7 @@ qc:
 qs:
 	make init-dev
 	make start
+	make migrate
 
 #####
 # docker create and start

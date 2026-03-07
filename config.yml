@@ -20,9 +20,9 @@ ports:
 
 zfs:
 ##### in prod this should be changed to the zfs path
-  base: "./lib-data"
-  files: "/records"
-  backup: "/backup"
+  base: "lib-data/"
+  files: "records/"
+  backup: "backup/"
 
 ##### these are for referance what could be - mfa should be tried
 config:
