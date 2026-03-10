@@ -1,0 +1,30 @@
+##### mainly for prod
+hostnames:
+##### full qulified domain name
+  fqdn: "nbcg.me"
+  frontend: "www."
+  api: "api."
+  keycloak: "auth."
+  opensearch: "search."
+
+##### these are external ports moastly for dev
+ports:
+  pgadmin: 8081
+  keycloak: 8082
+  opensearch-node-p1: 9200
+  opensearch-node-p2: 9600
+  opensearch-dashboards: 5601
+  metadata-db: 15432
+  redis-db: 6379
+  keycloak-db: 25432
+
+zfs:
+##### in prod this should be changed to the zfs path
+  base: "lib-data/"
+  files: "files/"
+  backup: "backup/"
+
+##### these are for referance what could be - mfa should be tried
+config:
+  allow_account_creation: false
+  enable_mfa: false

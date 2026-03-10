@@ -1,0 +1,22 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "metadata",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "nbcg",
+      "Password": "$(POSTGRES_PASSWORD)"
+    },
+    "2": {
+      "Name": "keycloak",
+      "Group": "Servers",
+      "Host": "keycloak-db",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "nbcg",
+      "Password": "$(KEYCLOAK_POSTGRES_PASSWORD)"
+    }
+  }
+}

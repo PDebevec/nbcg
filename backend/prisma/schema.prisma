@@ -1,0 +1,78 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  moduleFormat = "commonjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum VisibilityStatus {
+  PUBLIC
+  PRIVATE
+  HIDDEN
+}
+
+model Draft {
+  id               String            @id @default(cuid())
+  visibilityStatus VisibilityStatus
+  metadata         Json?             // { ..., data: { collectionType, childrenNumber, jeGlavnoGradivo } }
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  createdByUserId  String
+  updatedByUserId  String?
+  
+  parentRelations  ItemRelation[]    @relation("ChildItem")
+  childRelations   ItemRelation[]    @relation("ParentItem")
+
+  @@map("drafts")
+}
+
+model Record {
+  id               String            @id @default(cuid())
+  visibilityStatus VisibilityStatus
+  metadata         Json?             // { ..., data: { collectionType, childrenNumber, jeGlavnoGradivo } }
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  createdByUserId  String
+  updatedByUserId  String?
+  
+  parentRelations  ItemRelation[]    @relation("ChildItem")
+  childRelations   ItemRelation[]    @relation("ParentItem")
+  
+  @@map("records")
+}
+
+model ItemRelation {
+  parentId         String
+  parentType       String            // 'draft' | 'record'
+  childId          String
+  childType        String            // 'draft' | 'record'
+  createdAt        DateTime          @default(now())
+  
+  parentDraft      Draft?            @relation("ParentItem", fields: [parentId], references: [id], onDelete: Cascade, map: "parent_draft_fk")
+  childDraft       Draft?            @relation("ChildItem", fields: [childId], references: [id], onDelete: Cascade, map: "child_draft_fk")
+  parentRecord     Record?           @relation("ParentItem", fields: [parentId], references: [id], onDelete: Cascade, map: "parent_record_fk")
+  childRecord      Record?           @relation("ChildItem", fields: [childId], references: [id], onDelete: Cascade, map: "child_record_fk")
+
+  @@id([parentId, parentType, childId, childType])
+  @@index([parentId, parentType])
+  @@index([childId, childType])
+  @@index([childId, childType, parentType])
+  @@map("item_relations")
+}
+
+  // id               String   @id @default(cuid())
+  // recordId         String
+  // bucket           String
+  // objectKey        String
+  // mimeType         String
+  // size             Int
+  // originalFilename String

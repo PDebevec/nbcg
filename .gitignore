@@ -1,0 +1,9 @@
+infrastructure/docker/nginx/certs/*
+infrastructure/docker/pgadmin/servers.json
+
+.env
+
+docker-compose.yml
+docker-compose.ext.yml
+
+lib-data/*

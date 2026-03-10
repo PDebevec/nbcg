@@ -1,0 +1,78 @@
+##### DEVELOPEMNT #####
+networks:
+  backend:
+    driver: bridge
+
+services:
+##### TEMP ##### TODO: move to prod
+  # backend:
+  #   build:
+  #     context: "backend/"
+  #     dockerfile: dockerfile
+  #   env_file:
+  #     - backend/.env
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - "./lib-data:/lib-data"
+  #   networks:
+  #     - backend
+  #   depends_on:
+  #     - db
+
+##### POSTGRES #####
+  db:
+    ports:
+      - "${EXTERNAL_POSTGRES}:${INTERNAL_POSTGRES}"
+    networks:
+      - backend
+
+##### REDIS #####
+  redis:
+    ports:
+      - "${EXTERNAL_REDIS}:${INTERNAL_REDIS}"
+    networks:
+      - backend
+
+##### PGADMIN #####
+  pgadmin:
+    ports:
+      - "${EXTERNAL_PGADMIN}:${INTERNAL_HTTP}"
+    environment:
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    networks:
+      - backend
+
+##### KEYCLOAK
+  keycloak:
+    command: start-dev
+    ports:
+      - "${EXTERNAL_KEYCLOAK}:${INTERNAL_HTTPHTTP}"
+    environment:
+      KC_HOSTNAME_STRICT_BACKCHANNEL: false
+      KC_HTTP_ENABLED: true
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_LOG_LEVEL: debug
+    networks:
+      - backend
+
+  keycloak-db:
+    ports:
+      - "${EXTERNAL_KEYCLOAK_DB}:${INTERNAL_POSTGRES}"
+    networks:
+      - backend
+
+##### OPENSEARCH
+  opensearch-node:
+    ports:
+      - ${EXTERNAL_OPENSEARCH_NODE_P1}:${INTERNAL_OPENSEARCH_NODE_P1}
+      - ${EXTERNAL_OPENSEARCH_NODE_P2}:${INTERNAL_OPENSEARCH_NODE_P2}
+    networks:
+      - backend
+
+  opensearch-dashboards:
+    ports:
+      - ${EXTERNAL_OPENSEARCH_DASHBOARDS}:${INTERNAL_OPENSEARCH_DASHBOARDS}
+    networks:
+      - backend

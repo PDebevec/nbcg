@@ -1,0 +1,117 @@
+##### PRODUCTION #####
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true
+
+volumes:
+##### NGINX
+  nginx-logs:
+  nginx-certs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${NGINX_CERTIFICATE_LOCATION}
+
+##### NGINX #####
+services:
+  nginx:
+    image: nginx:1.29.5-perl
+    user: nginx
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "https://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - frontend
+      - backend
+    ports:
+      - 8080:8080
+      - 80:80
+      - 443:443
+    volumes:
+      - ./infrastructure/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx-certs:/etc/nginx/certs:ro
+      - nginx-logs:/var/log/nginx:ro
+
+##### KEYCLOAK
+  keycloak:
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    command: start
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      KC_HOSTNAME: keycloak
+      KC_HOSTNAME_STRICT_BACKCHANNEL: true
+      KC_HTTP_ENABLED: false
+      KC_HOSTNAME_STRICT_HTTPS: true
+      KC_HTTPS_CERTIFICATE_FILE: /etc/x509/https/server.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /etc/x509/https/server.key
+      KC_LOG_LEVEL: info
+    volumes:
+      - ${KC_HTTPS_CERTIFICATE}/server.crt:/etc/x509/https/server.crt:ro
+      - ${KC_HTTPS_CERTIFICATE}/server.key:/etc/x509/https/server.key:ro
+    networks:
+      - backend
+
+##### PGADMIN
+  pgadmin:
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/misc/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+      keycloak-db:
+        condition: service_healthy
+    networks:
+      - backend
+
+  redis:
+    networks:
+      - backend
+    healthcheck:
+        test: ["CMD", "redis-cli", "ping"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+
+  db:
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  keycloak-db:
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U ${KEYCLOAK_POSTGRES_USER} -d ${KEYCLOAK_POSTGRES_DB}'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  opensearch-node:
+    networks:
+      - backend
+
+  opensearch-dashboards:
+    networks:
+      - backend
+
+#TODO
