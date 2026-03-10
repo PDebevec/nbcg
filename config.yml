@@ -24,6 +24,10 @@ zfs:
   files: "files/"
   backup: "backup/"
 
+external:
+  #!#!#!#!#! if added do not commit and push this file !#!#!#!#!#
+  cobiss-token:
+
 ##### these are for referance what could be - mfa should be tried
 config:
   allow_account_creation: false

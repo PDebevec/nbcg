@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ENV_FILE=".env"
+CONFIG="config.yml"
+
 # Load env variables
 if [[ -f $ENV_FILE ]]; then
     set -a  # automatically export
@@ -44,6 +46,7 @@ if [ "$ENV" = "prod" ]; then
     set_env $BACKEND_ENV "OPENSEARCH_NODE_P1" "$INTERNAL_OPENSEARCH_NODE_P1"
     set_env $BACKEND_ENV "OPENSEARCH_HOSTNAME" "$OPENSEARCH_HOSTNAME"
     set_env $BACKEND_ENV "NODE_ENV" "production"
+    set_env $BACKEND_ENV "COBISS_TOKEN" "$(yq -r '.external.cobiss-token' $CONFIG)"
 elif [ "$ENV" = "dev" ]; then
     set_env $BACKEND_ENV "DATABASE_URL" "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@$HOSTNAME:$EXTERNAL_POSTGRES/$POSTGRES_DB"
     set_env $BACKEND_ENV "POSTGRES_USER" "$POSTGRES_USER"
@@ -63,4 +66,3 @@ else
     exho "ENV is ont set correctly!"
     exit 1
 fi
-
