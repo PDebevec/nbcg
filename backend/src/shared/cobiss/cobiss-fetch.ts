@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { extractFirstRecordXml, recordXmlToJson } from './cobiss-parser';
 import { DomainRecord } from './cobiss.types';
 
@@ -26,7 +27,14 @@ async function safeFetch(url: string): Promise<{ contentType: string; body: stri
 export async function fetchCobissRecord(
   cobissId: string,
 ): Promise<DomainRecord | null> {
-  const url =;
+  const url =
+    `${COBISS_ENDPOINT}?query=+ID = ${cobissId}` +
+    '&operation=searchRetrieve' +
+    '&recordSchema=info:srw/schema/1/comarc' +
+    '&recordPacking=XML' +
+    '&availableDBs=COBCG' +
+    `&x-info-2-auth1.0-authenticationToken=${process.env.COBISS_TOKEN}`
+  ;
 
   const response = await safeFetch(url);
   if (!response) return null;
