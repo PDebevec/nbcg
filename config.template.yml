@@ -21,8 +21,6 @@ ports:
 zfs:
 ##### in prod this should be changed to the zfs path
   base: "lib-data/"
-  files: "files/"
-  backup: "backup/"
 
 external:
   #!#!#!#!#! if added do not commit and push this file !#!#!#!#!#

@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG="config.yml"
+CONFIG="config.template.yml"
+
+if [[ -f $CONFIG ]]; then
+    cp $CONFIG 'config.yml'
+else
+    echo "config template file is missing!"
+    exit 1
+fi
 
 ENV_FILE=".env"
 # Load env variables
@@ -29,8 +36,8 @@ set_env() {
 touch "$ENV_FILE"
 
 set_env "BASE_DIR" "$(yq -r '.zfs.base' $CONFIG)"
-set_env "FILES_DIR" "$(yq -r '.zfs.base' $CONFIG)$(yq -r '.zfs.files' $CONFIG)"
-set_env "BACKUP_DIR" "$(yq -r '.zfs.base' $CONFIG)$(yq -r '.zfs.backup' $CONFIG)"
+set_env "FILES_DIR" "$(yq -r '.zfs.base' $CONFIG)files/"
+set_env "BACKUP_DIR" "$(yq -r '.zfs.base' $CONFIG)backup/"
 
 if [ "$ENV" = "prod" ]; then
     # Replace or add

@@ -42,8 +42,6 @@ check_folder infrastructure
 check_folder infrastructure/docker
 check_folder infrastructure/docker/nginx
 check_folder infrastructure/docker/pgadmin
-check_folder infrastructure/docker/backend
-check_folder infrastructure/docker/frontend
 check_folder infrastructure/env
 check_folder infrastructure/scripts
 

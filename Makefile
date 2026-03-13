@@ -129,6 +129,7 @@ clear:
 	rm frontend/.env
 	rm -f infrastructure/docker/nginx/certs/*
 	rm -f infrastructure/docker/pgadmin/servers.json
+	rm config.yml
 
 qd:
 	make down-v
