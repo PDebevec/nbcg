@@ -23,6 +23,11 @@ services:
       POSTGRES_INITDB_ARGS: "--data-checksums"
     volumes:
      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 ##### PGADMIN #####
   pgadmin:
@@ -35,9 +40,9 @@ services:
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
     depends_on:
       db:
-        condition: service_started
+        condition: service_healthy
       keycloak-db:
-        condition: service_started
+        condition: service_healthy
 
 ##### REDIS #####
   redis:
@@ -58,6 +63,11 @@ services:
       POSTGRES_INITDB_ARGS: "--data-checksums"
     volumes:
      - keycloak-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_POSTGRES_USER} -d ${KEYCLOAK_POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 ##### KEYCLOAK #####
   keycloak:
@@ -65,7 +75,7 @@ services:
     restart: unless-stopped
     depends_on:
       keycloak-db:
-        condition: service_started
+        condition: service_healthy
     environment:
       KC_HOSTNAME_PORT: ${INTERNAL_HTTPHTTP}
       KC_HEALTH_ENABLED: true

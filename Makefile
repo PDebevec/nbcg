@@ -1,3 +1,5 @@
+.PHONY: $(shell grep -E '^[a-zA-Z0-9_-]+:' Makefile | cut -d: -f1)
+
 ENV ?= dev
 
 #####
@@ -48,9 +50,6 @@ docker:
 #####
 back-end:
 	cd backend && npm ci
-	cd backend && npx prisma generate
-	cd backend && npm run build
-	cd backend && npm audit fix
 
 front-end:
 	cd frontend && npm ci
@@ -59,25 +58,25 @@ front-end:
 # startup scripts
 #####
 init-dev:
-	make env ENV=dev
-	make config
-	make apply-conf
-	make end-env
-	make apply-env
-	make docker ENV=dev
-	make backend/
-	make frontend/
-	make create
+	$(MAKE) env ENV=dev
+	$(MAKE) config
+	$(MAKE) apply-conf
+	$(MAKE) end-env
+	$(MAKE) apply-env
+	$(MAKE) docker ENV=dev
+	$(MAKE) back-end
+	$(MAKE) front-end
+	$(MAKE) create
 
 init-prod:
-	make env ENV=prod
-	make config
-	make apply-conf
-	make end-env
-	make apply-env
-	make docker ENV=prod
-	make cert-gen
-	make create
+	$(MAKE) env ENV=prod
+	$(MAKE) config
+	$(MAKE) apply-conf
+	$(MAKE) end-env
+	$(MAKE) apply-env
+	$(MAKE) docker ENV=prod
+	$(MAKE) cert-gen
+	$(MAKE) create
 
 migrate:
 	./infrastructure/scripts/migrate.sh
@@ -86,15 +85,15 @@ migrate:
 # quich create
 #####
 qc:
-	make init-dev
+	$(MAKE) init-dev
 
 #####
 # quich start
 #####
 qs:
-	make init-dev
-	make start
-	make migrate
+	$(MAKE) init-dev
+	$(MAKE) start
+	$(MAKE) migrate
 
 #####
 # docker create and start
@@ -131,19 +130,19 @@ down-v:
 	./infrastructure/scripts/clear-volumes.sh
 
 clear:
-	make down
-	rm docker-compose.yml
-	rm docker-compose.ext.yml
-	rm .env
-	rm backend/.env
-	rm frontend/.env
+	$(MAKE) down
+	rm -f docker-compose.yml
+	rm -f docker-compose.ext.yml
+	rm -f .env
+	rm -f backend/.env
+	rm -f frontend/.env
 	rm -f infrastructure/docker/nginx/certs/*
 	rm -f infrastructure/docker/pgadmin/servers.json
-	rm config.yml
+	rm -f config.yml
 
 qd:
-	make down-v
-	make clear
+	$(MAKE) down-v
+	$(MAKE) clear
 
 #####
 # generate self signed certificate
