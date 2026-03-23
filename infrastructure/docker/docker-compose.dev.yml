@@ -65,11 +65,14 @@ services:
 
 ##### OPENSEARCH
   opensearch-node:
+    environment:
+      - DISABLE_SECURITY_PLUGIN=true
     ports:
       - ${EXTERNAL_OPENSEARCH_NODE_P1}:${INTERNAL_OPENSEARCH_NODE_P1}
       - ${EXTERNAL_OPENSEARCH_NODE_P2}:${INTERNAL_OPENSEARCH_NODE_P2}
     networks:
       - backend
+    restart: unless-stopped
 
   opensearch-dashboards:
     ports:

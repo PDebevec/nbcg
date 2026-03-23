@@ -19,6 +19,12 @@ end-env:
 	./infrastructure/scripts/gen-end-env.sh
 
 #####
+# copy config file
+#####
+config:
+	cp config.template.yml config.yml
+
+#####
 # apply config
 #####
 apply-conf:
@@ -54,6 +60,7 @@ front-end:
 #####
 init-dev:
 	make env ENV=dev
+	make config
 	make apply-conf
 	make end-env
 	make apply-env
@@ -64,6 +71,7 @@ init-dev:
 
 init-prod:
 	make env ENV=prod
+	make config
 	make apply-conf
 	make end-env
 	make apply-env
@@ -98,7 +106,7 @@ up:
 	docker compose -f docker-compose.yml -f docker-compose.ext.yml up -d
 
 #####
-# handle services
+# handle docker services
 #####
 start:
 	docker compose -f docker-compose.yml -f docker-compose.ext.yml start
@@ -120,8 +128,10 @@ down:
 
 down-v:
 	docker compose -f docker-compose.yml -f docker-compose.ext.yml down -v
+	./infrastructure/scripts/clear-volumes.sh
 
 clear:
+	make down
 	rm docker-compose.yml
 	rm docker-compose.ext.yml
 	rm .env

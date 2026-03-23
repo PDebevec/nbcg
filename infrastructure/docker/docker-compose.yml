@@ -102,4 +102,4 @@ services:
     depends_on:
      - opensearch-node
     environment:
-      OPENSEARCH_HOSTS: '["https://opensearch-node:${INTERNAL_OPENSEARCH_NODE_P1}"]'
+      OPENSEARCH_HOSTS: '["http://opensearch-node:${INTERNAL_OPENSEARCH_NODE_P1}"]'

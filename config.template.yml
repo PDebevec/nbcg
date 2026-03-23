@@ -23,10 +23,10 @@ zfs:
   base: "lib-data/"
 
 external:
-  #!#!#!#!#! if added do not commit and push this file !#!#!#!#!#
+  #!#!#!#!#! DO NOT ADD VALUE TO THIS VARIABLE OR SECRETS / PASSWORDS / KEYS / ... TO THE TEMPLATE FILE !#!#!#!#!#
   cobiss-token:
 
-##### these are for referance what could be - mfa should be tried
+##### dev specific configuration to disable scurity of funcitonality
 config:
   allow_account_creation: false
   enable_mfa: false

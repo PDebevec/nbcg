@@ -27,7 +27,13 @@ MISSING=0
 
 check python3
 check docker
-check docker compose
+# fixed — check the subcommand directly
+if docker compose version >/dev/null 2>&1; then
+    echo "[OK] docker compose is installed"
+else
+    echo "[ERROR] docker compose is NOT installed"
+    MISSING=1
+fi
 check node
 check npx
 check npm
