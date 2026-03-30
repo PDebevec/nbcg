@@ -6,8 +6,12 @@
 
 generator client {
   provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  output   = "../generated/prisma"
   moduleFormat = "commonjs"
+}
+
+generator jsonTypes {
+  provider = "prisma-json-types-generator"
 }
 
 datasource db {
@@ -20,59 +24,46 @@ enum VisibilityStatus {
   HIDDEN
 }
 
+enum ItemType {
+  DRAFT
+  RECORD
+}
+
 model Draft {
-  id               String            @id @default(cuid())
+  id               String          @id @default(cuid())
   visibilityStatus VisibilityStatus
-  metadata         Json?             // { ..., data: { collectionType, childrenNumber, jeGlavnoGradivo } }
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  /// [RecordMetadata]
+  metadata         Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
   createdByUserId  String
   updatedByUserId  String?
-  
-  parentRelations  ItemRelation[]    @relation("ChildItem")
-  childRelations   ItemRelation[]    @relation("ParentItem")
 
   @@map("drafts")
 }
 
 model Record {
-  id               String            @id @default(cuid())
+  id               String          @id @default(cuid())
   visibilityStatus VisibilityStatus
-  metadata         Json?             // { ..., data: { collectionType, childrenNumber, jeGlavnoGradivo } }
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  /// [RecordMetadata]
+  metadata         Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
   createdByUserId  String
   updatedByUserId  String?
-  
-  parentRelations  ItemRelation[]    @relation("ChildItem")
-  childRelations   ItemRelation[]    @relation("ParentItem")
-  
+
   @@map("records")
 }
 
 model ItemRelation {
-  parentId         String
-  parentType       String            // 'draft' | 'record'
-  childId          String
-  childType        String            // 'draft' | 'record'
-  createdAt        DateTime          @default(now())
-  
-  parentDraft      Draft?            @relation("ParentItem", fields: [parentId], references: [id], onDelete: Cascade, map: "parent_draft_fk")
-  childDraft       Draft?            @relation("ChildItem", fields: [childId], references: [id], onDelete: Cascade, map: "child_draft_fk")
-  parentRecord     Record?           @relation("ParentItem", fields: [parentId], references: [id], onDelete: Cascade, map: "parent_record_fk")
-  childRecord      Record?           @relation("ChildItem", fields: [childId], references: [id], onDelete: Cascade, map: "child_record_fk")
+  parentId   String
+  parentType ItemType
+  childId    String
+  childType  ItemType
+  createdAt  DateTime @default(now())
 
-  @@id([parentId, parentType, childId, childType])
+  @@id([parentId, childId])
   @@index([parentId, parentType])
   @@index([childId, childType])
-  @@index([childId, childType, parentType])
   @@map("item_relations")
 }
-
-  // id               String   @id @default(cuid())
-  // recordId         String
-  // bucket           String
-  // objectKey        String
-  // mimeType         String
-  // size             Int
-  // originalFilename String

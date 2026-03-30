@@ -2,10 +2,10 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { BullModule } from '@nestjs/bullmq';
-import { AuthModule } from './auth/auth.module';
+import { AuthModule } from './core/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { ImportModule } from './modules/import/import.module';
-import { PrismaModule } from './prisma/prisma.module';
+import { PrismaModule } from './core/prisma/prisma.module';
 
 @Module({
   imports: [

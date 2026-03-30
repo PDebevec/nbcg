@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ImportController } from './import.controller';
-import { ImportQueueModule } from './shared/import-queue.module';
+import { ImportQueueModule } from './queue/import-queue.module';
 import { CobissImportModule } from './cobiss/cobiss-import.module';
 
 @Module({

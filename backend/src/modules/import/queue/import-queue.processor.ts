@@ -2,10 +2,10 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { ImportJobData, ImportJobProgress } from './import-job.types';
-import { fetchCobissRecord } from 'src/shared/cobiss/cobiss-fetch';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { randomUUID } from 'node:crypto';
+import { fetchCobissRecord } from 'src/modules/import/cobiss/cobiss-util/cobiss-fetch';
+import { PrismaService } from 'src/core/prisma/prisma.service';
 import { generateDeterministicId } from 'src/shared/util/generateUuidFromCobissId';
+import type { CobissMetadata } from 'src/core/types/metadata.types';
 
 const BATCH_SIZE = 5;
 
@@ -67,16 +67,14 @@ export class ImportQueueProcessor extends WorkerHost {
 
     const recordId = generateDeterministicId(id);
 
-    // Prepare metadata with data object
-    // collectionType comes from COBISS record, default to 0 if not present
-    const collectionType = 0;
-    
-    const metadata= JSON.parse(JSON.stringify({
-      ...record, // all the COBISS data
-      collectionType: collectionType,
-      childrenNumber: 0, // Will be updated by triggers when relations are created
-      jeGlavnoGradivo: true, // Will be updated by triggers when relations are created
-    }));
+    const metadata: CobissMetadata = {
+      ...record,
+      _source: 'cobiss',
+      title: record.title,
+      collectionType: 0,
+      childrenNumber: 0,     // updated by triggers when relations are created
+      jeGlavnoGradivo: true, // updated by triggers when relations are created
+    };
 
     await this.prisma.record.upsert({
       where: {

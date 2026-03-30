@@ -1,5 +1,5 @@
 import { Controller, Get, Param } from '@nestjs/common';
-import { ImportQueueService } from './shared/import-queue.service';
+import { ImportQueueService } from './queue/import-queue.service';
 
 @Controller('import')
 export class ImportController {

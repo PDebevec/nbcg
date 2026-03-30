@@ -1,4 +1,4 @@
-import { fetchCobissRecord } from '../shared/cobiss/cobiss-fetch';
+import { fetchCobissRecord } from '../src/modules/import/cobiss/cobiss-util/cobiss-fetch';
 
 async function main() {
   const cobissId = process.argv[2];
