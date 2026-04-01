@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { AuthModule } from './core/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { ImportModule } from './modules/import/import.module';
+import { RelationsModule } from './modules/relations/relations.module';
 import { PrismaModule } from './core/prisma/prisma.module';
 
 @Module({
@@ -19,6 +20,7 @@ import { PrismaModule } from './core/prisma/prisma.module';
     AuthModule,
     HealthModule,
     ImportModule,
+    RelationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,20 +1,17 @@
-import { Controller, Get, Query, Param } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { ImportQueueService } from '../queue/import-queue.service';
+import { CobissImportDto } from './dto/cobiss-import.dto';
 
 @Controller('import')
 export class CobissImportController {
   constructor(private readonly importQueue: ImportQueueService) {}
 
-  @Get('cobiss')
-  async importCobiss(@Query('id') id: string) {
-    const ids = id?.split(',').map((v) => v.trim()).filter(Boolean) ?? [];
-
-    if (ids.length === 0) {
+  @Post('cobiss')
+  async importCobiss(@Body() dto: CobissImportDto) {
+    if (!dto.ids?.length) {
       return { error: 'No COBISS ids provided' };
     }
 
-    // Immediately returns — heavy lifting happens in the background
-    return this.importQueue.enqueue('cobiss', ids);
-    // → { jobId: "42" }
+    return this.importQueue.enqueue('cobiss', dto.ids, dto.target, dto.visibilityStatus);
   }
 }

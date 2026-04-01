@@ -1,24 +1,32 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Queue } from 'bullmq';
+import { ItemType, VisibilityStatus } from '../../../../generated/prisma/enums';
 import { ImportJobData, ImportJobProgress, ImportSource } from './import-job.types';
 
 @Injectable()
 export class ImportQueueService {
   constructor(@InjectQueue('import-queue') private readonly queue: Queue) {}
 
-  async enqueue(source: ImportSource, ids: string[]): Promise<{ jobId: string }> {
+  async enqueue(
+    source: ImportSource,
+    ids: string[],
+    target: ItemType,
+    visibilityStatus: VisibilityStatus,
+  ): Promise<{ jobId: string }> {
     const job = await this.queue.add(
-      source, // job name = source, lets the processor route correctly
+      source,
       {
         source,
         ids,
+        target,
+        visibilityStatus,
         requestedAt: new Date().toISOString(),
       } satisfies ImportJobData,
       {
         attempts: 3,
         backoff: { type: 'exponential', delay: 2000 },
-        removeOnComplete: { age: 60 * 60 * 24 }, // keep 24h
+        removeOnComplete: { age: 60 * 60 * 24 },
         removeOnFail: { age: 60 * 60 * 24 * 7 },
       },
     );
@@ -36,7 +44,7 @@ export class ImportQueueService {
     return {
       jobId,
       source: (job.data as ImportJobData).source,
-      state,           // 'waiting' | 'active' | 'completed' | 'failed' | 'delayed'
+      state,
       requestedAt: (job.data as ImportJobData).requestedAt,
       progress: progress ?? null,
       failedReason: job.failedReason ?? null,

@@ -7,7 +7,8 @@ import type { DomainRecord } from 'src/modules/import/cobiss/cobiss-util/cobiss.
 export interface BaseMetadata {
   title: string;
   collectionType: number;
-  childrenNumber: number;
+  childrenInDrafts: number;
+  childrenInRecords: number;
   jeGlavnoGradivo: boolean;
 }
 
