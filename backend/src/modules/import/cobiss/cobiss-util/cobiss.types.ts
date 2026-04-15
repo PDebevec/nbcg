@@ -858,3 +858,137 @@ export interface DomainRecord {
   // }>;
 
 }
+
+// ─── Runtime sanitizers ───────────────────────────────────────────────────────
+//
+// Each FieldValidator receives a value and returns the sanitized form of it.
+// Throw a plain Error (message only) when the type is fundamentally wrong.
+// Unknown keys inside nested objects are silently dropped.
+
+export type FieldValidator = (v: unknown) => unknown;
+
+const str  = (v: unknown): unknown => { if (typeof v !== 'string')  throw new Error('expected string');  return v; };
+const bool = (v: unknown): unknown => { if (typeof v !== 'boolean') throw new Error('expected boolean'); return v; };
+
+// Validates a ResolvedCode and strips any extra keys (e.g. "bb").
+const resolvedCode = (v: unknown): unknown => {
+  if (typeof v !== 'object' || v === null || Array.isArray(v))
+    throw new Error('expected ResolvedCode { code, en, cnr }');
+  const o = v as Record<string, unknown>;
+  if (typeof o.code !== 'string' || typeof o.en !== 'string' || typeof o.cnr !== 'string')
+    throw new Error('expected ResolvedCode { code: string, en: string, cnr: string }');
+  return { code: o.code, en: o.en, cnr: o.cnr };
+};
+
+// Sanitizes an object against a shape: keeps only known keys, validates each.
+const sanitizeObj = (shape: Record<string, FieldValidator>) => (v: unknown): unknown => {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new Error('expected object');
+  const input = v as Record<string, unknown>;
+  const result: Record<string, unknown> = {};
+  for (const [k, val] of Object.entries(input)) {
+    if (!(k in shape)) continue; // unknown key → drop silently
+    result[k] = shape[k](val);   // throws if wrong type
+  }
+  return result;
+};
+
+const arrOf = (item: FieldValidator) => (v: unknown): unknown => {
+  if (!Array.isArray(v)) throw new Error('expected array');
+  return v.map((el, i) => {
+    try { return item(el); }
+    catch (e) { throw new Error(`[${i}]: ${(e as Error).message}`); }
+  });
+};
+
+// ─── Complex field sanitizers ─────────────────────────────────────────────────
+
+const responsibility = (v: unknown): unknown => {
+  if (v !== 'primary' && v !== 'alternative' && v !== 'secondary')
+    throw new Error('expected "primary" | "alternative" | "secondary"');
+  return v;
+};
+
+const textualMaterialCodesValidator = sanitizeObj({
+  illustrationCodes:     arrOf(resolvedCode),
+  contentTypeCodes:      arrOf(resolvedCode),
+  conferencePublication: bool,
+  festschrift:           bool,
+  indexIndicator:        bool,
+  literaryForm:          resolvedCode,
+  biographyCode:         resolvedCode,
+});
+
+const publicationValidator = sanitizeObj({
+  place:             str,
+  publisher:         str,
+  year:              str,
+  placeOfManufacture: str,
+  manufacturerName:  str,
+});
+
+const authorValidator = sanitizeObj({
+  familyName:     str,
+  firstName:      str,
+  prefix:         str,
+  romanNumerals:  str,
+  dates:          str,
+  role:           resolvedCode,
+  responsibility,
+});
+
+const corporateBodyValidator = sanitizeObj({
+  name:           str,
+  responsibility,
+});
+
+const electronicLocationValidator = sanitizeObj({
+  url: str,
+});
+
+/**
+ * Runtime mirror of DomainRecord — keys + sanitizer functions.
+ * TypeScript enforces this object covers every key on the interface exactly.
+ * Add a field to DomainRecord and tsc errors here until you add it below.
+ */
+export const DOMAIN_RECORD_SHAPE: Record<keyof DomainRecord, FieldValidator> = {
+  cobissId:                     str,
+  recordType:                   resolvedCode,
+  bibliographicLevel:           resolvedCode,
+  materialType:                 resolvedCode,
+  documentTypology:             str,
+  isbn:                         arrOf(str),
+  issn:                         arrOf(str),
+  ismn:                         arrOf(str),
+  publicationDate1:             str,
+  publicationDate2:             str,
+  language:                     arrOf(resolvedCode),
+  originalLanguage:             arrOf(resolvedCode),
+  translationLanguages:         arrOf(resolvedCode),
+  title:                        str,
+  parallelTitle:                arrOf(str),
+  subtitle:                     str,
+  titleInOtherScript:           arrOf(str),
+  titleByAnotherAuthor:         str,
+  titleMediumDesignation:       str,
+  firstResponsibility:          str,
+  subsequentResponsibility:     arrOf(str),
+  authors:                      arrOf(authorValidator),
+  corporateBodies:              arrOf(corporateBodyValidator),
+  edition:                      str,
+  musicEditionStatement:        str,
+  numberingAndDates:            str,
+  physicalDescription:          str,
+  otherPhysicalDetails:         str,
+  dimensions:                   str,
+  seriesTitle:                  str,
+  seriesSubtitle:               str,
+  seriesIssn:                   str,
+  seriesVolume:                 str,
+  seriesResponsibility:         str,
+  notes:                        arrOf(str),
+  electronicLocation:           arrOf(electronicLocationValidator),
+  textualMaterialCodes:         textualMaterialCodesValidator,
+  cartographicMathematicalData: str,
+  country:                      arrOf(resolvedCode),
+  publication:                  publicationValidator,
+};
