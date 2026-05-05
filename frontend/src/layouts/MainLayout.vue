@@ -1,21 +1,34 @@
 <template>
-  <q-layout view="lHh Lpr lFf">
-    <q-header elevated>
-      <q-toolbar>
-        <q-btn flat dense round icon="menu" aria-label="Menu" @click="toggleLeftDrawer" />
+  <q-layout view="lHh Lpr lFf" class="library-shell">
+    <q-header class="bg-library-primary text-white" bordered>
+      <q-toolbar class="q-px-md q-py-sm">
+        <q-btn flat dense round icon="menu_book" aria-label="Menu" @click="toggleLeftDrawer" />
 
-        <q-toolbar-title> Quasar App </q-toolbar-title>
+        <q-toolbar-title>
+          <div class="text-weight-bold">NBCG Digital Library</div>
+          <div class="text-caption text-blue-1">Catalog, records</div>
+        </q-toolbar-title>
 
-        <div>Quasar v{{ $q.version }}</div>
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
-      <q-list>
-        <q-item-label header> Essential Links </q-item-label>
+    <q-drawer v-model="leftDrawerOpen" show-if-above bordered :width="280" class="bg-library-paper text-library-ink">
+      <div class="q-pa-md column full-height">
+        <div class="library-chip q-mb-lg">
+          <q-icon name="auto_stories" size="18px" />
+          <span>Digital Collections</span>
+        </div>
 
-        <EssentialLink v-for="link in linksList" :key="link.title" v-bind="link" />
-      </q-list>
+        <q-list padding class="col">
+          <EssentialLink v-for="link in mainLinks" :key="link.title" v-bind="link" />
+        </q-list>
+
+        <q-separator color="grey-4" class="q-my-sm" />
+
+        <q-list padding>
+          <EssentialLink v-bind="adminLink" />
+        </q-list>
+      </div>
     </q-drawer>
 
     <q-page-container>
@@ -28,50 +41,29 @@
 import { ref } from 'vue';
 import EssentialLink, { type EssentialLinkProps } from 'components/EssentialLink.vue';
 
-const linksList: EssentialLinkProps[] = [
+const mainLinks: EssentialLinkProps[] = [
   {
-    title: 'Docs',
-    caption: 'quasar.dev',
-    icon: 'school',
-    link: 'https://quasar.dev',
+    title: 'Home',
+    icon: 'dashboard',
+    link: '/',
   },
   {
-    title: 'Github',
-    caption: 'github.com/quasarframework',
-    icon: 'code',
-    link: 'https://github.com/quasarframework',
+    title: 'Catalog',
+    icon: 'menu_book',
+    link: '/catalog',
   },
   {
-    title: 'Discord Chat Channel',
-    caption: 'chat.quasar.dev',
-    icon: 'chat',
-    link: 'https://chat.quasar.dev',
-  },
-  {
-    title: 'Forum',
-    caption: 'forum.quasar.dev',
-    icon: 'record_voice_over',
-    link: 'https://forum.quasar.dev',
-  },
-  {
-    title: 'Twitter',
-    caption: '@quasarframework',
-    icon: 'rss_feed',
-    link: 'https://twitter.quasar.dev',
-  },
-  {
-    title: 'Facebook',
-    caption: '@QuasarFramework',
-    icon: 'public',
-    link: 'https://facebook.quasar.dev',
-  },
-  {
-    title: 'Quasar Awesome',
-    caption: 'Community Quasar projects',
-    icon: 'favorite',
-    link: 'https://awesome.quasar.dev',
+    title: 'Records',
+    icon: 'inventory_2',
+    link: '#',
   },
 ];
+
+const adminLink: EssentialLinkProps = {
+  title: 'Administration',
+  icon: 'shield',
+  link: '#',
+};
 
 const leftDrawerOpen = ref(false);
 
@@ -79,3 +71,21 @@ function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value;
 }
 </script>
+
+<style scoped lang="sass">
+@use 'sass:color'
+
+.library-shell
+  background: linear-gradient(180deg, color.adjust($paper, $lightness: 3%), $paper 35%, #ffffff)
+  min-height: 100vh
+
+.library-chip
+  display: inline-flex
+  align-items: center
+  gap: 0.5rem
+  padding: 0.45rem 0.85rem
+  border-radius: 999px
+  background: rgba($secondary, 0.14)
+  color: $secondary
+  font-weight: 600
+</style>
