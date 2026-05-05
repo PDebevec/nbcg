@@ -96,6 +96,10 @@ services:
     networks:
       - backend
 
+  pgsync:
+    networks:
+      - backend
+
   opensearch-node:
     networks:
       - backend

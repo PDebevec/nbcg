@@ -1,0 +1,9 @@
+[
+  {
+    "database": "nbcg",
+    "index": "records",
+    "nodes": {
+      "table": "records"
+    }
+  }
+]

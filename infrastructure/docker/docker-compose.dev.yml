@@ -63,6 +63,11 @@ services:
     networks:
       - backend
 
+##### PGSYNC
+  pgsync:
+    networks:
+      - backend
+
 ##### OPENSEARCH
   opensearch-node:
     environment:

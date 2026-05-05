@@ -16,6 +16,7 @@ services:
     image: postgres:18.3
     restart: unless-stopped
     shm_size: 1024mb
+    command: [ "postgres", "-c", "wal_level=logical" ]
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -86,6 +87,28 @@ services:
       KC_DB_USERNAME: ${KEYCLOAK_POSTGRES_USER}
       KC_DB_PASSWORD: ${KEYCLOAK_POSTGRES_PASSWORD}
 
+##### PGSYNC #####
+  pgsync:
+    image: toluaina1/pgsync:latest
+    restart: unless-stopped
+    environment:
+      - REDIS_CHECKPOINT=true
+      - REDIS_HOST=redis
+      - PG_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
+      - ELASTICSEARCH_URL=http://opensearch-node:${INTERNAL_OPENSEARCH_NODE_P1}
+      - ELASTICSEARCH=false
+      - OPENSEARCH=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started # Redis is usually instant, but you can add a healthcheck there too
+      opensearch-node:
+        condition: service_healthy
+    volumes:
+      - ./infrastructure/docker/pgsync/schema.json:/app/schema.json
+    command: -c schema.json -d -b
+
 ##### OPENSEARCH #####
   opensearch-node:
     image: opensearchproject/opensearch:3.5.0
@@ -97,6 +120,12 @@ services:
       - bootstrap.memory_lock=true
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     ulimits:
       memlock:
         soft: -1
@@ -106,6 +135,7 @@ services:
         hard: 65536
     volumes:
       - opensearch-data:/usr/share/opensearch/data
+
 ##### dashboard
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:3.5.0
@@ -113,3 +143,4 @@ services:
      - opensearch-node
     environment:
       OPENSEARCH_HOSTS: '["http://opensearch-node:${INTERNAL_OPENSEARCH_NODE_P1}"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: true
