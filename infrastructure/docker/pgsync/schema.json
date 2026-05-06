@@ -3,7 +3,54 @@
     "database": "nbcg",
     "index": "records",
     "nodes": {
-      "table": "records"
+      "table": "records",
+      "columns": [
+        "id",
+        "visibilityStatus",
+        "metadata",
+        "createdAt",
+        "updatedAt",
+        "createdByUserId",
+        "updatedByUserId"
+      ],
+      "transform": {
+        "mapping": {
+          "id": { "type": "keyword" },
+          "visibilityStatus": { "type": "keyword" },
+          "metadata": { "type": "object", "enabled": true },
+          "createdAt": { "type": "date" },
+          "updatedAt": { "type": "date" },
+          "createdByUserId": { "type": "keyword" },
+          "updatedByUserId": { "type": "keyword" }
+        }
+      }
+    }
+  },
+  {
+    "database": "nbcg",
+    "index": "drafts",
+    "nodes": {
+      "table": "drafts",
+      "columns": [
+        "id",
+        "visibilityStatus",
+        "metadata",
+        "createdAt",
+        "updatedAt",
+        "createdByUserId",
+        "updatedByUserId"
+      ],
+      "transform": {
+        "mapping": {
+          "id": { "type": "keyword" },
+          "visibilityStatus": { "type": "keyword" },
+          "metadata": { "type": "object", "enabled": true },
+          "createdAt": { "type": "date" },
+          "updatedAt": { "type": "date" },
+          "createdByUserId": { "type": "keyword" },
+          "updatedByUserId": { "type": "keyword" }
+        }
+      }
     }
   }
 ]
