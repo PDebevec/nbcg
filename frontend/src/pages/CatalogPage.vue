@@ -10,15 +10,13 @@
           </div>
           <div class="row q-gutter-xs">
             <q-btn
-              flat
-              round
+              flat round
               :color="viewMode === 'grid' ? 'secondary' : 'white'"
               icon="grid_view"
               @click="viewMode = 'grid'"
             />
             <q-btn
-              flat
-              round
+              flat round
               :color="viewMode === 'list' ? 'secondary' : 'white'"
               icon="view_list"
               @click="viewMode = 'list'"
@@ -38,8 +36,7 @@
             <!-- SEARCH -->
             <q-input
               v-model="filterSearch"
-              outlined
-              dense
+              outlined dense
               placeholder="Search within catalog …"
               class="q-mb-md"
             >
@@ -48,14 +45,12 @@
               </template>
               <template #append>
                 <q-btn
-                  flat
-                  round
-                  dense
+                  flat round dense
                   :icon="fullTextSearch ? 'manage_search' : 'text_fields'"
                   :color="fullTextSearch ? 'primary' : 'grey-5'"
                   size="sm"
                   @click="fullTextSearch = !fullTextSearch"
-                >
+                  >
                   <q-tooltip>{{ fullTextSearch ? 'Full-text search on' : 'Full-text search off' }}</q-tooltip>
                 </q-btn>
               </template>
@@ -66,8 +61,7 @@
             <q-option-group
               v-model="selectedType"
               :options="typeOptions"
-              color="primary"
-              dense
+              color="primary" dense
               class="q-mb-md"
             />
 
@@ -82,8 +76,7 @@
                 v-model="selectedLanguages"
                 :val="lang.value"
                 :label="lang.label"
-                color="primary"
-                dense
+                color="primary" dense
                 />
             </div>
 
@@ -107,12 +100,10 @@
             <q-separator color="grey-3" class="q-my-md" />
 
             <q-btn
-              flat
-              no-caps
+              flat no-caps dense
               color="negative"
               label="Reset filters"
               icon="restart_alt"
-              dense
               size="sm"
               @click="resetFilters"
             />
@@ -132,10 +123,7 @@
             <q-select
               v-model="sortBy"
               :options="sortOptions"
-              dense
-              outlined
-              emit-value
-              map-options
+              outlined dense emit-value map-options
               label="Sort by"
               class="sort-select"
             />

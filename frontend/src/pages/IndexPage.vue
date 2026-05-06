@@ -78,7 +78,7 @@
     </section>
 
     <!-- STATS -->
-    <div class="stats-bar row no-wrap justify-center">
+    <div v-if="false" class="stats-bar row no-wrap justify-center">
       <div
         v-for="stat in stats"
         :key="stat.label"
@@ -93,7 +93,7 @@
 
       <!-- COLLECTIONS -->
       <section class="q-mb-xl">
-        <div class="section-label text-library-muted q-mb-xs">Collections</div>
+        <div v-if="false" class="section-label text-library-muted q-mb-xs">Collections</div>
         <h2 class="text-h5 text-weight-bold text-library-primary q-mt-none q-mb-md">Browse collections</h2>
         <div class="row q-col-gutter-md">
           <div v-for="col in collections" :key="col.type" class="col-6 col-sm-4 col-md-2">
