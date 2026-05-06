@@ -3,7 +3,7 @@
     <!-- PAGE HEADER -->
     <div class="catalog-header q-px-md q-py-lg">
       <div class="page-body">
-        <div class="row items-center justify-between">
+        <div class="row items-center justify-between q-px-md">
           <div>
             <div class="header-kicker q-mb-xs">Digital Library</div>
             <h1 class="text-h4 text-weight-bold text-white q-my-none">Item catalog</h1>
@@ -45,6 +45,19 @@
             >
               <template #prepend>
                 <q-icon name="search" size="18px" color="grey-6" />
+              </template>
+              <template #append>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  :icon="fullTextSearch ? 'manage_search' : 'text_fields'"
+                  :color="fullTextSearch ? 'primary' : 'grey-5'"
+                  size="sm"
+                  @click="fullTextSearch = !fullTextSearch"
+                >
+                  <q-tooltip>{{ fullTextSearch ? 'Full-text search on' : 'Full-text search off' }}</q-tooltip>
+                </q-btn>
               </template>
             </q-input>
 
@@ -203,8 +216,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 
-const viewMode = ref<'grid' | 'list'>('grid');
+const viewMode = ref<'grid' | 'list'>('list');
 const filterSearch = ref('');
+const fullTextSearch = ref(false);
 const selectedType = ref('vse');
 const selectedLanguages = ref<string[]>(['sl']);
 const selectedEra = ref('vse');
@@ -319,7 +333,7 @@ function resetFilters() {
 @use 'sass:color'
 
 .catalog-header
-  background: linear-gradient(135deg, $primary 0%, color.adjust($primary, $lightness: -8%) 100%)
+  background: $primary
 
 .header-kicker
   font-size: 0.72rem

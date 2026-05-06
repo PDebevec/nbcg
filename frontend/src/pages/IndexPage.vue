@@ -2,8 +2,7 @@
   <q-page>
     <!-- HERO -->
     <section class="hero-section">
-      <div class="hero-bg-dots" />
-      <div class="hero-glow" />
+      <div class="hero-overlay" />
       <div class="hero-content q-px-md">
         <div class="row justify-center">
           <div class="col-12 col-sm-10 col-md-8 col-lg-7 text-center">
@@ -35,6 +34,19 @@
                 placeholder="Search by title, author, subject …"
                 @keyup.enter="doSearch"
               />
+              <q-btn
+                flat
+                round
+                dense
+                :icon="fullTextSearch ? 'manage_search' : 'text_fields'"
+                :color="fullTextSearch ? 'primary' : 'grey-5'"
+                size="sm"
+                class="q-mr-xs"
+                @click="fullTextSearch = !fullTextSearch"
+              >
+                <q-tooltip>{{ fullTextSearch ? 'Full-text search on' : 'Full-text search off' }}</q-tooltip>
+              </q-btn>
+              <q-separator vertical inset class="q-mr-xs" />
               <q-btn
                 unelevated
                 color="secondary"
@@ -100,36 +112,6 @@
         </div>
       </section>
 
-      <!-- FEATURED ITEMS -->
-      <section class="q-mb-xl">
-        <div class="row items-baseline justify-between q-mb-md">
-          <div>
-            <div class="section-label text-library-muted q-mb-xs">Editor's picks</div>
-            <h2 class="text-h5 text-weight-bold text-library-primary q-my-none">Featured items</h2>
-          </div>
-          <q-btn flat no-caps color="secondary" label="All items →" to="/catalog" />
-        </div>
-        <div class="row q-col-gutter-md">
-          <div
-            v-for="item in featuredItems"
-            :key="item.id"
-            class="col-6 col-sm-4 col-md-3 col-lg-2"
-          >
-            <q-card flat v-ripple class="item-card cursor-pointer">
-              <q-img :src="item.cover" :ratio="2/3" class="item-cover">
-                <div class="absolute-top-right q-pa-xs">
-                  <q-badge :color="typeColor(item.type)" :label="item.type" />
-                </div>
-              </q-img>
-              <q-card-section class="q-pa-sm">
-                <div class="text-weight-bold text-caption text-library-ink ellipsis-2-lines">{{ item.title }}</div>
-                <div class="text-caption text-library-muted q-mt-xs">{{ item.author }}</div>
-                <div class="text-caption text-library-muted">{{ item.year }}</div>
-              </q-card-section>
-            </q-card>
-          </div>
-        </div>
-      </section>
 
       <!-- RECENT + INFO -->
       <div class="row q-col-gutter-lg">
@@ -194,9 +176,13 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
 
 const searchQuery = ref('');
 const searchType = ref('all');
+const fullTextSearch = ref(false);
 
 const searchTypes = [
   { label: 'All', value: 'all' },
@@ -223,14 +209,6 @@ const collections = [
   { type: 'photographs',  label: 'Photographs',  icon: 'photo_library', color: 'warning',    count: '11k items' },
 ];
 
-const featuredItems = [
-  { id: 1, title: 'History of the Slovenian nation', author: 'Josip Mal',        year: '1928', type: 'Book',       cover: 'https://picsum.photos/seed/nbcg01/200/300' },
-  { id: 2, title: 'Alpine Bulletin',                 author: 'PZS',              year: '1912', type: 'Journal',    cover: 'https://picsum.photos/seed/nbcg02/200/300' },
-  { id: 3, title: 'Map of the Carniola Province',    author: 'J. Lavtižar',     year: '1901', type: 'Map',        cover: 'https://picsum.photos/seed/nbcg03/200/300' },
-  { id: 4, title: 'Collected Poems',                 author: 'France Prešeren', year: '1847', type: 'Book',       cover: 'https://picsum.photos/seed/nbcg04/200/300' },
-  { id: 5, title: 'Ljubljanski zvon',                author: 'Various authors',  year: '1881', type: 'Journal',    cover: 'https://picsum.photos/seed/nbcg05/200/300' },
-  { id: 6, title: 'Triglav Manuscript',              author: 'Unknown',          year: '1780', type: 'Manuscript', cover: 'https://picsum.photos/seed/nbcg06/200/300' },
-];
 
 const recentEntries = [
   { id: 1, title: 'Yearbook of Matica Slovenska 1874', author: 'Matica Slovenska', year: '1874', type: 'Journal',   cover: 'https://picsum.photos/seed/nbcg07/80/80' },
@@ -253,8 +231,9 @@ function typeColor(type: string) {
   return typeColorMap[type] ?? 'grey-6';
 }
 
-function doSearch() {
+async function doSearch() {
   console.log('search', searchType.value, searchQuery.value);
+  await router.push('/catalog');
 }
 </script>
 
@@ -263,24 +242,16 @@ function doSearch() {
 
 .hero-section
   position: relative
-  background: linear-gradient(145deg, $primary 0%, color.adjust($primary, $lightness: -8%) 55%, $dark 100%)
+  background-image: url('https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1600&q=80')
+  background-size: cover
+  background-position: center 30%
   min-height: 380px
   overflow: hidden
 
-.hero-bg-dots
+.hero-overlay
   position: absolute
   inset: 0
-  background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)
-  background-size: 28px 28px
-
-.hero-glow
-  position: absolute
-  top: -80px
-  right: -60px
-  width: 320px
-  height: 320px
-  background: radial-gradient(circle, rgba($secondary, 0.22), transparent 70%)
-  border-radius: 50%
+  background: linear-gradient(145deg, rgba($primary, 0.82) 0%, rgba($dark, 0.72) 100%)
 
 .hero-content
   position: relative

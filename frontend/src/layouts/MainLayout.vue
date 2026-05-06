@@ -1,35 +1,22 @@
 <template>
   <q-layout view="lHh Lpr lFf" class="library-shell">
-    <q-header class="bg-library-primary text-white" bordered>
-      <q-toolbar class="q-px-md q-py-sm">
-        <q-btn flat dense round icon="menu_book" aria-label="Menu" @click="toggleLeftDrawer" />
-
-        <q-toolbar-title>
-          <div class="text-weight-bold">NBCG Digital Library</div>
-          <div class="text-caption text-blue-1">Catalog, records</div>
-        </q-toolbar-title>
-
-      </q-toolbar>
-    </q-header>
-
-    <q-drawer v-model="leftDrawerOpen" show-if-above bordered :width="280" class="bg-library-paper text-library-ink">
-      <div class="q-pa-md column full-height">
-        <div class="library-chip q-mb-lg">
-          <q-icon name="auto_stories" size="18px" />
-          <span>Digital Collections</span>
+    <q-header class="app-header" bordered>
+      <q-toolbar class="q-px-md">
+        <!-- LOGO + TITLE -->
+        <q-btn flat dense round icon="auto_stories" class="text-white q-mr-sm" to="/" :ripple="false" />
+        <div>
+          <div class="header-title">NBCG Digital Library</div>
+          <div class="header-subtitle">National and Central Library</div>
         </div>
 
-        <q-list padding class="col">
-          <EssentialLink v-for="link in mainLinks" :key="link.title" v-bind="link" />
-        </q-list>
+        <q-space />
 
-        <q-separator color="grey-4" class="q-my-sm" />
-
-        <q-list padding>
-          <EssentialLink v-bind="adminLink" />
-        </q-list>
-      </div>
-    </q-drawer>
+        <!-- RIGHT ACTIONS -->
+        <q-btn v-if="false" flat dense round icon="search" class="text-white" />
+        <q-btn v-if="false" flat dense round icon="notifications_none" class="text-white q-ml-xs" />
+        <q-btn flat dense round icon="account_circle" class="text-white q-ml-xs" />
+      </q-toolbar>
+    </q-header>
 
     <q-page-container>
       <router-view />
@@ -38,38 +25,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import EssentialLink, { type EssentialLinkProps } from 'components/EssentialLink.vue';
+import { useRouter } from 'vue-router';
 
-const mainLinks: EssentialLinkProps[] = [
-  {
-    title: 'Home',
-    icon: 'dashboard',
-    link: '/',
-  },
-  {
-    title: 'Catalog',
-    icon: 'menu_book',
-    link: '/catalog',
-  },
-  {
-    title: 'Records',
-    icon: 'inventory_2',
-    link: '#',
-  },
-];
-
-const adminLink: EssentialLinkProps = {
-  title: 'Administration',
-  icon: 'shield',
-  link: '#',
-};
-
-const leftDrawerOpen = ref(false);
-
-function toggleLeftDrawer() {
-  leftDrawerOpen.value = !leftDrawerOpen.value;
-}
+const router = useRouter();
+void router;
 </script>
 
 <style scoped lang="sass">
@@ -79,13 +38,22 @@ function toggleLeftDrawer() {
   background: linear-gradient(180deg, color.adjust($paper, $lightness: 3%), $paper 35%, #ffffff)
   min-height: 100vh
 
-.library-chip
-  display: inline-flex
-  align-items: center
-  gap: 0.5rem
-  padding: 0.45rem 0.85rem
-  border-radius: 999px
-  background: rgba($secondary, 0.14)
-  color: $secondary
-  font-weight: 600
+.app-header
+  background: linear-gradient(90deg, $primary 0%, color.adjust($primary, $lightness: -10%) 100%)
+  color: white
+  box-shadow: 0 2px 12px rgba($dark, 0.18)
+
+.header-title
+  font-size: 1rem
+  font-weight: 700
+  line-height: 1.2
+  color: white
+  letter-spacing: 0.01em
+
+.header-subtitle
+  font-size: 0.65rem
+  font-weight: 400
+  letter-spacing: 0.06em
+  color: rgba(white, 0.60)
+  text-transform: uppercase
 </style>

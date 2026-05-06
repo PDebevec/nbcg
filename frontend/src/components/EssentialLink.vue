@@ -6,6 +6,7 @@
     :tag="isInternal ? 'a' : 'a'"
     :href="isInternal ? undefined : link"
     :target="isInternal ? undefined : '_blank'"
+    :exact="link === '/'"
   >
     <q-item-section v-if="icon" avatar>
       <q-icon :name="icon" />
