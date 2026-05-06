@@ -116,8 +116,8 @@
       <!-- RECENT + INFO -->
       <div class="row q-col-gutter-lg">
         <div class="col-12 col-md-8">
-          <div class="section-label text-library-muted q-mb-xs">Recently updated</div>
-          <h2 class="text-h5 text-weight-bold text-library-primary q-mt-none q-mb-md">New entries</h2>
+          <div v-if="false" class="section-label text-library-muted q-mb-xs">Recently updated</div>
+          <h2 class="text-h5 text-weight-bold text-library-primary q-mt-none q-mb-md">Recently updated</h2>
           <q-list bordered separator class="rounded-borders bg-white">
             <q-item
               v-for="entry in recentEntries"
@@ -177,6 +177,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import imageStock from 'src/assets/image-stock.jpg';
 
 const router = useRouter();
 
@@ -211,11 +212,11 @@ const collections = [
 
 
 const recentEntries = [
-  { id: 1, title: 'Yearbook of Matica Slovenska 1874', author: 'Matica Slovenska', year: '1874', type: 'Journal',   cover: 'https://picsum.photos/seed/nbcg07/80/80' },
-  { id: 2, title: 'Slovenia in words and images',      author: 'Janez Trdina',    year: '1888', type: 'Book',      cover: 'https://picsum.photos/seed/nbcg08/80/80' },
-  { id: 3, title: 'Ethnographic map of the Balkans',   author: 'K. Šmid',         year: '1919', type: 'Map',       cover: 'https://picsum.photos/seed/nbcg09/80/80' },
-  { id: 4, title: 'Jutro – daily newspaper',            author: 'Jutro editorial', year: '1930', type: 'Newspaper', cover: 'https://picsum.photos/seed/nbcg10/80/80' },
-  { id: 5, title: 'Natural history atlas',             author: 'M. Hrovatin',     year: '1955', type: 'Book',      cover: 'https://picsum.photos/seed/nbcg11/80/80' },
+  { id: 1, title: 'Yearbook of Matica Slovenska 1874', author: 'Matica Slovenska', year: '1874', type: 'Journal',   cover: imageStock },
+  { id: 2, title: 'Slovenia in words and images',      author: 'Janez Trdina',    year: '1888', type: 'Book',      cover: imageStock },
+  { id: 3, title: 'Ethnographic map of the Balkans',   author: 'K. Šmid',         year: '1919', type: 'Map',       cover: imageStock },
+  { id: 4, title: 'Jutro – daily newspaper',            author: 'Jutro editorial', year: '1930', type: 'Newspaper', cover: imageStock },
+  { id: 5, title: 'Natural history atlas',             author: 'M. Hrovatin',     year: '1955', type: 'Book',      cover: imageStock },
 ];
 
 const typeColorMap: Record<string, string> = {

@@ -203,6 +203,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import imageStock from 'src/assets/image-stock.jpg';
 
 const viewMode = ref<'grid' | 'list'>('list');
 const filterSearch = ref('');
@@ -260,22 +261,22 @@ interface CatalogItem {
 }
 
 const allItems: CatalogItem[] = [
-  { id:  1, title: 'Collected Poems',                          author: 'France Prešeren',          publisher: 'Blaž Crobath',         year: '1847', type: 'Book',         language: 'sl', cover: 'https://picsum.photos/seed/cat01/200/300' },
-  { id:  2, title: 'History of the Slovenian nation',          author: 'Josip Mal',                publisher: 'Učiteljska tiskarna',   year: '1928', type: 'Book',         language: 'sl', cover: 'https://picsum.photos/seed/cat02/200/300' },
-  { id:  3, title: 'Alpine Bulletin',                          author: 'Planinska zveza Slovenije', publisher: 'PZS',                  year: '1912', type: 'Journal',      language: 'sl', cover: 'https://picsum.photos/seed/cat03/200/300' },
-  { id:  4, title: 'Ljubljanski zvon',                         author: 'Fran Levstik et al.',      publisher: 'Kleinmayr & Bamberg',  year: '1881', type: 'Journal',      language: 'sl', cover: 'https://picsum.photos/seed/cat04/200/300' },
-  { id:  5, title: 'Jutro – daily newspaper',                  author: 'Jutro editorial',          publisher: 'Jutro d.o.o.',         year: '1930', type: 'Newspaper',    language: 'sl', cover: 'https://picsum.photos/seed/cat05/200/300' },
-  { id:  6, title: 'Slovenec – political newspaper',          author: 'Various authors',          publisher: 'Katoliška tiskarna',   year: '1873', type: 'Newspaper',    language: 'sl', cover: 'https://picsum.photos/seed/cat06/200/300' },
-  { id:  7, title: 'Triglav Manuscript',                       author: 'Unknown',                  publisher: '–',                     year: '1780', type: 'Manuscript',   language: 'sl', cover: 'https://picsum.photos/seed/cat07/200/300' },
-  { id:  8, title: 'Codex Aquileiensis',                       author: 'Anonymous',                publisher: '–',                     year: '1150', type: 'Manuscript',   language: 'la', cover: 'https://picsum.photos/seed/cat08/200/300' },
-  { id:  9, title: 'Map of the Carniola Province',             author: 'J. Lavtižar',              publisher: 'Državna tiskarna',      year: '1901', type: 'Map',          language: 'sl', cover: 'https://picsum.photos/seed/cat09/200/300' },
-  { id: 10, title: 'Ethnographic map of the Balkans',          author: 'K. Šmid',                  publisher: 'Geografski inštitut',  year: '1919', type: 'Map',          language: 'de', cover: 'https://picsum.photos/seed/cat10/200/300' },
-  { id: 11, title: 'Kobal photo archive – Ljubljana 1920',   author: 'Foto Kobal',               publisher: '–',                     year: '1920', type: 'Photograph',   language: 'sl', cover: 'https://picsum.photos/seed/cat11/200/300' },
-  { id: 12, title: 'Portrait of Valentin Vodnik',              author: 'Janez Wolf',               publisher: '–',                     year: '1818', type: 'Photograph',   language: 'sl', cover: 'https://picsum.photos/seed/cat12/200/300' },
-  { id: 13, title: 'Natural history atlas',                    author: 'M. Hrovatin',              publisher: 'DZS',                  year: '1955', type: 'Book',         language: 'sl', cover: 'https://picsum.photos/seed/cat13/200/300' },
-  { id: 14, title: 'Botanisches Handbuch Krain',               author: 'H. Freyer',                publisher: 'Eger',                 year: '1838', type: 'Book',         language: 'de', cover: 'https://picsum.photos/seed/cat14/200/300' },
-  { id: 15, title: 'Yearbook of Matica Slovenska 1874',        author: 'Matica Slovenska',         publisher: 'Matica Slovenska',     year: '1874', type: 'Journal',      language: 'sl', cover: 'https://picsum.photos/seed/cat15/200/300' },
-  { id: 16, title: 'Folk songs recordings (LP)',               author: 'ZKP RTV Slovenija',        publisher: 'RTV',                  year: '1968', type: 'Audio record',  language: 'sl', cover: 'https://picsum.photos/seed/cat16/200/300' },
+  { id:  1, title: 'Collected Poems',                          author: 'France Prešeren',          publisher: 'Blaž Crobath',         year: '1847', type: 'Book',         language: 'sl', cover: imageStock },
+  { id:  2, title: 'History of the Slovenian nation',          author: 'Josip Mal',                publisher: 'Učiteljska tiskarna',   year: '1928', type: 'Book',         language: 'sl', cover: imageStock },
+  { id:  3, title: 'Alpine Bulletin',                          author: 'Planinska zveza Slovenije', publisher: 'PZS',                  year: '1912', type: 'Journal',      language: 'sl', cover: imageStock },
+  { id:  4, title: 'Ljubljanski zvon',                         author: 'Fran Levstik et al.',      publisher: 'Kleinmayr & Bamberg',  year: '1881', type: 'Journal',      language: 'sl', cover: imageStock },
+  { id:  5, title: 'Jutro – daily newspaper',                  author: 'Jutro editorial',          publisher: 'Jutro d.o.o.',         year: '1930', type: 'Newspaper',    language: 'sl', cover: imageStock },
+  { id:  6, title: 'Slovenec – political newspaper',          author: 'Various authors',          publisher: 'Katoliška tiskarna',   year: '1873', type: 'Newspaper',    language: 'sl', cover: imageStock },
+  { id:  7, title: 'Triglav Manuscript',                       author: 'Unknown',                  publisher: '–',                     year: '1780', type: 'Manuscript',   language: 'sl', cover: imageStock },
+  { id:  8, title: 'Codex Aquileiensis',                       author: 'Anonymous',                publisher: '–',                     year: '1150', type: 'Manuscript',   language: 'la', cover: imageStock },
+  { id:  9, title: 'Map of the Carniola Province',             author: 'J. Lavtižar',              publisher: 'Državna tiskarna',      year: '1901', type: 'Map',          language: 'sl', cover: imageStock },
+  { id: 10, title: 'Ethnographic map of the Balkans',          author: 'K. Šmid',                  publisher: 'Geografski inštitut',  year: '1919', type: 'Map',          language: 'de', cover: imageStock },
+  { id: 11, title: 'Kobal photo archive – Ljubljana 1920',   author: 'Foto Kobal',               publisher: '–',                     year: '1920', type: 'Photograph',   language: 'sl', cover: imageStock },
+  { id: 12, title: 'Portrait of Valentin Vodnik',              author: 'Janez Wolf',               publisher: '–',                     year: '1818', type: 'Photograph',   language: 'sl', cover: imageStock },
+  { id: 13, title: 'Natural history atlas',                    author: 'M. Hrovatin',              publisher: 'DZS',                  year: '1955', type: 'Book',         language: 'sl', cover: imageStock },
+  { id: 14, title: 'Botanisches Handbuch Krain',               author: 'H. Freyer',                publisher: 'Eger',                 year: '1838', type: 'Book',         language: 'de', cover: imageStock },
+  { id: 15, title: 'Yearbook of Matica Slovenska 1874',        author: 'Matica Slovenska',         publisher: 'Matica Slovenska',     year: '1874', type: 'Journal',      language: 'sl', cover: imageStock },
+  { id: 16, title: 'Folk songs recordings (LP)',               author: 'ZKP RTV Slovenija',        publisher: 'RTV',                  year: '1968', type: 'Audio record',  language: 'sl', cover: imageStock },
 ];
 
 const typeColorMap: Record<string, string> = {
