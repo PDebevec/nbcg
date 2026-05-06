@@ -84,3 +84,20 @@ services:
       - ${EXTERNAL_OPENSEARCH_DASHBOARDS}:${INTERNAL_OPENSEARCH_DASHBOARDS}
     networks:
       - backend
+
+##### SeaweedFS
+  master:
+    networks:
+      - backend
+  volume:
+    networks:
+      - backend
+  filer:
+    networks:
+      - backend
+  s3:
+    networks:
+      - backend
+  webdav:
+    networks:
+      - backend

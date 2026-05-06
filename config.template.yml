@@ -17,6 +17,18 @@ ports:
   metadata-db: 15432
   redis-db: 6379
   keycloak-db: 25432
+  seaweedfs-master-p1: 9333
+  seaweedfs-master-p2: 19333
+  seaweedfs-master-p3: 9324
+  seaweedfs-volume-p1: 8083
+  seaweedfs-volume-p2: 18083
+  seaweedfs-volume-p3: 9325
+  seaweedfs-filer-p1: 8888
+  seaweedfs-filer-p2: 18888
+  seaweedfs-filer-p3: 9326
+  seaweedfs-s3-p1: 8333
+  seaweedfs-s3-p2: 9327
+  seaweedfs-webdav: 7333
 
 zfs:
 ##### in prod this should be changed to the zfs path

@@ -1,3 +1,5 @@
+name: nbcg
+
 volumes:
 ##### POSTGRES
   postgres-data:
@@ -9,6 +11,8 @@ volumes:
   opensearch-data:
 ##### REDIS
   redis-data:
+##### SEAWEEDFS
+  seaweedfs-data:
 
 services:
 ##### POSTGRESQL #####
@@ -144,3 +148,59 @@ services:
     environment:
       OPENSEARCH_HOSTS: '["http://opensearch-node:${INTERNAL_OPENSEARCH_NODE_P1}"]'
       DISABLE_SECURITY_DASHBOARDS_PLUGIN: true
+
+##### SEAWEEDFS #####
+  master:
+    image: chrislusf/seaweedfs:4.23 # use a remote image
+    restart: unless-stopped
+    ports:
+      - ${EXTERNAL_SEAWEEDFS_MASTER_P1}:9333
+      - ${EXTERNAL_SEAWEEDFS_MASTER_P2}:19333
+      - ${EXTERNAL_SEAWEEDFS_MASTER_P3}:9324
+    command: 'master -ip=master -ip.bind=0.0.0.0 -metricsPort=9324'
+  volume:
+    image: chrislusf/seaweedfs:4.23 # use a remote image
+    volumes:
+      - seaweedfs-data:/data
+    restart: unless-stopped
+    ports:
+      - ${EXTERNAL_SEAWEEDFS_VOLUME_P1}:8080
+      - ${EXTERNAL_SEAWEEDFS_VOLUME_P2}:18080
+      - ${EXTERNAL_SEAWEEDFS_VOLUME_P3}:9325
+    command: 'volume -ip=volume -master="master:9333" -ip.bind=0.0.0.0 -port=8080 -metricsPort=9325'
+    depends_on:
+      - master
+  filer:
+    image: chrislusf/seaweedfs:4.23 # use a remote image
+    restart: unless-stopped
+    ports:
+      - ${EXTERNAL_SEAWEEDFS_FILER_P1}:8888
+      - ${EXTERNAL_SEAWEEDFS_FILER_P2}:18888
+      - ${EXTERNAL_SEAWEEDFS_FILER_P3}:9326
+    command: 'filer -ip=filer -master="master:9333" -ip.bind=0.0.0.0 -metricsPort=9326'
+    tty: true
+    stdin_open: true
+    depends_on:
+      - master
+      - volume
+  s3:
+    image: chrislusf/seaweedfs:4.23 # use a remote image
+    restart: unless-stopped
+    ports:
+      - ${EXTERNAL_SEAWEEDFS_S3_P1}:8333
+      - ${EXTERNAL_SEAWEEDFS_S3_P2}:9327
+    command: 's3 -filer="filer:8888" -ip.bind=0.0.0.0 -metricsPort=9327'
+    depends_on:
+      - master
+      - volume
+      - filer
+  webdav:
+    image: chrislusf/seaweedfs:4.23 # use a remote image
+    restart: unless-stopped
+    ports:
+      - ${EXTERNAL_SEAWEEDFS_WEBDAV}:7333
+    command: 'webdav -filer="filer:8888"'
+    depends_on:
+      - master
+      - volume
+      - filer

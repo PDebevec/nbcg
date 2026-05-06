@@ -42,10 +42,24 @@ BACKUP_DIR="${BASE_DIR}backup/"
 # Create directories if they don't exist
 mkdir -p "$BASE_DIR" "$FILES_DIR" "$BACKUP_DIR"
 
-# Set env variables
+# Set direcotry env variables
 set_env "BASE_DIR" "$BASE_DIR"
 set_env "FILES_DIR" "$FILES_DIR"
 set_env "BACKUP_DIR" "$BACKUP_DIR"
+
+# set SeaWeedFS env variables
+set_env "EXTERNAL_SEAWEEDFS_MASTER_P1" "$(yq -r '.ports.seaweedfs-master-p1' $CONFIG)"
+set_env "EXTERNAL_SEAWEEDFS_MASTER_P2" "$(yq -r '.ports.seaweedfs-master-p2' $CONFIG)"
+set_env "EXTERNAL_SEAWEEDFS_MASTER_P3" "$(yq -r '.ports.seaweedfs-master-p3' $CONFIG)"
+set_env "EXTERNAL_SEAWEEDFS_VOLUME_P1" "$(yq -r '.ports.seaweedfs-volume-p1' $CONFIG)"
+set_env "EXTERNAL_SEAWEEDFS_VOLUME_P2" "$(yq -r '.ports.seaweedfs-volume-p2' $CONFIG)"
+set_env "EXTERNAL_SEAWEEDFS_VOLUME_P3" "$(yq -r '.ports.seaweedfs-volume-p3' $CONFIG)"
+set_env "EXTERNAL_SEAWEEDFS_FILER_P1" "$(yq -r '.ports.seaweedfs-filer-p1' $CONFIG)"
+set_env "EXTERNAL_SEAWEEDFS_FILER_P2" "$(yq -r '.ports.seaweedfs-filer-p2' $CONFIG)"
+set_env "EXTERNAL_SEAWEEDFS_FILER_P3" "$(yq -r '.ports.seaweedfs-filer-p3' $CONFIG)"
+set_env "EXTERNAL_SEAWEEDFS_S3_P1" "$(yq -r '.ports.seaweedfs-s3-p1' $CONFIG)"
+set_env "EXTERNAL_SEAWEEDFS_S3_P2" "$(yq -r '.ports.seaweedfs-s3-p2' $CONFIG)"
+set_env "EXTERNAL_SEAWEEDFS_WEBDAV" "$(yq -r '.ports.seaweedfs-webdav' $CONFIG)"
 
 if [ "$ENV" = "prod" ]; then
     # Replace or add
