@@ -170,7 +170,7 @@ export type RecordGroupByOutputType = {
   _max: RecordMaxAggregateOutputType | null
 }
 
-type GetRecordGroupByPayload<T extends RecordGroupByArgs> = Prisma.PrismaPromise<
+export type GetRecordGroupByPayload<T extends RecordGroupByArgs> = Prisma.PrismaPromise<
   Array<
     Prisma.PickEnumerable<RecordGroupByOutputType, T['by']> &
       {
@@ -196,6 +196,7 @@ export type RecordWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"Record"> | Date | string
   createdByUserId?: Prisma.StringFilter<"Record"> | string
   updatedByUserId?: Prisma.StringNullableFilter<"Record"> | string | null
+  fileAttachments?: Prisma.FileAttachmentListRelationFilter
 }
 
 export type RecordOrderByWithRelationInput = {
@@ -206,6 +207,7 @@ export type RecordOrderByWithRelationInput = {
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  fileAttachments?: Prisma.FileAttachmentOrderByRelationAggregateInput
 }
 
 export type RecordWhereUniqueInput = Prisma.AtLeast<{
@@ -219,6 +221,7 @@ export type RecordWhereUniqueInput = Prisma.AtLeast<{
   updatedAt?: Prisma.DateTimeFilter<"Record"> | Date | string
   createdByUserId?: Prisma.StringFilter<"Record"> | string
   updatedByUserId?: Prisma.StringNullableFilter<"Record"> | string | null
+  fileAttachments?: Prisma.FileAttachmentListRelationFilter
 }, "id">
 
 export type RecordOrderByWithAggregationInput = {
@@ -255,6 +258,7 @@ export type RecordCreateInput = {
   updatedAt?: Date | string
   createdByUserId: string
   updatedByUserId?: string | null
+  fileAttachments?: Prisma.FileAttachmentCreateNestedManyWithoutRecordInput
 }
 
 export type RecordUncheckedCreateInput = {
@@ -265,6 +269,7 @@ export type RecordUncheckedCreateInput = {
   updatedAt?: Date | string
   createdByUserId: string
   updatedByUserId?: string | null
+  fileAttachments?: Prisma.FileAttachmentUncheckedCreateNestedManyWithoutRecordInput
 }
 
 export type RecordUpdateInput = {
@@ -275,6 +280,7 @@ export type RecordUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  fileAttachments?: Prisma.FileAttachmentUpdateManyWithoutRecordNestedInput
 }
 
 export type RecordUncheckedUpdateInput = {
@@ -285,6 +291,7 @@ export type RecordUncheckedUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  fileAttachments?: Prisma.FileAttachmentUncheckedUpdateManyWithoutRecordNestedInput
 }
 
 export type RecordCreateManyInput = {
@@ -345,6 +352,112 @@ export type RecordMinOrderByAggregateInput = {
   updatedByUserId?: Prisma.SortOrder
 }
 
+export type RecordNullableScalarRelationFilter = {
+  is?: Prisma.RecordWhereInput | null
+  isNot?: Prisma.RecordWhereInput | null
+}
+
+export type RecordCreateNestedOneWithoutFileAttachmentsInput = {
+  create?: Prisma.XOR<Prisma.RecordCreateWithoutFileAttachmentsInput, Prisma.RecordUncheckedCreateWithoutFileAttachmentsInput>
+  connectOrCreate?: Prisma.RecordCreateOrConnectWithoutFileAttachmentsInput
+  connect?: Prisma.RecordWhereUniqueInput
+}
+
+export type RecordUpdateOneWithoutFileAttachmentsNestedInput = {
+  create?: Prisma.XOR<Prisma.RecordCreateWithoutFileAttachmentsInput, Prisma.RecordUncheckedCreateWithoutFileAttachmentsInput>
+  connectOrCreate?: Prisma.RecordCreateOrConnectWithoutFileAttachmentsInput
+  upsert?: Prisma.RecordUpsertWithoutFileAttachmentsInput
+  disconnect?: Prisma.RecordWhereInput | boolean
+  delete?: Prisma.RecordWhereInput | boolean
+  connect?: Prisma.RecordWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.RecordUpdateToOneWithWhereWithoutFileAttachmentsInput, Prisma.RecordUpdateWithoutFileAttachmentsInput>, Prisma.RecordUncheckedUpdateWithoutFileAttachmentsInput>
+}
+
+export type RecordCreateWithoutFileAttachmentsInput = {
+  id?: string
+  visibilityStatus: $Enums.VisibilityStatus
+  metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  createdByUserId: string
+  updatedByUserId?: string | null
+}
+
+export type RecordUncheckedCreateWithoutFileAttachmentsInput = {
+  id?: string
+  visibilityStatus: $Enums.VisibilityStatus
+  metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  createdByUserId: string
+  updatedByUserId?: string | null
+}
+
+export type RecordCreateOrConnectWithoutFileAttachmentsInput = {
+  where: Prisma.RecordWhereUniqueInput
+  create: Prisma.XOR<Prisma.RecordCreateWithoutFileAttachmentsInput, Prisma.RecordUncheckedCreateWithoutFileAttachmentsInput>
+}
+
+export type RecordUpsertWithoutFileAttachmentsInput = {
+  update: Prisma.XOR<Prisma.RecordUpdateWithoutFileAttachmentsInput, Prisma.RecordUncheckedUpdateWithoutFileAttachmentsInput>
+  create: Prisma.XOR<Prisma.RecordCreateWithoutFileAttachmentsInput, Prisma.RecordUncheckedCreateWithoutFileAttachmentsInput>
+  where?: Prisma.RecordWhereInput
+}
+
+export type RecordUpdateToOneWithWhereWithoutFileAttachmentsInput = {
+  where?: Prisma.RecordWhereInput
+  data: Prisma.XOR<Prisma.RecordUpdateWithoutFileAttachmentsInput, Prisma.RecordUncheckedUpdateWithoutFileAttachmentsInput>
+}
+
+export type RecordUpdateWithoutFileAttachmentsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  visibilityStatus?: Prisma.EnumVisibilityStatusFieldUpdateOperationsInput | $Enums.VisibilityStatus
+  metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+}
+
+export type RecordUncheckedUpdateWithoutFileAttachmentsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  visibilityStatus?: Prisma.EnumVisibilityStatusFieldUpdateOperationsInput | $Enums.VisibilityStatus
+  metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+}
+
+
+/**
+ * Count Type RecordCountOutputType
+ */
+
+export type RecordCountOutputType = {
+  fileAttachments: number
+}
+
+export type RecordCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  fileAttachments?: boolean | RecordCountOutputTypeCountFileAttachmentsArgs
+}
+
+/**
+ * RecordCountOutputType without action
+ */
+export type RecordCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the RecordCountOutputType
+   */
+  select?: Prisma.RecordCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * RecordCountOutputType without action
+ */
+export type RecordCountOutputTypeCountFileAttachmentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.FileAttachmentWhereInput
+}
 
 
 export type RecordSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -355,6 +468,8 @@ export type RecordSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   updatedAt?: boolean
   createdByUserId?: boolean
   updatedByUserId?: boolean
+  fileAttachments?: boolean | Prisma.Record$fileAttachmentsArgs<ExtArgs>
+  _count?: boolean | Prisma.RecordCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["record"]>
 
 export type RecordSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -388,10 +503,18 @@ export type RecordSelectScalar = {
 }
 
 export type RecordOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "visibilityStatus" | "metadata" | "createdAt" | "updatedAt" | "createdByUserId" | "updatedByUserId", ExtArgs["result"]["record"]>
+export type RecordInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  fileAttachments?: boolean | Prisma.Record$fileAttachmentsArgs<ExtArgs>
+  _count?: boolean | Prisma.RecordCountOutputTypeDefaultArgs<ExtArgs>
+}
+export type RecordIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
+export type RecordIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
 
 export type $RecordPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Record"
-  objects: {}
+  objects: {
+    fileAttachments: Prisma.$FileAttachmentPayload<ExtArgs>[]
+  }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     visibilityStatus: $Enums.VisibilityStatus
@@ -797,6 +920,7 @@ readonly fields: RecordFieldRefs;
  */
 export interface Prisma__RecordClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  fileAttachments<T extends Prisma.Record$fileAttachmentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Record$fileAttachmentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$FileAttachmentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -850,6 +974,10 @@ export type RecordFindUniqueArgs<ExtArgs extends runtime.Types.Extensions.Intern
    */
   omit?: Prisma.RecordOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RecordInclude<ExtArgs> | null
+  /**
    * Filter, which Record to fetch.
    */
   where: Prisma.RecordWhereUniqueInput
@@ -868,6 +996,10 @@ export type RecordFindUniqueOrThrowArgs<ExtArgs extends runtime.Types.Extensions
    */
   omit?: Prisma.RecordOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RecordInclude<ExtArgs> | null
+  /**
    * Filter, which Record to fetch.
    */
   where: Prisma.RecordWhereUniqueInput
@@ -885,6 +1017,10 @@ export type RecordFindFirstArgs<ExtArgs extends runtime.Types.Extensions.Interna
    * Omit specific fields from the Record
    */
   omit?: Prisma.RecordOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RecordInclude<ExtArgs> | null
   /**
    * Filter, which Record to fetch.
    */
@@ -934,6 +1070,10 @@ export type RecordFindFirstOrThrowArgs<ExtArgs extends runtime.Types.Extensions.
    */
   omit?: Prisma.RecordOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RecordInclude<ExtArgs> | null
+  /**
    * Filter, which Record to fetch.
    */
   where?: Prisma.RecordWhereInput
@@ -981,6 +1121,10 @@ export type RecordFindManyArgs<ExtArgs extends runtime.Types.Extensions.Internal
    * Omit specific fields from the Record
    */
   omit?: Prisma.RecordOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RecordInclude<ExtArgs> | null
   /**
    * Filter, which Records to fetch.
    */
@@ -1030,6 +1174,10 @@ export type RecordCreateArgs<ExtArgs extends runtime.Types.Extensions.InternalAr
    */
   omit?: Prisma.RecordOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RecordInclude<ExtArgs> | null
+  /**
    * The data needed to create a Record.
    */
   data: Prisma.XOR<Prisma.RecordCreateInput, Prisma.RecordUncheckedCreateInput>
@@ -1077,6 +1225,10 @@ export type RecordUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalAr
    * Omit specific fields from the Record
    */
   omit?: Prisma.RecordOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RecordInclude<ExtArgs> | null
   /**
    * The data needed to update a Record.
    */
@@ -1144,6 +1296,10 @@ export type RecordUpsertArgs<ExtArgs extends runtime.Types.Extensions.InternalAr
    */
   omit?: Prisma.RecordOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RecordInclude<ExtArgs> | null
+  /**
    * The filter to search for the Record to update in case it exists.
    */
   where: Prisma.RecordWhereUniqueInput
@@ -1170,6 +1326,10 @@ export type RecordDeleteArgs<ExtArgs extends runtime.Types.Extensions.InternalAr
    */
   omit?: Prisma.RecordOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RecordInclude<ExtArgs> | null
+  /**
    * Filter which Record to delete.
    */
   where: Prisma.RecordWhereUniqueInput
@@ -1190,6 +1350,30 @@ export type RecordDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.Intern
 }
 
 /**
+ * Record.fileAttachments
+ */
+export type Record$fileAttachmentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the FileAttachment
+   */
+  select?: Prisma.FileAttachmentSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the FileAttachment
+   */
+  omit?: Prisma.FileAttachmentOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.FileAttachmentInclude<ExtArgs> | null
+  where?: Prisma.FileAttachmentWhereInput
+  orderBy?: Prisma.FileAttachmentOrderByWithRelationInput | Prisma.FileAttachmentOrderByWithRelationInput[]
+  cursor?: Prisma.FileAttachmentWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.FileAttachmentScalarFieldEnum | Prisma.FileAttachmentScalarFieldEnum[]
+}
+
+/**
  * Record without action
  */
 export type RecordDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1201,4 +1385,8 @@ export type RecordDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalA
    * Omit specific fields from the Record
    */
   omit?: Prisma.RecordOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.RecordInclude<ExtArgs> | null
 }

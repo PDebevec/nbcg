@@ -10,5 +10,6 @@
  */
 export type * from './models/Draft.js'
 export type * from './models/Record.js'
+export type * from './models/FileAttachment.js'
 export type * from './models/ItemRelation.js'
 export type * from './commonInputTypes.js'

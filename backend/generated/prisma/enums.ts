@@ -24,3 +24,12 @@ export const ItemType = {
 } as const
 
 export type ItemType = (typeof ItemType)[keyof typeof ItemType]
+
+
+export const FileType = {
+  IMAGE: 'IMAGE',
+  PDF: 'PDF',
+  UNKNOWN: 'UNKNOWN'
+} as const
+
+export type FileType = (typeof FileType)[keyof typeof FileType]

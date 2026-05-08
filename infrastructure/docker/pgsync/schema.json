@@ -23,7 +23,61 @@
           "createdByUserId": { "type": "keyword" },
           "updatedByUserId": { "type": "keyword" }
         }
-      }
+      },
+      "children": [
+        {
+          "table": "file_attachments",
+          "columns": [
+            "id",
+            "fileType",
+            "filename",
+            "mimeType",
+            "sizeBytes",
+            "textExtracted",
+            "createdAt"
+          ],
+          "transform": {
+            "mapping": {
+              "id": { "type": "keyword" },
+              "fileType": { "type": "keyword" },
+              "filename": { "type": "text" },
+              "mimeType": { "type": "keyword" },
+              "sizeBytes": { "type": "long" },
+              "textExtracted": { "type": "boolean" },
+              "createdAt": { "type": "date" }
+            }
+          },
+          "relationship": {
+            "variant": "object",
+            "type": "one_to_many",
+            "foreign_key": {
+              "child": ["record_id"],
+              "parent": ["id"]
+            }
+          }
+        },
+        {
+          "table": "item_relations",
+          "columns": [
+            "childId",
+            "childType"
+          ],
+          "transform": {
+            "mapping": {
+              "childId": { "type": "keyword" },
+              "childType": { "type": "keyword" }
+            }
+          },
+          "relationship": {
+            "variant": "object",
+            "type": "one_to_many",
+            "foreign_key": {
+              "child": ["parentId"],
+              "parent": ["id"]
+            }
+          }
+        }
+      ]
     }
   },
   {
@@ -50,7 +104,61 @@
           "createdByUserId": { "type": "keyword" },
           "updatedByUserId": { "type": "keyword" }
         }
-      }
+      },
+      "children": [
+        {
+          "table": "file_attachments",
+          "columns": [
+            "id",
+            "fileType",
+            "filename",
+            "mimeType",
+            "sizeBytes",
+            "textExtracted",
+            "createdAt"
+          ],
+          "transform": {
+            "mapping": {
+              "id": { "type": "keyword" },
+              "fileType": { "type": "keyword" },
+              "filename": { "type": "text" },
+              "mimeType": { "type": "keyword" },
+              "sizeBytes": { "type": "long" },
+              "textExtracted": { "type": "boolean" },
+              "createdAt": { "type": "date" }
+            }
+          },
+          "relationship": {
+            "variant": "object",
+            "type": "one_to_many",
+            "foreign_key": {
+              "child": ["draft_id"],
+              "parent": ["id"]
+            }
+          }
+        },
+        {
+          "table": "item_relations",
+          "columns": [
+            "childId",
+            "childType"
+          ],
+          "transform": {
+            "mapping": {
+              "childId": { "type": "keyword" },
+              "childType": { "type": "keyword" }
+            }
+          },
+          "relationship": {
+            "variant": "object",
+            "type": "one_to_many",
+            "foreign_key": {
+              "child": ["parentId"],
+              "parent": ["id"]
+            }
+          }
+        }
+      ]
     }
   }
 ]

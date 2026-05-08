@@ -80,12 +80,12 @@ export type PrismaVersion = {
 }
 
 /**
- * Prisma Client JS version: 7.5.0
- * Query Engine version: 280c870be64f457428992c43c1f6d557fab6e29e
+ * Prisma Client JS version: 7.7.0
+ * Query Engine version: 75cbdc1eb7150937890ad5465d861175c6624711
  */
 export const prismaVersion: PrismaVersion = {
-  client: "7.5.0",
-  engine: "280c870be64f457428992c43c1f6d557fab6e29e"
+  client: "7.7.0",
+  engine: "75cbdc1eb7150937890ad5465d861175c6624711"
 }
 
 /**
@@ -386,6 +386,7 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 export const ModelName = {
   Draft: 'Draft',
   Record: 'Record',
+  FileAttachment: 'FileAttachment',
   ItemRelation: 'ItemRelation'
 } as const
 
@@ -402,7 +403,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "draft" | "record" | "itemRelation"
+    modelProps: "draft" | "record" | "fileAttachment" | "itemRelation"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -554,6 +555,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    FileAttachment: {
+      payload: Prisma.$FileAttachmentPayload<ExtArgs>
+      fields: Prisma.FileAttachmentFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.FileAttachmentFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileAttachmentPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.FileAttachmentFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileAttachmentPayload>
+        }
+        findFirst: {
+          args: Prisma.FileAttachmentFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileAttachmentPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.FileAttachmentFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileAttachmentPayload>
+        }
+        findMany: {
+          args: Prisma.FileAttachmentFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileAttachmentPayload>[]
+        }
+        create: {
+          args: Prisma.FileAttachmentCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileAttachmentPayload>
+        }
+        createMany: {
+          args: Prisma.FileAttachmentCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.FileAttachmentCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileAttachmentPayload>[]
+        }
+        delete: {
+          args: Prisma.FileAttachmentDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileAttachmentPayload>
+        }
+        update: {
+          args: Prisma.FileAttachmentUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileAttachmentPayload>
+        }
+        deleteMany: {
+          args: Prisma.FileAttachmentDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.FileAttachmentUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.FileAttachmentUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileAttachmentPayload>[]
+        }
+        upsert: {
+          args: Prisma.FileAttachmentUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileAttachmentPayload>
+        }
+        aggregate: {
+          args: Prisma.FileAttachmentAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateFileAttachment>
+        }
+        groupBy: {
+          args: Prisma.FileAttachmentGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.FileAttachmentGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.FileAttachmentCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.FileAttachmentCountAggregateOutputType> | number
+        }
+      }
+    }
     ItemRelation: {
       payload: Prisma.$ItemRelationPayload<ExtArgs>
       fields: Prisma.ItemRelationFieldRefs
@@ -693,6 +768,23 @@ export const RecordScalarFieldEnum = {
 export type RecordScalarFieldEnum = (typeof RecordScalarFieldEnum)[keyof typeof RecordScalarFieldEnum]
 
 
+export const FileAttachmentScalarFieldEnum = {
+  id: 'id',
+  draft_id: 'draft_id',
+  record_id: 'record_id',
+  fileType: 'fileType',
+  originalFid: 'originalFid',
+  extractedText: 'extractedText',
+  filename: 'filename',
+  mimeType: 'mimeType',
+  sizeBytes: 'sizeBytes',
+  textExtracted: 'textExtracted',
+  createdAt: 'createdAt'
+} as const
+
+export type FileAttachmentScalarFieldEnum = (typeof FileAttachmentScalarFieldEnum)[keyof typeof FileAttachmentScalarFieldEnum]
+
+
 export const ItemRelationScalarFieldEnum = {
   parentId: 'parentId',
   parentType: 'parentType',
@@ -808,16 +900,16 @@ export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaM
 
 
 /**
- * Reference to a field of type 'ItemType'
+ * Reference to a field of type 'FileType'
  */
-export type EnumItemTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ItemType'>
+export type EnumFileTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'FileType'>
     
 
 
 /**
- * Reference to a field of type 'ItemType[]'
+ * Reference to a field of type 'FileType[]'
  */
-export type ListEnumItemTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ItemType[]'>
+export type ListEnumFileTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'FileType[]'>
     
 
 
@@ -832,6 +924,41 @@ export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'In
  * Reference to a field of type 'Int[]'
  */
 export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Boolean'
+ */
+export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+/**
+ * Reference to a field of type 'ItemType'
+ */
+export type EnumItemTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ItemType'>
+    
+
+
+/**
+ * Reference to a field of type 'ItemType[]'
+ */
+export type ListEnumItemTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ItemType[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Float'
+ */
+export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
+    
+
+
+/**
+ * Reference to a field of type 'Float[]'
+ */
+export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
     
 
 /**
@@ -931,6 +1058,7 @@ export type PrismaClientOptions = ({
 export type GlobalOmitConfig = {
   draft?: Prisma.DraftOmit
   record?: Prisma.RecordOmit
+  fileAttachment?: Prisma.FileAttachmentOmit
   itemRelation?: Prisma.ItemRelationOmit
 }
 

@@ -29,30 +29,58 @@ enum ItemType {
   RECORD
 }
 
+enum FileType {
+  IMAGE
+  PDF
+  UNKNOWN
+}
+
 model Draft {
-  id               String          @id @default(cuid())
+  id               String           @id @default(cuid())
   visibilityStatus VisibilityStatus
   /// [RecordMetadata]
   metadata         Json?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
   createdByUserId  String
   updatedByUserId  String?
+  fileAttachments  FileAttachment[]
 
   @@map("drafts")
 }
 
 model Record {
-  id               String          @id @default(cuid())
+  id               String           @id @default(cuid())
   visibilityStatus VisibilityStatus
   /// [RecordMetadata]
   metadata         Json?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
   createdByUserId  String
   updatedByUserId  String?
+  fileAttachments  FileAttachment[]
 
   @@map("records")
+}
+
+model FileAttachment {
+  id            String   @id @default(cuid())
+  draft_id      String?
+  record_id     String?
+  draft         Draft?   @relation(fields: [draft_id], references: [id], onDelete: Cascade)
+  record        Record?  @relation(fields: [record_id], references: [id], onDelete: Cascade)
+  fileType      FileType
+  originalFid   String
+  extractedText String?
+  filename      String
+  mimeType      String
+  sizeBytes     Int
+  textExtracted Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([draft_id])
+  @@index([record_id])
+  @@map("file_attachments")
 }
 
 model ItemRelation {

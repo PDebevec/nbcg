@@ -8,6 +8,7 @@ import { ItemType, VisibilityStatus } from '../../../generated/prisma/enums';
 import { EDITABLE_BASE_METADATA_SHAPE } from '../../core/types/metadata.types';
 import { DOMAIN_RECORD_SHAPE, FieldValidator } from '../import/cobiss/cobiss-util/cobiss.types';
 import { PrismaService } from '../../core/prisma/prisma.service';
+import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
 import { generateDeterministicId } from '../../shared/util/generateUuidFromCobissId';
 
 // Derived at module load from the type shapes — automatically stays in sync
@@ -34,7 +35,10 @@ const REQUIRED_METADATA_VALIDATORS: Array<{
 
 @Injectable()
 export class ItemsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly seaweedfs: SeaweedfsService,
+  ) {}
 
   async create(
     visibilityStatus: VisibilityStatus,
@@ -142,6 +146,13 @@ export class ItemsService {
   }
 
   async delete(ids: string[]): Promise<void> {
+    const attachments = await this.prisma.fileAttachment.findMany({
+      where: { OR: [{ draft_id: { in: ids } }, { record_id: { in: ids } }] },
+      select: { originalFid: true },
+    });
+
+    await Promise.all(attachments.map((a) => this.seaweedfs.delete(a.originalFid)));
+
     await this.prisma.$transaction(async (tx) => {
       const [allDrafts, allRecords] = await Promise.all([
         tx.draft.findMany({ where: { id: { in: ids } } }),
@@ -158,6 +169,7 @@ export class ItemsService {
 
       // Delete relations first so the DELETE trigger can update parent counts
       // before the items themselves are removed.
+      // Note: file_attachments are deleted automatically via ON DELETE CASCADE.
       await tx.itemRelation.deleteMany({
         where: { OR: [{ parentId: { in: ids } }, { childId: { in: ids } }] },
       });
@@ -268,6 +280,25 @@ export class ItemsService {
         where: { parentId: { in: ids } },
         data: { parentType: targetState },
       });
+
+      // Re-link file attachments before cascade fires on delete.
+      // IDs are identical after transition so record_id/draft_id = id directly.
+      if (fromDrafts.length > 0 && targetState === ItemType.RECORD) {
+        for (const id of fromDrafts) {
+          await tx.fileAttachment.updateMany({
+            where: { draft_id: id },
+            data: { record_id: id, draft_id: null },
+          });
+        }
+      }
+      if (fromRecords.length > 0 && targetState === ItemType.DRAFT) {
+        for (const id of fromRecords) {
+          await tx.fileAttachment.updateMany({
+            where: { record_id: id },
+            data: { draft_id: id, record_id: null },
+          });
+        }
+      }
 
       if (fromDrafts.length > 0) {
         await tx.draft.deleteMany({ where: { id: { in: fromDrafts } } });

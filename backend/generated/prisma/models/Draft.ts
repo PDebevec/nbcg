@@ -170,7 +170,7 @@ export type DraftGroupByOutputType = {
   _max: DraftMaxAggregateOutputType | null
 }
 
-type GetDraftGroupByPayload<T extends DraftGroupByArgs> = Prisma.PrismaPromise<
+export type GetDraftGroupByPayload<T extends DraftGroupByArgs> = Prisma.PrismaPromise<
   Array<
     Prisma.PickEnumerable<DraftGroupByOutputType, T['by']> &
       {
@@ -196,6 +196,7 @@ export type DraftWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"Draft"> | Date | string
   createdByUserId?: Prisma.StringFilter<"Draft"> | string
   updatedByUserId?: Prisma.StringNullableFilter<"Draft"> | string | null
+  fileAttachments?: Prisma.FileAttachmentListRelationFilter
 }
 
 export type DraftOrderByWithRelationInput = {
@@ -206,6 +207,7 @@ export type DraftOrderByWithRelationInput = {
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  fileAttachments?: Prisma.FileAttachmentOrderByRelationAggregateInput
 }
 
 export type DraftWhereUniqueInput = Prisma.AtLeast<{
@@ -219,6 +221,7 @@ export type DraftWhereUniqueInput = Prisma.AtLeast<{
   updatedAt?: Prisma.DateTimeFilter<"Draft"> | Date | string
   createdByUserId?: Prisma.StringFilter<"Draft"> | string
   updatedByUserId?: Prisma.StringNullableFilter<"Draft"> | string | null
+  fileAttachments?: Prisma.FileAttachmentListRelationFilter
 }, "id">
 
 export type DraftOrderByWithAggregationInput = {
@@ -255,6 +258,7 @@ export type DraftCreateInput = {
   updatedAt?: Date | string
   createdByUserId: string
   updatedByUserId?: string | null
+  fileAttachments?: Prisma.FileAttachmentCreateNestedManyWithoutDraftInput
 }
 
 export type DraftUncheckedCreateInput = {
@@ -265,6 +269,7 @@ export type DraftUncheckedCreateInput = {
   updatedAt?: Date | string
   createdByUserId: string
   updatedByUserId?: string | null
+  fileAttachments?: Prisma.FileAttachmentUncheckedCreateNestedManyWithoutDraftInput
 }
 
 export type DraftUpdateInput = {
@@ -275,6 +280,7 @@ export type DraftUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  fileAttachments?: Prisma.FileAttachmentUpdateManyWithoutDraftNestedInput
 }
 
 export type DraftUncheckedUpdateInput = {
@@ -285,6 +291,7 @@ export type DraftUncheckedUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  fileAttachments?: Prisma.FileAttachmentUncheckedUpdateManyWithoutDraftNestedInput
 }
 
 export type DraftCreateManyInput = {
@@ -345,6 +352,11 @@ export type DraftMinOrderByAggregateInput = {
   updatedByUserId?: Prisma.SortOrder
 }
 
+export type DraftNullableScalarRelationFilter = {
+  is?: Prisma.DraftWhereInput | null
+  isNot?: Prisma.DraftWhereInput | null
+}
+
 export type StringFieldUpdateOperationsInput = {
   set?: string
 }
@@ -361,6 +373,107 @@ export type NullableStringFieldUpdateOperationsInput = {
   set?: string | null
 }
 
+export type DraftCreateNestedOneWithoutFileAttachmentsInput = {
+  create?: Prisma.XOR<Prisma.DraftCreateWithoutFileAttachmentsInput, Prisma.DraftUncheckedCreateWithoutFileAttachmentsInput>
+  connectOrCreate?: Prisma.DraftCreateOrConnectWithoutFileAttachmentsInput
+  connect?: Prisma.DraftWhereUniqueInput
+}
+
+export type DraftUpdateOneWithoutFileAttachmentsNestedInput = {
+  create?: Prisma.XOR<Prisma.DraftCreateWithoutFileAttachmentsInput, Prisma.DraftUncheckedCreateWithoutFileAttachmentsInput>
+  connectOrCreate?: Prisma.DraftCreateOrConnectWithoutFileAttachmentsInput
+  upsert?: Prisma.DraftUpsertWithoutFileAttachmentsInput
+  disconnect?: Prisma.DraftWhereInput | boolean
+  delete?: Prisma.DraftWhereInput | boolean
+  connect?: Prisma.DraftWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.DraftUpdateToOneWithWhereWithoutFileAttachmentsInput, Prisma.DraftUpdateWithoutFileAttachmentsInput>, Prisma.DraftUncheckedUpdateWithoutFileAttachmentsInput>
+}
+
+export type DraftCreateWithoutFileAttachmentsInput = {
+  id?: string
+  visibilityStatus: $Enums.VisibilityStatus
+  metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  createdByUserId: string
+  updatedByUserId?: string | null
+}
+
+export type DraftUncheckedCreateWithoutFileAttachmentsInput = {
+  id?: string
+  visibilityStatus: $Enums.VisibilityStatus
+  metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  createdByUserId: string
+  updatedByUserId?: string | null
+}
+
+export type DraftCreateOrConnectWithoutFileAttachmentsInput = {
+  where: Prisma.DraftWhereUniqueInput
+  create: Prisma.XOR<Prisma.DraftCreateWithoutFileAttachmentsInput, Prisma.DraftUncheckedCreateWithoutFileAttachmentsInput>
+}
+
+export type DraftUpsertWithoutFileAttachmentsInput = {
+  update: Prisma.XOR<Prisma.DraftUpdateWithoutFileAttachmentsInput, Prisma.DraftUncheckedUpdateWithoutFileAttachmentsInput>
+  create: Prisma.XOR<Prisma.DraftCreateWithoutFileAttachmentsInput, Prisma.DraftUncheckedCreateWithoutFileAttachmentsInput>
+  where?: Prisma.DraftWhereInput
+}
+
+export type DraftUpdateToOneWithWhereWithoutFileAttachmentsInput = {
+  where?: Prisma.DraftWhereInput
+  data: Prisma.XOR<Prisma.DraftUpdateWithoutFileAttachmentsInput, Prisma.DraftUncheckedUpdateWithoutFileAttachmentsInput>
+}
+
+export type DraftUpdateWithoutFileAttachmentsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  visibilityStatus?: Prisma.EnumVisibilityStatusFieldUpdateOperationsInput | $Enums.VisibilityStatus
+  metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+}
+
+export type DraftUncheckedUpdateWithoutFileAttachmentsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  visibilityStatus?: Prisma.EnumVisibilityStatusFieldUpdateOperationsInput | $Enums.VisibilityStatus
+  metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+}
+
+
+/**
+ * Count Type DraftCountOutputType
+ */
+
+export type DraftCountOutputType = {
+  fileAttachments: number
+}
+
+export type DraftCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  fileAttachments?: boolean | DraftCountOutputTypeCountFileAttachmentsArgs
+}
+
+/**
+ * DraftCountOutputType without action
+ */
+export type DraftCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the DraftCountOutputType
+   */
+  select?: Prisma.DraftCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * DraftCountOutputType without action
+ */
+export type DraftCountOutputTypeCountFileAttachmentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.FileAttachmentWhereInput
+}
 
 
 export type DraftSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -371,6 +484,8 @@ export type DraftSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   updatedAt?: boolean
   createdByUserId?: boolean
   updatedByUserId?: boolean
+  fileAttachments?: boolean | Prisma.Draft$fileAttachmentsArgs<ExtArgs>
+  _count?: boolean | Prisma.DraftCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["draft"]>
 
 export type DraftSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -404,10 +519,18 @@ export type DraftSelectScalar = {
 }
 
 export type DraftOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "visibilityStatus" | "metadata" | "createdAt" | "updatedAt" | "createdByUserId" | "updatedByUserId", ExtArgs["result"]["draft"]>
+export type DraftInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  fileAttachments?: boolean | Prisma.Draft$fileAttachmentsArgs<ExtArgs>
+  _count?: boolean | Prisma.DraftCountOutputTypeDefaultArgs<ExtArgs>
+}
+export type DraftIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
+export type DraftIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
 
 export type $DraftPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Draft"
-  objects: {}
+  objects: {
+    fileAttachments: Prisma.$FileAttachmentPayload<ExtArgs>[]
+  }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
     visibilityStatus: $Enums.VisibilityStatus
@@ -813,6 +936,7 @@ readonly fields: DraftFieldRefs;
  */
 export interface Prisma__DraftClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  fileAttachments<T extends Prisma.Draft$fileAttachmentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Draft$fileAttachmentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$FileAttachmentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -866,6 +990,10 @@ export type DraftFindUniqueArgs<ExtArgs extends runtime.Types.Extensions.Interna
    */
   omit?: Prisma.DraftOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DraftInclude<ExtArgs> | null
+  /**
    * Filter, which Draft to fetch.
    */
   where: Prisma.DraftWhereUniqueInput
@@ -884,6 +1012,10 @@ export type DraftFindUniqueOrThrowArgs<ExtArgs extends runtime.Types.Extensions.
    */
   omit?: Prisma.DraftOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DraftInclude<ExtArgs> | null
+  /**
    * Filter, which Draft to fetch.
    */
   where: Prisma.DraftWhereUniqueInput
@@ -901,6 +1033,10 @@ export type DraftFindFirstArgs<ExtArgs extends runtime.Types.Extensions.Internal
    * Omit specific fields from the Draft
    */
   omit?: Prisma.DraftOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DraftInclude<ExtArgs> | null
   /**
    * Filter, which Draft to fetch.
    */
@@ -950,6 +1086,10 @@ export type DraftFindFirstOrThrowArgs<ExtArgs extends runtime.Types.Extensions.I
    */
   omit?: Prisma.DraftOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DraftInclude<ExtArgs> | null
+  /**
    * Filter, which Draft to fetch.
    */
   where?: Prisma.DraftWhereInput
@@ -997,6 +1137,10 @@ export type DraftFindManyArgs<ExtArgs extends runtime.Types.Extensions.InternalA
    * Omit specific fields from the Draft
    */
   omit?: Prisma.DraftOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DraftInclude<ExtArgs> | null
   /**
    * Filter, which Drafts to fetch.
    */
@@ -1046,6 +1190,10 @@ export type DraftCreateArgs<ExtArgs extends runtime.Types.Extensions.InternalArg
    */
   omit?: Prisma.DraftOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DraftInclude<ExtArgs> | null
+  /**
    * The data needed to create a Draft.
    */
   data: Prisma.XOR<Prisma.DraftCreateInput, Prisma.DraftUncheckedCreateInput>
@@ -1093,6 +1241,10 @@ export type DraftUpdateArgs<ExtArgs extends runtime.Types.Extensions.InternalArg
    * Omit specific fields from the Draft
    */
   omit?: Prisma.DraftOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DraftInclude<ExtArgs> | null
   /**
    * The data needed to update a Draft.
    */
@@ -1160,6 +1312,10 @@ export type DraftUpsertArgs<ExtArgs extends runtime.Types.Extensions.InternalArg
    */
   omit?: Prisma.DraftOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DraftInclude<ExtArgs> | null
+  /**
    * The filter to search for the Draft to update in case it exists.
    */
   where: Prisma.DraftWhereUniqueInput
@@ -1186,6 +1342,10 @@ export type DraftDeleteArgs<ExtArgs extends runtime.Types.Extensions.InternalArg
    */
   omit?: Prisma.DraftOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DraftInclude<ExtArgs> | null
+  /**
    * Filter which Draft to delete.
    */
   where: Prisma.DraftWhereUniqueInput
@@ -1206,6 +1366,30 @@ export type DraftDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.Interna
 }
 
 /**
+ * Draft.fileAttachments
+ */
+export type Draft$fileAttachmentsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the FileAttachment
+   */
+  select?: Prisma.FileAttachmentSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the FileAttachment
+   */
+  omit?: Prisma.FileAttachmentOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.FileAttachmentInclude<ExtArgs> | null
+  where?: Prisma.FileAttachmentWhereInput
+  orderBy?: Prisma.FileAttachmentOrderByWithRelationInput | Prisma.FileAttachmentOrderByWithRelationInput[]
+  cursor?: Prisma.FileAttachmentWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.FileAttachmentScalarFieldEnum | Prisma.FileAttachmentScalarFieldEnum[]
+}
+
+/**
  * Draft without action
  */
 export type DraftDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1217,4 +1401,8 @@ export type DraftDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalAr
    * Omit specific fields from the Draft
    */
   omit?: Prisma.DraftOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DraftInclude<ExtArgs> | null
 }

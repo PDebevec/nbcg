@@ -50,6 +50,11 @@ export type Draft = Prisma.DraftModel
  */
 export type Record = Prisma.RecordModel
 /**
+ * Model FileAttachment
+ * 
+ */
+export type FileAttachment = Prisma.FileAttachmentModel
+/**
  * Model ItemRelation
  * 
  */

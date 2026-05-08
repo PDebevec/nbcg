@@ -7,7 +7,10 @@ import { HealthModule } from './modules/health/health.module';
 import { ImportModule } from './modules/import/import.module';
 import { RelationsModule } from './modules/relations/relations.module';
 import { ItemsModule } from './modules/items/items.module';
+import { FilesModule } from './modules/files/files.module';
+import { SearchModule } from './modules/search/search.module';
 import { PrismaModule } from './core/prisma/prisma.module';
+import { SeaweedfsModule } from './core/seaweedfs/seaweedfs.module';
 
 @Module({
   imports: [
@@ -18,11 +21,14 @@ import { PrismaModule } from './core/prisma/prisma.module';
       },
     }),
     PrismaModule,
+    SeaweedfsModule,
     AuthModule,
     HealthModule,
     ImportModule,
     RelationsModule,
     ItemsModule,
+    FilesModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [AppService],

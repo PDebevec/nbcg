@@ -53,6 +53,7 @@ export const AnyNull = runtime.AnyNull
 export const ModelName = {
   Draft: 'Draft',
   Record: 'Record',
+  FileAttachment: 'FileAttachment',
   ItemRelation: 'ItemRelation'
 } as const
 
@@ -96,6 +97,23 @@ export const RecordScalarFieldEnum = {
 } as const
 
 export type RecordScalarFieldEnum = (typeof RecordScalarFieldEnum)[keyof typeof RecordScalarFieldEnum]
+
+
+export const FileAttachmentScalarFieldEnum = {
+  id: 'id',
+  draft_id: 'draft_id',
+  record_id: 'record_id',
+  fileType: 'fileType',
+  originalFid: 'originalFid',
+  extractedText: 'extractedText',
+  filename: 'filename',
+  mimeType: 'mimeType',
+  sizeBytes: 'sizeBytes',
+  textExtracted: 'textExtracted',
+  createdAt: 'createdAt'
+} as const
+
+export type FileAttachmentScalarFieldEnum = (typeof FileAttachmentScalarFieldEnum)[keyof typeof FileAttachmentScalarFieldEnum]
 
 
 export const ItemRelationScalarFieldEnum = {
