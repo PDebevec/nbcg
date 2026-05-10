@@ -1,16 +1,13 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { SearchService } from './search.service';
+import { SearchQueryDto } from './dto/search-query.dto';
 
 @Controller('search')
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @Get()
-  search(
-    @Query('q') q: string,
-    @Query('type') type: 'all' | 'records' | 'drafts' = 'all',
-    @Query('limit') limit = 20,
-  ) {
-    return this.searchService.search(q ?? '', type, Number(limit));
+  search(@Query() dto: SearchQueryDto) {
+    return this.searchService.search(dto);
   }
 }
