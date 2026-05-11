@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { OpenSearchService } from '../../core/opensearch/opensearch.service';
 import type { SearchQueryDto } from './dto/search-query.dto';
 
@@ -105,7 +105,7 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
   }
 
   if (must.length === 0 && filter.length === 0) {
-    return {};
+    return { match_all: {} };
   }
 
   return { bool: { ...(must.length ? { must } : {}), ...(filter.length ? { filter } : {}) } };
@@ -125,7 +125,7 @@ export class SearchService {
     }
 
     const query = buildQuery(dto);
-    if (!query.bool) {
+    if (Object.keys(query).length === 0) {
       return { total: 0, page, limit, pages: 0, hits: [] };
     }
 
@@ -154,5 +154,13 @@ export class SearchService {
         source: hit._source,
       })),
     };
+  }
+
+  async getById(id: string): Promise<SearchHit> {
+    const result = await this.opensearch.getById(id);
+    if (!result) {
+      throw new NotFoundException(`Item with id "${id}" not found`);
+    }
+    return { id, index: result.index, score: 1, source: result.source };
   }
 }

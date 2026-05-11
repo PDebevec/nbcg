@@ -15,4 +15,18 @@ export class OpenSearchService {
     const response = await this.client.search({ index, body });
     return response.body;
   }
+
+  async getById(id: string, indices = ['records', 'drafts']): Promise<{ index: string; source: Record<string, unknown> } | null> {
+    for (const index of indices) {
+      try {
+        const response = await this.client.get({ index, id });
+        if (response.body.found) {
+          return { index, source: response.body._source as Record<string, unknown> };
+        }
+      } catch {
+        // not found in this index — try next
+      }
+    }
+    return null;
+  }
 }

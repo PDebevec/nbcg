@@ -5,7 +5,7 @@
         <!-- LOGO + TITLE -->
         <q-btn flat dense round icon="auto_stories" class="text-white q-mr-sm" to="/" :ripple="false" />
         <div>
-          <div class="header-title">NBCG Digital Library</div>
+          <div class="header-title">Digital Library for National Library of Montenegro "Đurđe Crnojević"</div>
           <div class="header-subtitle">National and Central Library</div>
         </div>
 

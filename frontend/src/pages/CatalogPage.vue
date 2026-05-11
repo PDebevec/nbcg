@@ -37,6 +37,7 @@
             <q-input
               v-model="filterSearch"
               outlined dense
+              debounce="350"
               placeholder="Search within catalog …"
               class="q-mb-md"
             >
@@ -116,9 +117,10 @@
           <!-- RESULTS BAR -->
           <div class="row items-center justify-between q-mb-md">
             <div class="text-body2 text-library-muted">
+              <q-spinner v-if="loading" size="14px" color="primary" class="q-mr-xs" />
               Showing
               <strong class="text-library-ink">{{ filteredItems.length }}</strong>
-              of {{ allItems.length }} items
+              of {{ totalItems }} items
             </div>
             <q-select
               v-model="sortBy"
@@ -136,18 +138,18 @@
               :key="item.id"
               class="col-6 col-sm-4 col-lg-3"
             >
-              <q-card flat v-ripple class="item-card cursor-pointer">
-                <q-img :src="item.cover" :ratio="2/3" class="item-cover">
+              <q-card flat v-ripple class="item-card cursor-pointer" @click="openRecord(item)">
+                <q-img :src="coverUrl(item)" :ratio="2/3" class="item-cover">
                   <div class="absolute-top-right q-pa-xs">
-                    <q-badge :color="typeColor(item.type)" :label="item.type" />
+                    <q-badge :color="typeColor(item.source.metadata.materialType?.en ?? '')" :label="item.source.metadata.materialType?.en" />
                   </div>
                 </q-img>
                 <q-card-section class="q-pa-sm">
-                  <div class="text-weight-bold text-caption text-library-ink ellipsis-2-lines">{{ item.title }}</div>
-                  <div class="text-caption text-library-muted q-mt-xs ellipsis">{{ item.author }}</div>
+                  <div class="text-weight-bold text-caption text-library-ink ellipsis-2-lines">{{ item.source.metadata.title }}</div>
+                  <div class="text-caption text-library-muted q-mt-xs ellipsis">{{ item.source.metadata.firstResponsibility }}</div>
                   <div class="row items-center justify-between q-mt-xs">
-                    <span class="text-caption text-library-muted">{{ item.year }}</span>
-                    <q-btn flat dense no-caps color="primary" label="View" size="sm" />
+                    <span class="text-caption text-library-muted">{{ item.source.metadata.publicationDate1 }}</span>
+                    <q-btn flat dense no-caps color="primary" label="View" size="sm" @click.stop="openRecord(item)" />
                   </div>
                 </q-card-section>
               </q-card>
@@ -162,22 +164,23 @@
               clickable
               v-ripple
               class="q-py-md"
+              @click="openRecord(item)"
             >
               <q-item-section avatar>
                 <q-avatar square size="58px" class="rounded-borders overflow-hidden">
-                  <img :src="item.cover" />
+                  <img :src="coverUrl(item)" />
                 </q-avatar>
               </q-item-section>
               <q-item-section>
-                <q-item-label class="text-weight-semibold text-library-ink">{{ item.title }}</q-item-label>
-                <q-item-label caption>{{ item.author }}</q-item-label>
-                <q-item-label caption>{{ item.publisher }} · {{ item.year }}</q-item-label>
+                <q-item-label class="text-weight-semibold text-library-ink">{{ item.source.metadata.title }}</q-item-label>
+                <q-item-label caption>{{ item.source.metadata.firstResponsibility }}</q-item-label>
+                <q-item-label caption>{{ item.source.metadata.publication?.publisher }} · {{ item.source.metadata.publicationDate1 }}</q-item-label>
               </q-item-section>
               <q-item-section side>
                 <div class="column items-end q-gutter-xs">
-                  <q-badge outline :color="typeColor(item.type)" :label="item.type" />
-                  <q-badge outline color="grey-5" text-color="grey-7" :label="item.language" />
-                  <q-btn flat dense no-caps color="primary" label="Details" size="xs" class="q-mt-xs" />
+                  <q-badge outline :color="typeColor(item.source.metadata.materialType?.en ?? '')" :label="item.source.metadata.materialType?.en" />
+                  <q-badge outline color="grey-5" text-color="grey-7" :label="item.source.metadata.language?.[0]?.en" />
+                  <q-btn flat dense no-caps color="primary" label="Details" size="xs" class="q-mt-xs" @click.stop="openRecord(item)" />
                 </div>
               </q-item-section>
             </q-item>
@@ -187,7 +190,7 @@
           <div class="row justify-center q-mt-lg">
             <q-pagination
               v-model="page"
-              :max="8"
+              :max="totalPages"
               :max-pages="6"
               boundary-numbers
               color="primary"
@@ -202,35 +205,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import imageStock from 'src/assets/image-stock.jpg';
+import { searchItems, type SearchHit } from 'src/api/search';
+
+const router = useRouter();
+function openRecord(item: SearchHit) {
+  void router.push(`/catalog/${item.id}`);
+}
+
+//TEMPORARY IMAGE, currently bad todo: make better
+function coverUrl(item: SearchHit): string {
+  const img = item.source.file_attachments?.find((f) => f.fileType === 'IMAGE');
+  return img ? `/api/files/${img.id}/download` : imageStock;
+}
 
 const viewMode = ref<'grid' | 'list'>('list');
 const filterSearch = ref('');
 const fullTextSearch = ref(false);
 const selectedType = ref('vse');
-const selectedLanguages = ref<string[]>(['sl']);
+const selectedLanguages = ref<string[]>([]);
 const selectedEra = ref('vse');
 const sortBy = ref('relevance');
 const page = ref(1);
+const loading = ref(false);
 
 const typeOptions = [
-  { label: 'All types',      value: 'vse' },
-  { label: 'Books',          value: 'Book' },
-  { label: 'Journals',       value: 'Journal' },
-  { label: 'Newspapers',     value: 'Newspaper' },
-  { label: 'Manuscripts',    value: 'Manuscript' },
-  { label: 'Maps',           value: 'Map' },
-  { label: 'Photographs',    value: 'Photograph' },
-  { label: 'Audio records',  value: 'Audio record' },
+  { label: 'All types',            value: 'vse' },
+  { label: 'Monograph',            value: 'Monograph' },
+  { label: 'Serial publication',   value: 'Serial publication' },
+  { label: 'Manuscript',           value: 'Manuscript' },
+  { label: 'Map',                  value: 'Map' },
+  { label: 'Music',                value: 'Printed music' },
+  { label: 'Sound recording',      value: 'Sound recording' },
+  { label: 'Visual material',      value: 'Visual material' },
 ];
 
 const languages = [
-  { label: 'Slovenian', value: 'sl' },
-  { label: 'German',    value: 'de' },
-  { label: 'Latin',     value: 'la' },
-  { label: 'Italian',   value: 'it' },
-  { label: 'Croatian',  value: 'hr' },
+  { label: 'Slovenian', value: 'Slovenian' },
+  { label: 'German',    value: 'German' },
+  { label: 'Latin',     value: 'Latin' },
+  { label: 'Italian',   value: 'Italian' },
+  { label: 'Croatian',  value: 'Croatian' },
 ];
 
 const eras = [
@@ -249,44 +266,55 @@ const sortOptions = [
   { label: 'Year (newest)',   value: 'year-desc' },
 ];
 
-interface CatalogItem {
-  id: number;
-  title: string;
-  author: string;
-  publisher: string;
-  year: string;
-  type: string;
-  language: string;
-  cover: string;
+const items = ref<SearchHit[]>([]);
+const totalItems = ref(0);
+const totalPages = ref(1);
+const PAGE_SIZE = 20;
+
+async function fetchItems() {
+  loading.value = true;
+  try {
+    const q = filterSearch.value.trim();
+    const result = await searchItems({
+      type: 'records',
+      page: page.value,
+      limit: PAGE_SIZE,
+      ...(q ? (fullTextSearch.value ? { q } : { title: q }) : {}),
+      ...(selectedType.value !== 'vse' ? { materialType: selectedType.value } : {}),
+      ...(selectedLanguages.value.length === 1 && selectedLanguages.value[0]
+        ? { language: selectedLanguages.value[0] }
+        : {}),
+    });
+    items.value = result.hits;
+    totalItems.value = result.total;
+    totalPages.value = result.pages;
+  } finally {
+    loading.value = false;
+  }
 }
 
-const allItems: CatalogItem[] = [
-  { id:  1, title: 'Collected Poems',                          author: 'France Prešeren',          publisher: 'Blaž Crobath',         year: '1847', type: 'Book',         language: 'sl', cover: imageStock },
-  { id:  2, title: 'History of the Slovenian nation',          author: 'Josip Mal',                publisher: 'Učiteljska tiskarna',   year: '1928', type: 'Book',         language: 'sl', cover: imageStock },
-  { id:  3, title: 'Alpine Bulletin',                          author: 'Planinska zveza Slovenije', publisher: 'PZS',                  year: '1912', type: 'Journal',      language: 'sl', cover: imageStock },
-  { id:  4, title: 'Ljubljanski zvon',                         author: 'Fran Levstik et al.',      publisher: 'Kleinmayr & Bamberg',  year: '1881', type: 'Journal',      language: 'sl', cover: imageStock },
-  { id:  5, title: 'Jutro – daily newspaper',                  author: 'Jutro editorial',          publisher: 'Jutro d.o.o.',         year: '1930', type: 'Newspaper',    language: 'sl', cover: imageStock },
-  { id:  6, title: 'Slovenec – political newspaper',          author: 'Various authors',          publisher: 'Katoliška tiskarna',   year: '1873', type: 'Newspaper',    language: 'sl', cover: imageStock },
-  { id:  7, title: 'Triglav Manuscript',                       author: 'Unknown',                  publisher: '–',                     year: '1780', type: 'Manuscript',   language: 'sl', cover: imageStock },
-  { id:  8, title: 'Codex Aquileiensis',                       author: 'Anonymous',                publisher: '–',                     year: '1150', type: 'Manuscript',   language: 'la', cover: imageStock },
-  { id:  9, title: 'Map of the Carniola Province',             author: 'J. Lavtižar',              publisher: 'Državna tiskarna',      year: '1901', type: 'Map',          language: 'sl', cover: imageStock },
-  { id: 10, title: 'Ethnographic map of the Balkans',          author: 'K. Šmid',                  publisher: 'Geografski inštitut',  year: '1919', type: 'Map',          language: 'de', cover: imageStock },
-  { id: 11, title: 'Kobal photo archive – Ljubljana 1920',   author: 'Foto Kobal',               publisher: '–',                     year: '1920', type: 'Photograph',   language: 'sl', cover: imageStock },
-  { id: 12, title: 'Portrait of Valentin Vodnik',              author: 'Janez Wolf',               publisher: '–',                     year: '1818', type: 'Photograph',   language: 'sl', cover: imageStock },
-  { id: 13, title: 'Natural history atlas',                    author: 'M. Hrovatin',              publisher: 'DZS',                  year: '1955', type: 'Book',         language: 'sl', cover: imageStock },
-  { id: 14, title: 'Botanisches Handbuch Krain',               author: 'H. Freyer',                publisher: 'Eger',                 year: '1838', type: 'Book',         language: 'de', cover: imageStock },
-  { id: 15, title: 'Yearbook of Matica Slovenska 1874',        author: 'Matica Slovenska',         publisher: 'Matica Slovenska',     year: '1874', type: 'Journal',      language: 'sl', cover: imageStock },
-  { id: 16, title: 'Folk songs recordings (LP)',               author: 'ZKP RTV Slovenija',        publisher: 'RTV',                  year: '1968', type: 'Audio record',  language: 'sl', cover: imageStock },
-];
+watch(filterSearch, () => {
+  page.value = 1;
+  void fetchItems();
+});
+
+watch([selectedType, selectedLanguages, fullTextSearch], () => {
+  page.value = 1;
+  void fetchItems();
+}, { deep: true });
+
+watch(page, () => { void fetchItems(); });
+
+onMounted(() => { void fetchItems(); });
 
 const typeColorMap: Record<string, string> = {
-  Book:         'primary',
-  Journal:      'secondary',
-  Newspaper:    'info',
-  Manuscript:   'accent',
-  Map:          'positive',
-  Photograph:   'warning',
-  'Audio record': 'purple',
+  'Monograph':          'primary',
+  'Serial publication': 'secondary',
+  'Manuscript':         'accent',
+  'Map':                'positive',
+  'Printed music':      'info',
+  'Sound recording':    'purple',
+  'Visual material':    'warning',
 };
 
 function typeColor(type: string) {
@@ -294,20 +322,7 @@ function typeColor(type: string) {
 }
 
 const filteredItems = computed(() => {
-  let items = allItems;
-  if (selectedType.value !== 'vse') {
-    items = items.filter((i) => i.type === selectedType.value);
-  }
-  if (selectedLanguages.value.length > 0) {
-    items = items.filter((i) => selectedLanguages.value.includes(i.language));
-  }
-  if (filterSearch.value.trim()) {
-    const q = filterSearch.value.toLowerCase();
-    items = items.filter(
-      (i) => i.title.toLowerCase().includes(q) || i.author.toLowerCase().includes(q),
-    );
-  }
-  return items;
+ return items.value;
 });
 
 function resetFilters() {
@@ -315,6 +330,7 @@ function resetFilters() {
   selectedLanguages.value = [];
   selectedEra.value = 'vse';
   filterSearch.value = '';
+  page.value = 1;
 }
 </script>
 

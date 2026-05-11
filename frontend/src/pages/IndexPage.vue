@@ -8,10 +8,10 @@
           <div class="col-12 col-sm-10 col-md-8 col-lg-7 text-center">
             <div class="hero-kicker q-mb-sm">National and Central Library</div>
             <h1 class="text-h3 text-weight-bold text-white q-my-sm">
-              NBCG Digital Library
+              Digital Library for National Library of Montenegro "Đurđe Crnojević"
             </h1>
             <p class="text-subtitle1 hero-subtitle q-mb-xl">
-              Free access to catalogs, digital resources, metadata and archival collections
+              Access to catalogs, digital resources, metadata and archival collections
             </p>
 
             <!-- SEARCH BAR -->
@@ -149,7 +149,7 @@
             <p class="text-body2 text-library-ink">
               The NBCG digital library provides open access to catalogs,
               digital resources and metadata for books, journals, manuscripts,
-              maps and photographic material of Slovenian cultural heritage.
+              maps and photographic material of Montenegrin cultural heritage.
             </p>
             <q-separator class="q-my-md" color="grey-3" />
             <div class="column q-gutter-sm">
@@ -159,11 +159,11 @@
               </div>
               <div class="row items-center q-gutter-sm">
                 <q-icon name="location_on" color="secondary" size="18px" />
-                <span class="text-body2 text-library-muted">Ljubljana, Slovenia</span>
+                <span class="text-body2 text-library-muted">Podgorica, Montenegro</span>
               </div>
               <div class="row items-center q-gutter-sm">
                 <q-icon name="mail" color="secondary" size="18px" />
-                <span class="text-body2 text-library-muted">info@nbcg.si</span>
+                <span class="text-body2 text-library-muted">placeholder@nbcg.me</span>
               </div>
             </div>
           </div>
@@ -233,7 +233,6 @@ function typeColor(type: string) {
 }
 
 async function doSearch() {
-  console.log('search', searchType.value, searchQuery.value);
   await router.push('/catalog');
 }
 </script>

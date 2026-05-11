@@ -99,6 +99,12 @@ export default defineConfig((ctx) => {
     devServer: {
       // https: true,
       port: 3080,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+        },
+      },
       open: true, // opens browser window automatically
     },
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { SearchQueryDto } from './dto/search-query.dto';
 
@@ -9,5 +9,10 @@ export class SearchController {
   @Get()
   search(@Query() dto: SearchQueryDto) {
     return this.searchService.search(dto);
+  }
+
+  @Get(':id')
+  getById(@Param('id') id: string) {
+    return this.searchService.getById(id);
   }
 }

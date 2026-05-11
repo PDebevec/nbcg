@@ -9,15 +9,16 @@ async function bootstrap() {
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
-  // app.enableCors({
-  //   origin: [
-  //     'http://localhost:5173', // Vue dev (Vite)
-  //     'http://localhost:8080', // optional
-  //   ],
-  //   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  //   allowedHeaders: ['Content-Type', 'Authorization'],
-  //   credentials: true,
-  // });
+  const corsOrigin = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+    : ['http://localhost:3080', 'http://127.0.0.1:3080'];
+
+  app.enableCors({
+    origin: corsOrigin,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
   
   await app.listen(process.env.PORT ?? 3000);
 }
