@@ -9,6 +9,8 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import * as os from 'os';
 import type { Response } from 'express';
 import { FilesService } from './files.service';
 
@@ -17,7 +19,10 @@ export class FilesController {
   constructor(private readonly filesService: FilesService) {}
 
   @Post('upload/:itemId')
-  @UseInterceptors(FilesInterceptor('files'))
+  @UseInterceptors(FilesInterceptor('files', 10, {
+    storage: diskStorage({ destination: os.tmpdir() }),
+    limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB hard cap
+  }))
   upload(@Param('itemId') itemId: string, @UploadedFiles() files: Express.Multer.File[]) {
     return this.filesService.upload(itemId, files);
   }

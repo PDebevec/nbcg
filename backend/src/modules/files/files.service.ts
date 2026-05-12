@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { createReadStream } from 'fs';
+import { unlink } from 'fs/promises';
 import { FileType } from '../../../generated/prisma/enums';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
@@ -22,7 +24,13 @@ export class FilesService {
     const created = await Promise.all(
       (files ?? []).map(async (file) => {
         const fileType = MIME_TO_FILE_TYPE[file.mimetype] ?? FileType.UNKNOWN;
-        const fid = await this.seaweedfs.upload(file.buffer, file.originalname, file.mimetype);
+        const stream = createReadStream(file.path);
+        let fid: string;
+        try {
+          fid = await this.seaweedfs.upload(stream, file.originalname, file.mimetype, file.size);
+        } finally {
+          await unlink(file.path).catch(() => undefined);
+        }
 
         return this.prisma.fileAttachment.create({
           data: {

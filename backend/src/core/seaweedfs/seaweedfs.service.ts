@@ -1,4 +1,5 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import type { ReadStream } from 'fs';
 
 interface AssignResponse {
   fid: string;
@@ -6,21 +7,33 @@ interface AssignResponse {
 
 @Injectable()
 export class SeaweedfsService {
+  private readonly logger = new Logger(SeaweedfsService.name);
   private readonly masterUrl = process.env.SEAWEEDFS_MASTER ?? 'http://seaweedfs-master:9333';
   private readonly volumeUrl = process.env.SEAWEEDFS_VOLUME ?? 'http://seaweedfs-volume:8080';
 
-  async upload(buffer: Buffer, filename: string, mimeType: string): Promise<string> {
+  async upload(stream: ReadStream, filename: string, mimeType: string, sizeBytes: number): Promise<string> {
     const assign = await fetch(`${this.masterUrl}/dir/assign`);
     if (!assign.ok) {
+      const body = await assign.text().catch(() => '(unreadable)');
+      this.logger.error(`SeaweedFS assign failed: HTTP ${assign.status} — ${body}`);
       throw new InternalServerErrorException('SeaweedFS assign failed');
     }
     const { fid } = (await assign.json()) as AssignResponse;
 
-    const form = new FormData();
-    form.append('file', new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
-
-    const upload = await fetch(`${this.volumeUrl}/${fid}`, { method: 'POST', body: form });
+    const upload = await fetch(`${this.volumeUrl}/${fid}`, {
+      method: 'POST',
+      body: stream as any,
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+        'Content-Length': String(sizeBytes),
+      },
+      // @ts-expect-error: Node 18+ fetch requires duplex for streaming request bodies
+      duplex: 'half',
+    });
     if (!upload.ok) {
+      const body = await upload.text().catch(() => '(unreadable)');
+      this.logger.error(`SeaweedFS upload failed: HTTP ${upload.status} — ${body}`);
       throw new InternalServerErrorException('SeaweedFS upload failed');
     }
 
