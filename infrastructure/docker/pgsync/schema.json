@@ -58,21 +58,22 @@
         },
         {
           "table": "item_relations",
+          "label": "parent_relations",
           "columns": [
-            "childId",
-            "childType"
+            "parentId",
+            "parentType"
           ],
           "transform": {
             "mapping": {
-              "childId": { "type": "keyword" },
-              "childType": { "type": "keyword" }
+              "parentId": { "type": "keyword" },
+              "parentType": { "type": "keyword" }
             }
           },
           "relationship": {
             "variant": "object",
             "type": "one_to_many",
             "foreign_key": {
-              "child": ["parentId"],
+              "child": ["childId"],
               "parent": ["id"]
             }
           }
@@ -139,21 +140,22 @@
         },
         {
           "table": "item_relations",
+          "label": "parent_relations",
           "columns": [
-            "childId",
-            "childType"
+            "parentId",
+            "parentType"
           ],
           "transform": {
             "mapping": {
-              "childId": { "type": "keyword" },
-              "childType": { "type": "keyword" }
+              "parentId": { "type": "keyword" },
+              "parentType": { "type": "keyword" }
             }
           },
           "relationship": {
             "variant": "object",
             "type": "one_to_many",
             "foreign_key": {
-              "child": ["parentId"],
+              "child": ["childId"],
               "parent": ["id"]
             }
           }

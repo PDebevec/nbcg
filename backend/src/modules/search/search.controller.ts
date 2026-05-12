@@ -11,6 +11,11 @@ export class SearchController {
     return this.searchService.search(dto);
   }
 
+  @Get(':id/children')
+  getChildren(@Param('id') id: string, @Query() dto: SearchQueryDto) {
+    return this.searchService.getChildren(id, dto);
+  }
+
   @Get(':id')
   getById(@Param('id') id: string) {
     return this.searchService.getById(id);

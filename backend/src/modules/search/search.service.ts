@@ -156,6 +156,49 @@ export class SearchService {
     };
   }
 
+  async getChildren(id: string, dto: SearchQueryDto): Promise<SearchResult> {
+    const page = dto.page ?? 1;
+    const limit = dto.limit ?? 20;
+    const from = (page - 1) * limit;
+
+    if (from + limit >= 10000) {
+      throw new BadRequestException('Page out of range: OpenSearch limit is from + size < 10000');
+    }
+
+    const indices: string[] = [];
+    if (dto.type === 'all' || dto.type === 'records') indices.push('records');
+    if (dto.type === 'all' || dto.type === 'drafts') indices.push('drafts');
+
+    const innerQuery = buildQuery(dto);
+    const query = {
+      bool: {
+        must: [innerQuery],
+        filter: [{ term: { 'parent_relations.parentId': id } }],
+      },
+    };
+
+    const body = { from, size: limit, query, track_total_hits: true };
+    const result = await this.opensearch.search(indices, body);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw: any = result;
+    const total: number = raw?.hits?.total?.value ?? 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hits: any[] = raw?.hits?.hits ?? [];
+
+    return {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
+      hits: hits.map((hit) => ({
+        id: hit._id,
+        index: hit._index,
+        score: hit._score,
+        source: hit._source,
+      })),
+    };
+  }
+
   async getById(id: string): Promise<SearchHit> {
     const result = await this.opensearch.getById(id);
     if (!result) {
