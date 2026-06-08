@@ -159,11 +159,11 @@
               </div>
               <div class="row items-center q-gutter-sm">
                 <q-icon name="location_on" color="secondary" size="18px" />
-                <span class="text-body2 text-library-muted">Podgorica, Montenegro</span>
+                <span class="text-body2 text-library-muted">Cetinje, Montenegro</span>
               </div>
               <div class="row items-center q-gutter-sm">
                 <q-icon name="mail" color="secondary" size="18px" />
-                <span class="text-body2 text-library-muted">placeholder@nbcg.me</span>
+                <span class="text-body2 text-library-muted">info@dlib.me</span>
               </div>
             </div>
           </div>
