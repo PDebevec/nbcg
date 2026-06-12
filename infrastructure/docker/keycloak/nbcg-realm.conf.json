@@ -1,0 +1,220 @@
+{
+  "realm": "nbcg",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "client": {
+      "nbcg-api": [
+        {
+          "name": "records:view:public",
+          "description": "See PUBLIC records. Implicit baseline for everyone (incl. anonymous); not normally assigned directly.",
+          "clientRole": true,
+          "composite": false
+        },
+        {
+          "name": "records:view:private",
+          "description": "See PRIVATE records (implies records:view:public).",
+          "clientRole": true,
+          "composite": true,
+          "composites": { "client": { "nbcg-api": ["records:view:public"] } }
+        },
+        {
+          "name": "records:view:hidden",
+          "description": "See HIDDEN records (implies records:view:private -> public).",
+          "clientRole": true,
+          "composite": true,
+          "composites": { "client": { "nbcg-api": ["records:view:private"] } }
+        },
+        {
+          "name": "records:manage",
+          "description": "Full CRUD on records: create/edit/delete, file attachments, set visibility. Publish boundary. Implies records:view:hidden.",
+          "clientRole": true,
+          "composite": true,
+          "composites": { "client": { "nbcg-api": ["records:view:hidden"] } }
+        },
+        {
+          "name": "drafts:view:public",
+          "description": "See PUBLIC drafts.",
+          "clientRole": true,
+          "composite": false
+        },
+        {
+          "name": "drafts:view:private",
+          "description": "See PRIVATE drafts (implies drafts:view:public).",
+          "clientRole": true,
+          "composite": true,
+          "composites": { "client": { "nbcg-api": ["drafts:view:public"] } }
+        },
+        {
+          "name": "drafts:view:hidden",
+          "description": "See HIDDEN drafts (implies drafts:view:private -> public).",
+          "clientRole": true,
+          "composite": true,
+          "composites": { "client": { "nbcg-api": ["drafts:view:private"] } }
+        },
+        {
+          "name": "drafts:manage",
+          "description": "Full CRUD on drafts: create/edit/delete, file attachments, set visibility. Implies drafts:view:hidden.",
+          "clientRole": true,
+          "composite": true,
+          "composites": { "client": { "nbcg-api": ["drafts:view:hidden"] } }
+        },
+        {
+          "name": "import:execute",
+          "description": "Run COBISS import jobs. Additionally requires manage on the import target collection.",
+          "clientRole": true,
+          "composite": false
+        },
+        {
+          "name": "users:manage",
+          "description": "Administer users, groups and role assignments.",
+          "clientRole": true,
+          "composite": false
+        },
+        {
+          "name": "reader",
+          "description": "Persona: read public+private records, no drafts.",
+          "clientRole": true,
+          "composite": true,
+          "composites": { "client": { "nbcg-api": ["records:view:private"] } }
+        },
+        {
+          "name": "cataloguer",
+          "description": "Persona: view all records (incl. hidden), full draft management, import to drafts. Cannot publish.",
+          "clientRole": true,
+          "composite": true,
+          "composites": { "client": { "nbcg-api": ["records:view:hidden", "drafts:manage", "import:execute"] } }
+        },
+        {
+          "name": "editor",
+          "description": "Persona: full manage of records and drafts, import to either, can publish (transition).",
+          "clientRole": true,
+          "composite": true,
+          "composites": { "client": { "nbcg-api": ["records:manage", "drafts:manage", "import:execute"] } }
+        },
+        {
+          "name": "admin",
+          "description": "Persona: everything incl. user administration.",
+          "clientRole": true,
+          "composite": true,
+          "composites": { "client": { "nbcg-api": ["records:manage", "drafts:manage", "import:execute", "users:manage"] } }
+        }
+      ]
+    }
+  },
+  "groups": [
+    {
+      "name": "nbcg",
+      "path": "/nbcg",
+      "subGroups": [
+        {
+          "name": "readers",
+          "path": "/nbcg/readers",
+          "clientRoles": { "nbcg-api": ["reader"] }
+        },
+        {
+          "name": "cataloguers",
+          "path": "/nbcg/cataloguers",
+          "clientRoles": { "nbcg-api": ["cataloguer"] }
+        },
+        {
+          "name": "editors",
+          "path": "/nbcg/editors",
+          "clientRoles": { "nbcg-api": ["editor"] }
+        },
+        {
+          "name": "admins",
+          "path": "/nbcg/admins",
+          "clientRoles": { "nbcg-api": ["admin"] }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "nbcg-web",
+      "name": "NBCG Web (frontend SPA)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:5173/*", "http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:5173", "http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "nbcg-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "nbcg-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "nbcg-api",
+      "name": "NBCG API (resource server)",
+      "description": "Backend resource server. Holds all authorization client roles; validates bearer tokens.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "nbcg-worker",
+      "name": "NBCG Worker (background/import service account)",
+      "description": "Client-credentials client for background jobs that write as 'system' (e.g. COBISS import worker).",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "CHANGE_ME_worker_secret",
+      "protocolMappers": [
+        {
+          "name": "nbcg-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "nbcg-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-nbcg-worker",
+      "enabled": true,
+      "serviceAccountClientId": "nbcg-worker",
+      "clientRoles": {
+        "nbcg-api": ["import:execute", "records:manage", "drafts:manage"]
+      }
+    }
+  ]
+}

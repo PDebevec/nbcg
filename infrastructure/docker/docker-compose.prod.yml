@@ -44,7 +44,7 @@ services:
     depends_on:
       keycloak-db:
         condition: service_healthy
-    command: start
+    command: start --import-realm
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
       interval: 30s

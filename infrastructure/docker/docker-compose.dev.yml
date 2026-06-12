@@ -46,7 +46,7 @@ services:
 
 ##### KEYCLOAK
   keycloak:
-    command: start-dev
+    command: start-dev --import-realm
     ports:
       - "${EXTERNAL_KEYCLOAK}:${INTERNAL_HTTPHTTP}"
     environment:

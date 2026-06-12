@@ -1,5 +1,7 @@
 infrastructure/docker/nginx/certs/*
 infrastructure/docker/pgadmin/servers.json
+infrastructure/docker/keycloak/certs/*
+infrastructure/docker/keycloak/nbcg-realm.json
 
 .env
 

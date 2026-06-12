@@ -78,6 +78,8 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.5.4
     restart: unless-stopped
+    volumes:
+      - ./infrastructure/docker/keycloak/nbcg-realm.json:/opt/keycloak/data/import/nbcg-realm.json
     depends_on:
       keycloak-db:
         condition: service_healthy
