@@ -7,7 +7,7 @@
           <q-btn
             flat no-caps dense
             icon="arrow_back"
-            label="Back to catalog"
+            :label="t('record.backToCatalog')"
             color="white"
             class="q-mb-md"
             @click="$router.back()"
@@ -64,7 +64,7 @@
             </div>
           </div>
 
-          <div v-else class="text-white text-body1">Item not found.</div>
+          <div v-else class="text-white text-body1">{{ t('record.notFound') }}</div>
         </div>
       </div>
     </div>
@@ -87,7 +87,7 @@
             <!-- Summary / Abstract -->
             <q-card v-if="meta.summaryNote" flat bordered class="detail-card q-mb-md">
               <q-card-section>
-                <div class="section-label q-mb-sm">Abstract / Summary</div>
+                <div class="section-label q-mb-sm">{{ t('record.abstract') }}</div>
                 <p class="text-body2 text-library-ink q-ma-none">{{ meta.summaryNote }}</p>
               </q-card-section>
             </q-card>
@@ -95,22 +95,22 @@
             <!-- Bibliographic details -->
             <q-card flat bordered class="detail-card q-mb-md">
               <q-card-section>
-                <div class="section-label q-mb-sm">Bibliographic details</div>
+                <div class="section-label q-mb-sm">{{ t('record.bibliographic') }}</div>
                 <q-list dense separator>
-                  <detail-row v-if="meta.title" label="Title" :value="meta.title" />
-                  <detail-row v-if="meta.subtitle" label="Subtitle" :value="meta.subtitle" />
-                  <detail-row v-if="meta.parallelTitle" label="Parallel title" :value="meta.parallelTitle" />
-                  <detail-row v-if="meta.firstResponsibility" label="Responsibility" :value="meta.firstResponsibility" />
-                  <detail-row v-if="meta.subsequentResponsibility" label="Add. responsibility" :value="meta.subsequentResponsibility" />
-                  <detail-row v-if="meta.edition" label="Edition" :value="meta.edition" />
-                  <detail-row v-if="meta.publication?.publisher" label="Publisher" :value="meta.publication.publisher" />
-                  <detail-row v-if="meta.publication?.place" label="Place" :value="meta.publication.place" />
-                  <detail-row v-if="meta.publicationDate1" label="Year" :value="meta.publicationDate1" />
-                  <detail-row v-if="meta.physicalDescription?.extent" label="Extent" :value="meta.physicalDescription.extent" />
-                  <detail-row v-if="meta.physicalDescription?.dimensions" label="Dimensions" :value="meta.physicalDescription.dimensions" />
-                  <detail-row v-if="meta.isbn?.length" label="ISBN" :value="meta.isbn.join(', ')" />
-                  <detail-row v-if="meta.issn?.length" label="ISSN" :value="meta.issn.join(', ')" />
-                  <detail-row v-if="meta.cobissId" label="COBISS ID" :value="meta.cobissId" />
+                  <detail-row v-if="meta.title" :label="t('record.fields.title')" :value="meta.title" />
+                  <detail-row v-if="meta.subtitle" :label="t('record.fields.subtitle')" :value="meta.subtitle" />
+                  <detail-row v-if="meta.parallelTitle" :label="t('record.fields.parallelTitle')" :value="meta.parallelTitle" />
+                  <detail-row v-if="meta.firstResponsibility" :label="t('record.fields.responsibility')" :value="meta.firstResponsibility" />
+                  <detail-row v-if="meta.subsequentResponsibility" :label="t('record.fields.addResponsibility')" :value="meta.subsequentResponsibility" />
+                  <detail-row v-if="meta.edition" :label="t('record.fields.edition')" :value="meta.edition" />
+                  <detail-row v-if="meta.publication?.publisher" :label="t('record.fields.publisher')" :value="meta.publication.publisher" />
+                  <detail-row v-if="meta.publication?.place" :label="t('record.fields.place')" :value="meta.publication.place" />
+                  <detail-row v-if="meta.publicationDate1" :label="t('record.fields.year')" :value="meta.publicationDate1" />
+                  <detail-row v-if="meta.physicalDescription?.extent" :label="t('record.fields.extent')" :value="meta.physicalDescription.extent" />
+                  <detail-row v-if="meta.physicalDescription?.dimensions" :label="t('record.fields.dimensions')" :value="meta.physicalDescription.dimensions" />
+                  <detail-row v-if="meta.isbn?.length" :label="t('record.fields.isbn')" :value="meta.isbn.join(', ')" />
+                  <detail-row v-if="meta.issn?.length" :label="t('record.fields.issn')" :value="meta.issn.join(', ')" />
+                  <detail-row v-if="meta.cobissId" :label="t('record.fields.cobissId')" :value="meta.cobissId" />
                 </q-list>
               </q-card-section>
             </q-card>
@@ -118,7 +118,7 @@
             <!-- Authors -->
             <q-card v-if="meta.authors?.length" flat bordered class="detail-card q-mb-md">
               <q-card-section>
-                <div class="section-label q-mb-sm">Authors</div>
+                <div class="section-label q-mb-sm">{{ t('record.authors') }}</div>
                 <div class="row q-gutter-sm">
                   <q-chip
                     v-for="(author, i) in meta.authors"
@@ -138,7 +138,7 @@
             <!-- Notes -->
             <q-card v-if="meta.notes?.length" flat bordered class="detail-card q-mb-md">
               <q-card-section>
-                <div class="section-label q-mb-sm">Notes</div>
+                <div class="section-label q-mb-sm">{{ t('record.notes') }}</div>
                 <ul class="q-ma-none q-pl-md">
                   <li v-for="(note, i) in meta.notes" :key="i" class="text-body2 text-library-ink">{{ note }}</li>
                 </ul>
@@ -148,11 +148,11 @@
             <!-- Series -->
             <q-card v-if="meta.seriesTitle" flat bordered class="detail-card q-mb-md">
               <q-card-section>
-                <div class="section-label q-mb-sm">Series</div>
+                <div class="section-label q-mb-sm">{{ t('record.series') }}</div>
                 <q-list dense>
-                  <detail-row label="Series title" :value="meta.seriesTitle" />
-                  <detail-row v-if="meta.seriesIssn" label="Series ISSN" :value="meta.seriesIssn" />
-                  <detail-row v-if="meta.seriesVolume" label="Volume" :value="meta.seriesVolume" />
+                  <detail-row :label="t('record.fields.seriesTitle')" :value="meta.seriesTitle" />
+                  <detail-row v-if="meta.seriesIssn" :label="t('record.fields.seriesIssn')" :value="meta.seriesIssn" />
+                  <detail-row v-if="meta.seriesVolume" :label="t('record.fields.volume')" :value="meta.seriesVolume" />
                 </q-list>
               </q-card-section>
             </q-card>
@@ -169,29 +169,29 @@
             <!-- Classification -->
             <q-card flat bordered class="detail-card q-mb-md">
               <q-card-section>
-                <div class="section-label q-mb-sm">Classification</div>
+                <div class="section-label q-mb-sm">{{ t('record.classification') }}</div>
                 <q-list dense separator>
-                  <detail-row v-if="meta.materialType?.en" label="Material type" :value="meta.materialType.en" />
-                  <detail-row v-if="meta.bibliographicLevel?.en" label="Bib. level" :value="meta.bibliographicLevel.en" />
-                  <detail-row v-if="meta.documentTypology" label="Doc. typology" :value="meta.documentTypology" />
+                  <detail-row v-if="meta.materialType?.en" :label="t('record.fields.materialType')" :value="meta.materialType.en" />
+                  <detail-row v-if="meta.bibliographicLevel?.en" :label="t('record.fields.bibLevel')" :value="meta.bibliographicLevel.en" />
+                  <detail-row v-if="meta.documentTypology" :label="t('record.fields.docTypology')" :value="meta.documentTypology" />
                 </q-list>
 
                 <div v-if="meta.udc?.length" class="q-mt-sm">
-                  <div class="field-label q-mb-xs">UDC</div>
+                  <div class="field-label q-mb-xs">{{ t('record.udc') }}</div>
                   <div class="row q-gutter-xs">
                     <q-chip v-for="u in meta.udc" :key="u" dense outline color="grey-6" size="sm">{{ u }}</q-chip>
                   </div>
                 </div>
 
                 <div v-if="meta.subjects?.length" class="q-mt-sm">
-                  <div class="field-label q-mb-xs">Subjects</div>
+                  <div class="field-label q-mb-xs">{{ t('record.subjects') }}</div>
                   <div class="row q-gutter-xs">
                     <q-chip v-for="s in meta.subjects" :key="s" dense outline color="primary" size="sm">{{ s }}</q-chip>
                   </div>
                 </div>
 
                 <div v-if="meta.keywords?.length" class="q-mt-sm">
-                  <div class="field-label q-mb-xs">Keywords</div>
+                  <div class="field-label q-mb-xs">{{ t('record.keywords') }}</div>
                   <div class="row q-gutter-xs">
                     <q-chip v-for="k in meta.keywords" :key="k" dense outline color="secondary" size="sm">{{ k }}</q-chip>
                   </div>
@@ -202,7 +202,7 @@
             <!-- Attachments -->
             <q-card v-if="item.source.file_attachments?.length" flat bordered class="detail-card q-mb-md">
               <q-card-section>
-                <div class="section-label q-mb-sm">Attachments</div>
+                <div class="section-label q-mb-sm">{{ t('record.attachments') }}</div>
                 <q-list dense separator>
                   <q-item
                     v-for="file in item.source.file_attachments"
@@ -231,7 +231,7 @@
           </div>
         </div>
 
-        <div v-else class="text-body1 text-library-muted">Item not found.</div>
+        <div v-else class="text-body1 text-library-muted">{{ t('record.notFound') }}</div>
       </div>
     </div>
   </q-page>
@@ -240,8 +240,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, defineComponent, h } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import imageStock from 'src/assets/image-stock.jpg';
 import { getItem, type SearchHit, type RecordMetadata } from 'src/api/search';
+
+const { t } = useI18n();
 
 // ---------------------------------------------------------------------------
 // Inline helper component to keep template DRY

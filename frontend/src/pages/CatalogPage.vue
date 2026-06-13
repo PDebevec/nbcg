@@ -5,8 +5,8 @@
       <div class="page-body">
         <div class="row items-center justify-between q-px-md">
           <div>
-            <div class="header-kicker q-mb-xs">Digital Library</div>
-            <h1 class="text-h4 text-weight-bold text-white q-my-none">Item catalog</h1>
+            <div class="header-kicker q-mb-xs">{{ t('catalog.kicker') }}</div>
+            <h1 class="text-h4 text-weight-bold text-white q-my-none">{{ t('catalog.title') }}</h1>
           </div>
           <div class="row q-gutter-xs">
             <q-btn
@@ -38,7 +38,7 @@
               v-model="filterSearch"
               outlined dense
               debounce="350"
-              placeholder="Search within catalog …"
+              :placeholder="t('catalog.searchWithin')"
               class="q-mb-md"
             >
               <template #prepend>
@@ -52,13 +52,13 @@
                   size="sm"
                   @click="fullTextSearch = !fullTextSearch"
                   >
-                  <q-tooltip>{{ fullTextSearch ? 'Full-text search on' : 'Full-text search off' }}</q-tooltip>
+                  <q-tooltip>{{ fullTextSearch ? t('catalog.fullTextOn') : t('catalog.fullTextOff') }}</q-tooltip>
                 </q-btn>
               </template>
             </q-input>
 
             <!-- TYPE -->
-            <div class="section-label text-library-muted q-mb-sm">Item type</div>
+            <div class="section-label text-library-muted q-mb-sm">{{ t('catalog.itemType') }}</div>
             <q-option-group
               v-model="selectedType"
               :options="typeOptions"
@@ -69,7 +69,7 @@
             <q-separator color="grey-3" class="q-my-md" />
 
             <!-- LANGUAGE -->
-            <div class="section-label text-library-muted q-mb-sm">Language</div>
+            <div class="section-label text-library-muted q-mb-sm">{{ t('catalog.language') }}</div>
             <div class="column q-gutter-xs q-mb-md">
               <q-checkbox
                 v-for="lang in languages"
@@ -84,7 +84,7 @@
             <q-separator color="grey-3" class="q-my-md" />
 
             <!-- ERA -->
-            <div class="section-label text-library-muted q-mb-sm">Period</div>
+            <div class="section-label text-library-muted q-mb-sm">{{ t('catalog.period') }}</div>
             <div class="row wrap q-gutter-xs q-mb-md">
               <q-chip
                 v-for="era in eras"
@@ -103,7 +103,7 @@
             <q-btn
               flat no-caps dense
               color="negative"
-              label="Reset filters"
+              :label="t('catalog.resetFilters')"
               icon="restart_alt"
               size="sm"
               @click="resetFilters"
@@ -118,15 +118,15 @@
           <div class="row items-center justify-between q-mb-md">
             <div class="text-body2 text-library-muted">
               <q-spinner v-if="loading" size="14px" color="primary" class="q-mr-xs" />
-              Showing
+              {{ t('catalog.showing') }}
               <strong class="text-library-ink">{{ filteredItems.length }}</strong>
-              of {{ totalItems }} items
+              {{ t('catalog.of') }} {{ totalItems }} {{ t('catalog.items') }}
             </div>
             <q-select
               v-model="sortBy"
               :options="sortOptions"
               outlined dense emit-value map-options
-              label="Sort by"
+              :label="t('catalog.sortBy')"
               class="sort-select"
             />
           </div>
@@ -149,7 +149,7 @@
                   <div class="text-caption text-library-muted q-mt-xs ellipsis">{{ item.source.metadata.firstResponsibility }}</div>
                   <div class="row items-center justify-between q-mt-xs">
                     <span class="text-caption text-library-muted">{{ item.source.metadata.publicationDate1 }}</span>
-                    <q-btn flat dense no-caps color="primary" label="View" size="sm" @click.stop="openRecord(item)" />
+                    <q-btn flat dense no-caps color="primary" :label="t('catalog.view')" size="sm" @click.stop="openRecord(item)" />
                   </div>
                 </q-card-section>
               </q-card>
@@ -180,7 +180,7 @@
                 <div class="column items-end q-gutter-xs">
                   <q-badge outline :color="typeColor(item.source.metadata.materialType?.en ?? '')" :label="item.source.metadata.materialType?.en" />
                   <q-badge outline color="grey-5" text-color="grey-7" :label="item.source.metadata.language?.[0]?.en" />
-                  <q-btn flat dense no-caps color="primary" label="Details" size="xs" class="q-mt-xs" @click.stop="openRecord(item)" />
+                  <q-btn flat dense no-caps color="primary" :label="t('catalog.details')" size="xs" class="q-mt-xs" @click.stop="openRecord(item)" />
                 </div>
               </q-item-section>
             </q-item>
@@ -206,11 +206,14 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import imageStock from 'src/assets/image-stock.jpg';
 import { searchItems, type SearchHit } from 'src/api/search';
 
 const router = useRouter();
+const route = useRoute();
+const { t } = useI18n();
 function openRecord(item: SearchHit) {
   void router.push(`/catalog/${item.id}`);
 }
@@ -221,50 +224,55 @@ function coverUrl(item: SearchHit): string {
   return img ? `/api/files/${img.id}/download` : imageStock;
 }
 
+function queryStr(key: string): string {
+  const v = route.query[key];
+  return typeof v === 'string' ? v : '';
+}
+
 const viewMode = ref<'grid' | 'list'>('list');
-const filterSearch = ref('');
-const fullTextSearch = ref(false);
-const selectedType = ref('vse');
+const filterSearch = ref(queryStr('q'));
+const fullTextSearch = ref(queryStr('fullText') === '1');
+const selectedType = ref(queryStr('materialType') || 'vse');
 const selectedLanguages = ref<string[]>([]);
 const selectedEra = ref('vse');
 const sortBy = ref('relevance');
 const page = ref(1);
 const loading = ref(false);
 
-const typeOptions = [
-  { label: 'All types',            value: 'vse' },
-  { label: 'Monograph',            value: 'Monograph' },
-  { label: 'Serial publication',   value: 'Serial publication' },
-  { label: 'Manuscript',           value: 'Manuscript' },
-  { label: 'Map',                  value: 'Map' },
-  { label: 'Music',                value: 'Printed music' },
-  { label: 'Sound recording',      value: 'Sound recording' },
-  { label: 'Visual material',      value: 'Visual material' },
-];
+const typeOptions = computed(() => [
+  { label: t('catalog.types.all'),        value: 'vse' },
+  { label: t('catalog.types.monograph'),  value: 'Monograph' },
+  { label: t('catalog.types.serial'),     value: 'Serial publication' },
+  { label: t('catalog.types.manuscript'), value: 'Manuscript' },
+  { label: t('catalog.types.map'),        value: 'Map' },
+  { label: t('catalog.types.music'),      value: 'Printed music' },
+  { label: t('catalog.types.sound'),      value: 'Sound recording' },
+  { label: t('catalog.types.visual'),     value: 'Visual material' },
+]);
 
-const languages = [
-  { label: 'Slovenian', value: 'Slovenian' },
-  { label: 'German',    value: 'German' },
-  { label: 'Latin',     value: 'Latin' },
-  { label: 'Italian',   value: 'Italian' },
-  { label: 'Croatian',  value: 'Croatian' },
-];
+const languages = computed(() => [
+  { label: t('catalog.languages.slovenian'), value: 'Slovenian' },
+  { label: t('catalog.languages.german'),    value: 'German' },
+  { label: t('catalog.languages.latin'),     value: 'Latin' },
+  { label: t('catalog.languages.italian'),   value: 'Italian' },
+  { label: t('catalog.languages.croatian'),  value: 'Croatian' },
+]);
 
-const eras = [
-  { label: 'All',       value: 'vse' },
-  { label: 'Pre-1800',  value: 'do1800' },
-  { label: '1800–1900', value: '19st' },
-  { label: '1900–1950', value: '1900-1950' },
-  { label: '1950–2000', value: '1950-2000' },
-  { label: 'Post-2000', value: 'po2000' },
-];
+const eras = computed(() => [
+  { label: t('catalog.eras.all'),      value: 'vse' },
+  { label: t('catalog.eras.pre1800'),  value: 'do1800' },
+  { label: t('catalog.eras.c19'),      value: '19st' },
+  { label: t('catalog.eras.e1900'),    value: '1900-1950' },
+  { label: t('catalog.eras.e1950'),    value: '1950-2000' },
+  { label: t('catalog.eras.post2000'), value: 'po2000' },
+]);
 
-const sortOptions = [
-  { label: 'Relevance',       value: 'relevance' },
-  { label: 'Title A–Z',       value: 'title-asc' },
-  { label: 'Year (oldest)',   value: 'year-asc' },
-  { label: 'Year (newest)',   value: 'year-desc' },
-];
+const sortOptions = computed(() => [
+  { label: t('catalog.sort.relevance'), value: 'relevance' },
+  { label: t('catalog.sort.titleAsc'),  value: 'title-asc' },
+  { label: t('catalog.sort.yearAsc'),   value: 'year-asc' },
+  { label: t('catalog.sort.yearDesc'),  value: 'year-desc' },
+]);
 
 const items = ref<SearchHit[]>([]);
 const totalItems = ref(0);

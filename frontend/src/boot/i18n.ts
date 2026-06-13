@@ -21,9 +21,20 @@ declare module 'vue-i18n' {
 }
 /* eslint-enable @typescript-eslint/no-empty-object-type */
 
+export const LOCALE_STORAGE_KEY = 'nbcg-locale';
+
+function initialLocale(): MessageLanguages {
+  const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(LOCALE_STORAGE_KEY) : null;
+  if (stored && stored in messages) {
+    return stored as MessageLanguages;
+  }
+  return 'me';
+}
+
 export default defineBoot(({ app }) => {
   const i18n = createI18n<{ message: MessageSchema }, MessageLanguages>({
-    locale: 'en-US',
+    locale: initialLocale(),
+    fallbackLocale: 'en-US',
     legacy: false,
     messages,
   });
