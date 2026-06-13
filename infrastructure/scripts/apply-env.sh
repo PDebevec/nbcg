@@ -33,4 +33,5 @@ apply_env_to_file() {
 }
 
 apply_env_to_file "./infrastructure/docker/pgadmin/servers.conf.json" "./infrastructure/docker/pgadmin/servers.json"
+apply_env_to_file "./infrastructure/docker/keycloak/nbcg-realm.conf.json" "./infrastructure/docker/keycloak/nbcg-realm.json"
 
