@@ -21,11 +21,15 @@ export class KeycloakJwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
+    const clientId = process.env.KEYCLOAK_CLIENT_ID ?? 'nbcg-api';
+    const clientRoles: string[] =
+      payload.resource_access?.[clientId]?.roles ?? [];
+
     return {
-      userId: payload.sub,
+      sub: payload.sub,
       username: payload.preferred_username,
       email: payload.email,
-      roles: payload.realm_access?.roles ?? [],
+      scopes: clientRoles,
     };
   }
 }

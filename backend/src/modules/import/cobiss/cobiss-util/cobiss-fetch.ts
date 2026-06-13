@@ -1,6 +1,9 @@
 import "dotenv/config";
+import { Logger } from '@nestjs/common';
 import { extractFirstRecordXml, recordXmlToJson } from './cobiss-parser';
 import { DomainRecord } from './cobiss.types';
+
+const logger = new Logger('CobissFetch');
 
 const COBISS_ENDPOINT =
   'https://ws.cobiss.net/sru_rest/search/COBCG';
@@ -10,7 +13,7 @@ async function safeFetch(url: string): Promise<{ contentType: string; body: stri
     const res = await fetch(url);
 
     if (!res.ok) {
-      console.error('COBISS fetch failed:', res.status, res.statusText);
+      logger.error(`COBISS fetch failed: ${res.status} ${res.statusText}`);
       return null;
     }
 
@@ -19,7 +22,7 @@ async function safeFetch(url: string): Promise<{ contentType: string; body: stri
       body: await res.text(),
     };
   } catch (err) {
-    console.error('Fetch error:', err);
+    logger.error('Fetch error:', err);
     return null;
   }
 }

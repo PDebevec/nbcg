@@ -29,6 +29,7 @@ export class FilesService {
         try {
           fid = await this.seaweedfs.upload(stream, file.originalname, file.mimetype, file.size);
         } finally {
+          stream.destroy();
           await unlink(file.path).catch(() => undefined);
         }
 
@@ -69,8 +70,9 @@ export class FilesService {
     const file = await this.prisma.fileAttachment.findUnique({ where: { id: fileId } });
     if (!file) throw new NotFoundException(`File not found: ${fileId}`);
 
-    await this.seaweedfs.delete(file.originalFid);
     await this.prisma.fileAttachment.delete({ where: { id: fileId } });
+    // Delete from storage after DB commit — orphaned blob is harmless, missing DB row is not.
+    await this.seaweedfs.delete(file.originalFid).catch(() => {});
 
     // OpenSearch file_texts cleanup will be added in step 5 (SearchModule) — best-effort, non-throwing
   }
