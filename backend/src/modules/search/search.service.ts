@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { VisibilityStatus } from '../../../generated/prisma/enums';
 import { OpenSearchService } from '../../core/opensearch/opensearch.service';
+import { ResourceAccessService } from '../../core/auth/resource-access.service';
+import type { Principal, VisibilityFilter } from '../../core/auth/principal.type';
 import type { SearchQueryDto } from './dto/search-query.dto';
 
 export interface SearchHit {
@@ -38,7 +41,7 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
       multi_match: {
         query: dto.q,
         fields: SEARCH_FIELDS,
-        type: 'cross_fields',
+        type: 'best_fields',
         fuzziness: 'AUTO',
         lenient: true,
       },
@@ -113,9 +116,12 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
 
 @Injectable()
 export class SearchService {
-  constructor(private readonly opensearch: OpenSearchService) {}
+  constructor(
+    private readonly opensearch: OpenSearchService,
+    private readonly access: ResourceAccessService,
+  ) {}
 
-  async search(dto: SearchQueryDto): Promise<SearchResult> {
+  async search(dto: SearchQueryDto, principal: Principal): Promise<SearchResult> {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 20;
     const from = (page - 1) * limit;
@@ -124,14 +130,21 @@ export class SearchService {
       throw new BadRequestException('Page out of range: OpenSearch limit is from + size < 10000');
     }
 
-    const query = buildQuery(dto);
-    if (Object.keys(query).length === 0) {
+    const filter = this.access.visibilityFilter(principal);
+    const requestedType = dto.type ?? 'all';
+    const { indices, visibilityClause } = this.buildVisibilityQuery(requestedType, filter);
+
+    if (indices.length === 0) {
       return { total: 0, page, limit, pages: 0, hits: [] };
     }
 
-    const indices: string[] = [];
-    if (dto.type === 'all' || dto.type === 'records') indices.push('records');
-    if (dto.type === 'all' || dto.type === 'drafts') indices.push('drafts');
+    const userQuery = buildQuery(dto);
+    const query = {
+      bool: {
+        must: [userQuery],
+        filter: [visibilityClause],
+      },
+    };
 
     const body = { from, size: limit, query, track_total_hits: true };
 
@@ -156,7 +169,7 @@ export class SearchService {
     };
   }
 
-  async getChildren(id: string, dto: SearchQueryDto): Promise<SearchResult> {
+  async getChildren(id: string, dto: SearchQueryDto, principal: Principal): Promise<SearchResult> {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 20;
     const from = (page - 1) * limit;
@@ -165,15 +178,22 @@ export class SearchService {
       throw new BadRequestException('Page out of range: OpenSearch limit is from + size < 10000');
     }
 
-    const indices: string[] = [];
-    if (dto.type === 'all' || dto.type === 'records') indices.push('records');
-    if (dto.type === 'all' || dto.type === 'drafts') indices.push('drafts');
+    const filter = this.access.visibilityFilter(principal);
+    const requestedType = dto.type ?? 'all';
+    const { indices, visibilityClause } = this.buildVisibilityQuery(requestedType, filter);
+
+    if (indices.length === 0) {
+      return { total: 0, page, limit, pages: 0, hits: [] };
+    }
 
     const innerQuery = buildQuery(dto);
     const query = {
       bool: {
         must: [innerQuery],
-        filter: [{ term: { 'parent_relations.parentId': id } }],
+        filter: [
+          { term: { 'parent_relations.parentId': id } },
+          visibilityClause,
+        ],
       },
     };
 
@@ -199,11 +219,68 @@ export class SearchService {
     };
   }
 
-  async getById(id: string): Promise<SearchHit> {
+  async getById(id: string, principal: Principal): Promise<SearchHit> {
     const result = await this.opensearch.getById(id);
     if (!result) {
       throw new NotFoundException(`Item with id "${id}" not found`);
     }
+
+    // Check visibility — return 404 (not 403) if the principal can't see this item
+    const filter = this.access.visibilityFilter(principal);
+    const allowedStatuses: VisibilityStatus[] =
+      result.index === 'records' ? filter.records : filter.drafts;
+    const itemVisibility = (result.source as Record<string, unknown>).visibilityStatus as string;
+
+    if (!allowedStatuses.includes(itemVisibility as VisibilityStatus)) {
+      throw new NotFoundException(`Item with id "${id}" not found`);
+    }
+
     return { id, index: result.index, score: 1, source: result.source };
+  }
+
+  /**
+   * Build an OpenSearch visibility clause that restricts results to only the
+   * indices and visibility tiers the principal is allowed to see.
+   */
+  private buildVisibilityQuery(
+    requestedType: 'all' | 'records' | 'drafts',
+    filter: VisibilityFilter,
+  ): { indices: string[]; visibilityClause: Record<string, unknown> } {
+    const should: unknown[] = [];
+    const indices: string[] = [];
+
+    const wantsRecords = requestedType === 'all' || requestedType === 'records';
+    const wantsDrafts = requestedType === 'all' || requestedType === 'drafts';
+
+    if (wantsRecords && filter.records.length > 0) {
+      indices.push('records');
+      should.push({
+        bool: {
+          must: [
+            { term: { _index: 'records' } },
+            { terms: { visibilityStatus: filter.records } },
+          ],
+        },
+      });
+    }
+
+    if (wantsDrafts && filter.drafts.length > 0) {
+      indices.push('drafts');
+      should.push({
+        bool: {
+          must: [
+            { term: { _index: 'drafts' } },
+            { terms: { visibilityStatus: filter.drafts } },
+          ],
+        },
+      });
+    }
+
+    return {
+      indices,
+      visibilityClause: {
+        bool: { should, minimum_should_match: 1 },
+      },
+    };
   }
 }

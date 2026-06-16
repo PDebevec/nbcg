@@ -88,18 +88,22 @@ export class ImportQueueProcessor extends WorkerHost {
       jeGlavnoGradivo: true,
     };
 
+    const data = {
+      id: recordId,
+      visibilityStatus,
+      metadata,
+      createdByUserId: 'system',
+      updatedByUserId: 'system',
+    };
+
     if (target === ItemType.RECORD) {
-      await this.prisma.record.upsert({
-        where: { id: recordId },
-        update: { visibilityStatus, metadata, updatedAt: new Date(), updatedByUserId: 'system' },
-        create: { id: recordId, visibilityStatus, metadata, createdByUserId: 'system', updatedByUserId: 'system' },
-      });
+      const existing = await this.prisma.record.findUnique({ where: { id: recordId }, select: { id: true } });
+      if (existing) throw new Error(`Record ${recordId} (COBISS:${id}) already exists. Skipping.`);
+      await this.prisma.record.create({ data });
     } else {
-      await this.prisma.draft.upsert({
-        where: { id: recordId },
-        update: { visibilityStatus, metadata, updatedAt: new Date(), updatedByUserId: 'system' },
-        create: { id: recordId, visibilityStatus, metadata, createdByUserId: 'system', updatedByUserId: 'system' },
-      });
+      const existing = await this.prisma.draft.findUnique({ where: { id: recordId }, select: { id: true } });
+      if (existing) throw new Error(`Draft ${recordId} (COBISS:${id}) already exists. Skipping.`);
+      await this.prisma.draft.create({ data });
     }
   }
 

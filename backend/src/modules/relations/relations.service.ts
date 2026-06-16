@@ -12,6 +12,11 @@ export class RelationsService {
     const parentType = typeMap.get(parentId);
     if (!parentType) throw new BadRequestException(`Parent not found: ${parentId}`);
 
+    const missing = childIds.filter((id) => !typeMap.has(id));
+    if (missing.length > 0) {
+      throw new BadRequestException(`Child IDs not found: ${missing.join(', ')}`);
+    }
+
     await this.prisma.itemRelation.createMany({
       data: childIds.map((childId) => ({
         parentId,

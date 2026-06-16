@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { BullModule } from '@nestjs/bullmq';
 import { AuthModule } from './core/auth/auth.module';
+import { OptionalJwtGuard } from './core/auth/optional-jwt.guard';
+import { ScopesGuard } from './core/auth/scopes.guard';
 import { HealthModule } from './modules/health/health.module';
 import { ImportModule } from './modules/import/import.module';
 import { RelationsModule } from './modules/relations/relations.module';
@@ -31,6 +34,10 @@ import { SeaweedfsModule } from './core/seaweedfs/seaweedfs.module';
     SearchModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: OptionalJwtGuard },
+    { provide: APP_GUARD, useClass: ScopesGuard },
+  ],
 })
 export class AppModule {}

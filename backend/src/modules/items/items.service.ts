@@ -44,6 +44,7 @@ export class ItemsService {
     visibilityStatus: VisibilityStatus,
     targetState: ItemType,
     rawMetadata: Record<string, unknown> | undefined,
+    userId: string,
   ): Promise<void> {
     const sanitizedMetadata = this.sanitizeMetadata(rawMetadata ?? {});
 
@@ -84,8 +85,8 @@ export class ItemsService {
       ...(id ? { id } : {}),
       visibilityStatus,
       metadata: finalMetadata,
-      createdByUserId: 'user',
-      updatedByUserId: 'user',
+      createdByUserId: userId,
+      updatedByUserId: userId,
     };
 
     if (targetState === ItemType.RECORD) {
@@ -99,6 +100,7 @@ export class ItemsService {
     id: string,
     visibilityStatus: VisibilityStatus | undefined,
     rawMetadata: Record<string, unknown> | undefined,
+    userId: string,
   ): Promise<void> {
     const metadataUpdate = rawMetadata ? this.sanitizeMetadata(rawMetadata) : undefined;
 
@@ -132,7 +134,7 @@ export class ItemsService {
     const existingMetadata =
       (existing.metadata as unknown as Record<string, unknown>) ?? {};
 
-    const data: Record<string, unknown> = { updatedByUserId: 'user' };
+    const data: Record<string, unknown> = { updatedByUserId: userId };
     if (visibilityStatus) data.visibilityStatus = visibilityStatus;
     if (hasMetadataChanges) {
       data.metadata = { ...existingMetadata, ...metadataUpdate };
@@ -150,8 +152,6 @@ export class ItemsService {
       where: { OR: [{ draft_id: { in: ids } }, { record_id: { in: ids } }] },
       select: { originalFid: true },
     });
-
-    await Promise.all(attachments.map((a) => this.seaweedfs.delete(a.originalFid)));
 
     await this.prisma.$transaction(async (tx) => {
       const [allDrafts, allRecords] = await Promise.all([
@@ -184,6 +184,10 @@ export class ItemsService {
         await tx.record.deleteMany({ where: { id: { in: fromRecords } } });
       }
     });
+
+    // Delete files from SeaweedFS after DB commit succeeds.
+    // If this fails, we get orphaned blobs (wasted storage) but DB stays consistent.
+    await Promise.all(attachments.map((a) => this.seaweedfs.delete(a.originalFid).catch(() => {})));
   }
 
   async transition(ids: string[], targetState: ItemType): Promise<void> {
@@ -283,21 +287,22 @@ export class ItemsService {
 
       // Re-link file attachments before cascade fires on delete.
       // IDs are identical after transition so record_id/draft_id = id directly.
+      // Per-id loop is required because Prisma can't set column = different value per row.
       if (fromDrafts.length > 0 && targetState === ItemType.RECORD) {
-        for (const id of fromDrafts) {
-          await tx.fileAttachment.updateMany({
+        await Promise.all(fromDrafts.map((id) =>
+          tx.fileAttachment.updateMany({
             where: { draft_id: id },
             data: { record_id: id, draft_id: null },
-          });
-        }
+          }),
+        ));
       }
       if (fromRecords.length > 0 && targetState === ItemType.DRAFT) {
-        for (const id of fromRecords) {
-          await tx.fileAttachment.updateMany({
+        await Promise.all(fromRecords.map((id) =>
+          tx.fileAttachment.updateMany({
             where: { record_id: id },
             data: { draft_id: id, record_id: null },
-          });
-        }
+          }),
+        ));
       }
 
       if (fromDrafts.length > 0) {
