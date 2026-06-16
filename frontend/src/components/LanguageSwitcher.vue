@@ -51,7 +51,7 @@ function setLocale(value: string) {
 
 <style scoped lang="sass">
 .lang-switcher
-  color: $primary
+  color: $ink
   font-weight: 600
   font-size: 0.82rem
 

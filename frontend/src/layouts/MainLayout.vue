@@ -34,7 +34,7 @@
         </nav>
 
         <!-- MOBILE MENU -->
-        <q-btn flat dense round icon="menu" class="nav-menu-btn text-library-primary">
+        <q-btn flat dense round icon="menu" class="nav-menu-btn text-library-ink">
           <q-menu>
             <q-list style="min-width: 200px">
               <q-item
@@ -208,7 +208,7 @@ const navLinks = [
   height: 24px
 
 .nav-user
-  color: $primary
+  color: $ink
 
 .nav-menu-btn
   display: none
