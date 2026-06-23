@@ -68,6 +68,7 @@ elif [ "$ENV" = "dev" ]; then
     set_env $BACKEND_ENV "TIKA_HOST" "$TIKA_HOST"
     set_env $BACKEND_ENV "KEYCLOAK_REALM" "nbcg"
     set_env $BACKEND_ENV "KEYCLOAK_CLIENT_ID" "nbcg-api"
+    set_env $BACKEND_ENV "KEYCLOAK_URL" "$KEYCLOAK_URL"
 
     set_env $BACKEND_ENV "NODE_ENV" "development"
 else
