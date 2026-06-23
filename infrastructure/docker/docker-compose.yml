@@ -179,7 +179,7 @@ services:
       - ${EXTERNAL_SEAWEEDFS_FILER_P1}:8888
       - ${EXTERNAL_SEAWEEDFS_FILER_P2}:18888
       - ${EXTERNAL_SEAWEEDFS_FILER_P3}:9326
-    command: 'filer -ip=filer -master="master:9333" -ip.bind=0.0.0.0 -metricsPort=9326 -fileSizeLimitMB=4096' 
+    command: 'filer -ip=filer -master="master:9333" -ip.bind=0.0.0.0 -metricsPort=9326 -maxMB=4096' 
     tty: true
     stdin_open: true
     depends_on:
