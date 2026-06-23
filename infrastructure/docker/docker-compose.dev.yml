@@ -20,6 +20,20 @@ services:
   #   depends_on:
   #     - db
 
+  tika:
+    image: apache/tika
+    restart: unless-stopped
+    ports:
+      - 9998:9998
+    environment:
+      - JAVA_OPTS=-Xms256m -Xmx2g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9998/tika"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
 ##### POSTGRES #####
   db:
     ports:
