@@ -66,6 +66,8 @@ elif [ "$ENV" = "dev" ]; then
     set_env $BACKEND_ENV "SEAWEEDFS_VOLUME" "http://localhost:$EXTERNAL_SEAWEEDFS_VOLUME_P1"
     set_env $BACKEND_ENV "OPENSEARCH_URL" "http://$HOSTNAME:$EXTERNAL_OPENSEARCH_NODE_P1"
     set_env $BACKEND_ENV "TIKA_HOST" "$TIKA_HOST"
+    set_env $BACKEND_ENV "KEYCLOAK_REALM" "nbcg"
+    set_env $BACKEND_ENV "KEYCLOAK_CLIENT_ID" "nbcg-api"
 
     set_env $BACKEND_ENV "NODE_ENV" "development"
 else
