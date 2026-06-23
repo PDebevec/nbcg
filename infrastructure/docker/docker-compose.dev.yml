@@ -21,7 +21,9 @@ services:
   #     - db
 
   tika:
-    image: apache/tika
+    build:
+      context: ./infrastructure/docker/tika
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - 9998:9998
