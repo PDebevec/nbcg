@@ -26,9 +26,29 @@
 
           <q-separator vertical inset class="q-mx-sm nav-divider" />
 
-          <q-btn flat round icon="account_circle" class="nav-user" to="/profil">
-            <q-tooltip>{{ t('nav.profile') }}</q-tooltip>
-          </q-btn>
+          <template v-if="auth.authenticated">
+            <q-btn flat round icon="account_circle" class="nav-user" to="/profil">
+              <q-tooltip>{{ auth.username || t('nav.profile') }}</q-tooltip>
+            </q-btn>
+            <q-btn
+              flat
+              no-caps
+              icon="logout"
+              :label="t('auth.logout')"
+              class="nav-btn"
+              @click="onLogout"
+            />
+          </template>
+          <q-btn
+            v-else
+            unelevated
+            no-caps
+            color="primary"
+            icon="login"
+            :label="t('auth.login')"
+            class="q-ml-xs"
+            @click="onLogin"
+          />
 
           <LanguageSwitcher class="q-ml-xs" />
         </nav>
@@ -51,11 +71,23 @@
                 <q-item-section>{{ t(link.labelKey) }}</q-item-section>
               </q-item>
               <q-separator />
-              <q-item clickable v-close-popup to="/profil">
+              <q-item v-if="auth.authenticated" clickable v-close-popup to="/profil">
                 <q-item-section avatar>
                   <q-icon name="account_circle" color="primary" />
                 </q-item-section>
-                <q-item-section>{{ t('nav.profile') }}</q-item-section>
+                <q-item-section>{{ auth.username || t('nav.profile') }}</q-item-section>
+              </q-item>
+              <q-item v-if="auth.authenticated" clickable v-close-popup @click="onLogout">
+                <q-item-section avatar>
+                  <q-icon name="logout" color="primary" />
+                </q-item-section>
+                <q-item-section>{{ t('auth.logout') }}</q-item-section>
+              </q-item>
+              <q-item v-else clickable v-close-popup @click="onLogin">
+                <q-item-section avatar>
+                  <q-icon name="login" color="primary" />
+                </q-item-section>
+                <q-item-section>{{ t('auth.login') }}</q-item-section>
               </q-item>
               <q-separator />
               <q-item>
@@ -144,8 +176,17 @@
 import { useI18n } from 'vue-i18n';
 import logo from 'src/assets/logo.png';
 import LanguageSwitcher from 'components/LanguageSwitcher.vue';
+import { auth, login, logout } from 'src/services/keycloak';
 
 const { t } = useI18n();
+
+function onLogin() {
+  void login('/profil');
+}
+
+function onLogout() {
+  void logout();
+}
 
 const year = new Date().getFullYear();
 

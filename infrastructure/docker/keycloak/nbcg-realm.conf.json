@@ -950,10 +950,12 @@
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
         "http://localhost:3000/*",
+        "http://localhost:3080/*",
         "http://localhost:5173/*"
       ],
       "webOrigins": [
         "http://localhost:3000",
+        "http://localhost:3080",
         "http://localhost:5173"
       ],
       "notBefore": 0,
@@ -972,7 +974,7 @@
         "oidc.ciba.grant.enabled": "false",
         "backchannel.logout.session.required": "false",
         "standard.token.exchange.enabled": "false",
-        "post.logout.redirect.uris": "http://localhost:5173/*",
+        "post.logout.redirect.uris": "http://localhost:3000/*##http://localhost:3080/*##http://localhost:5173/*",
         "oauth2.device.authorization.grant.enabled": "false",
         "display.on.consent.screen": "false",
         "pkce.code.challenge.method": "S256",

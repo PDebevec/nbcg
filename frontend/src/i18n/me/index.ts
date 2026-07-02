@@ -87,11 +87,21 @@ export default {
     addressValue: 'Nacionalna biblioteka Crne Gore „Đurđe Crnojević“, Cetinje, Crna Gora',
   },
 
+  auth: {
+    login: 'Prijava',
+    logout: 'Odjava',
+  },
+
   profile: {
     title: 'Korisnički profil',
     unavailableTitle: 'Prijava nije dostupna',
     unavailableText:
       'Korisnički nalozi će uskoro biti omogućeni na portalu Digitalne biblioteke Crne Gore.',
+    username: 'Korisničko ime',
+    email: 'E-pošta',
+    fullName: 'Ime',
+    roles: 'Uloge',
+    noRoles: 'Nema dodijeljenih uloga',
   },
 
   footer: {
@@ -101,7 +111,7 @@ export default {
     navigation: 'Navigacija',
     contact: 'Kontakt',
     phone: 'Tel: + 382 41 234 243, lokal 13',
-    email: 'e-mail: info@dlib.me',
+    email: "e-mail: info{'@'}dlib.me",
     copyright: 'Digitalna biblioteka Crne Gore.',
   },
 

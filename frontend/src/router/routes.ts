@@ -12,7 +12,11 @@ const routes: RouteRecordRaw[] = [
       { path: 'uslovi-koriscenja', component: () => import('pages/TermsOfUsePage.vue') },
       { path: 'napredna-pretraga', component: () => import('pages/AdvancedSearchPage.vue') },
       { path: 'kontakt', component: () => import('pages/ContactPage.vue') },
-      { path: 'profil', component: () => import('pages/ProfilePage.vue') },
+      {
+        path: 'profil',
+        component: () => import('pages/ProfilePage.vue'),
+        meta: { requiresAuth: true },
+      },
     ],
   },
 

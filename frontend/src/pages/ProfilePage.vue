@@ -8,15 +8,58 @@
     </div>
 
     <div class="page-body q-px-md q-py-xl">
-      <div class="content-card q-pa-xl text-center">
-        <q-icon name="account_circle" size="56px" color="primary" class="q-mb-md" />
-        <div class="text-h6 text-weight-bold text-library-primary q-mb-sm">
-          {{ t('profile.unavailableTitle') }}
+      <div class="content-card q-pa-xl">
+        <div class="text-center q-mb-lg">
+          <q-icon name="account_circle" size="56px" color="primary" class="q-mb-sm" />
+          <div class="text-h6 text-weight-bold text-library-primary">
+            {{ auth.fullName || auth.username }}
+          </div>
         </div>
-        <p class="text-library-muted q-mb-lg">
-          {{ t('profile.unavailableText') }}
-        </p>
-        <q-btn unelevated no-caps color="primary" :label="t('common.backHome')" icon="home" to="/" />
+
+        <q-list separator>
+          <q-item>
+            <q-item-section>
+              <q-item-label caption>{{ t('profile.username') }}</q-item-label>
+              <q-item-label>{{ auth.username || '—' }}</q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item>
+            <q-item-section>
+              <q-item-label caption>{{ t('profile.email') }}</q-item-label>
+              <q-item-label>{{ auth.email || '—' }}</q-item-label>
+            </q-item-section>
+          </q-item>
+          <q-item>
+            <q-item-section>
+              <q-item-label caption>{{ t('profile.roles') }}</q-item-label>
+              <q-item-label>
+                <template v-if="auth.roles.length">
+                  <q-chip
+                    v-for="role in auth.roles"
+                    :key="role"
+                    dense
+                    color="primary"
+                    text-color="white"
+                    :label="role"
+                  />
+                </template>
+                <span v-else class="text-library-muted">{{ t('profile.noRoles') }}</span>
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+
+        <div class="row justify-center q-gutter-sm q-mt-lg">
+          <q-btn outline no-caps color="primary" :label="t('common.backHome')" icon="home" to="/" />
+          <q-btn
+            unelevated
+            no-caps
+            color="primary"
+            :label="t('auth.logout')"
+            icon="logout"
+            @click="onLogout"
+          />
+        </div>
       </div>
     </div>
   </q-page>
@@ -24,8 +67,13 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
+import { auth, logout } from 'src/services/keycloak';
 
 const { t } = useI18n();
+
+function onLogout() {
+  void logout();
+}
 </script>
 
 <style scoped lang="sass">

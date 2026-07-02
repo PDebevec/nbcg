@@ -87,11 +87,21 @@ export default {
     addressValue: 'National Library of Montenegro “Đurđe Crnojević”, Cetinje, Montenegro',
   },
 
+  auth: {
+    login: 'Log in',
+    logout: 'Log out',
+  },
+
   profile: {
     title: 'User profile',
     unavailableTitle: 'Login is not available',
     unavailableText:
       'User accounts will soon be enabled on the Digital Library of Montenegro portal.',
+    username: 'Username',
+    email: 'E-mail',
+    fullName: 'Name',
+    roles: 'Roles',
+    noRoles: 'No assigned roles',
   },
 
   footer: {
@@ -101,7 +111,7 @@ export default {
     navigation: 'Navigation',
     contact: 'Contact',
     phone: 'Tel: + 382 41 234 243, ext. 13',
-    email: 'e-mail: info@dlib.me',
+    email: "e-mail: info{'@'}dlib.me",
     copyright: 'Digital Library of Montenegro.',
   },
 
