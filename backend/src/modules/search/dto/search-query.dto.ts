@@ -66,4 +66,8 @@ export class SearchQueryDto {
   @IsOptional()
   @IsString()
   cobissId?: string;
+
+  @IsOptional()
+  @IsString()
+  fullText?: string;
 }

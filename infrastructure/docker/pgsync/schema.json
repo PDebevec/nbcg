@@ -21,7 +21,20 @@
           "createdAt": { "type": "date" },
           "updatedAt": { "type": "date" },
           "createdByUserId": { "type": "keyword" },
-          "updatedByUserId": { "type": "keyword" }
+          "updatedByUserId": { "type": "keyword" },
+          "file_attachments": {
+            "type": "nested",
+            "properties": {
+              "id": { "type": "keyword" },
+              "fileType": { "type": "keyword" },
+              "filename": { "type": "text" },
+              "mimeType": { "type": "keyword" },
+              "sizeBytes": { "type": "long" },
+              "textExtracted": { "type": "boolean" },
+              "extractedText": { "type": "text" },
+              "createdAt": { "type": "date" }
+            }
+          }
         }
       },
       "children": [
@@ -34,19 +47,9 @@
             "mimeType",
             "sizeBytes",
             "textExtracted",
+            "extractedText",
             "createdAt"
           ],
-          "transform": {
-            "mapping": {
-              "id": { "type": "keyword" },
-              "fileType": { "type": "keyword" },
-              "filename": { "type": "text" },
-              "mimeType": { "type": "keyword" },
-              "sizeBytes": { "type": "long" },
-              "textExtracted": { "type": "boolean" },
-              "createdAt": { "type": "date" }
-            }
-          },
           "relationship": {
             "variant": "object",
             "type": "one_to_many",
@@ -103,7 +106,20 @@
           "createdAt": { "type": "date" },
           "updatedAt": { "type": "date" },
           "createdByUserId": { "type": "keyword" },
-          "updatedByUserId": { "type": "keyword" }
+          "updatedByUserId": { "type": "keyword" },
+          "file_attachments": {
+            "type": "nested",
+            "properties": {
+              "id": { "type": "keyword" },
+              "fileType": { "type": "keyword" },
+              "filename": { "type": "text" },
+              "mimeType": { "type": "keyword" },
+              "sizeBytes": { "type": "long" },
+              "textExtracted": { "type": "boolean" },
+              "extractedText": { "type": "text" },
+              "createdAt": { "type": "date" }
+            }
+          }
         }
       },
       "children": [
@@ -116,19 +132,9 @@
             "mimeType",
             "sizeBytes",
             "textExtracted",
+            "extractedText",
             "createdAt"
           ],
-          "transform": {
-            "mapping": {
-              "id": { "type": "keyword" },
-              "fileType": { "type": "keyword" },
-              "filename": { "type": "text" },
-              "mimeType": { "type": "keyword" },
-              "sizeBytes": { "type": "long" },
-              "textExtracted": { "type": "boolean" },
-              "createdAt": { "type": "date" }
-            }
-          },
           "relationship": {
             "variant": "object",
             "type": "one_to_many",

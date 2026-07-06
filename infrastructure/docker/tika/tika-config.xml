@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tika server config.
+
+  taskTimeoutMillis: how long the server's forked-process watchdog allows a single
+  parse before killing the child (default 300000 = 5 min). OCR of large scanned PDFs
+  (rendered + tesseract'd page by page) easily exceeds 5 min, so the default aborts
+  extraction with a TIMEOUT. Raised to 30 min to match the backend's undici client
+  timeout (TIKA_TIMEOUT_MS). This value is also the ceiling for any per-request
+  X-Tika-Timeout-Millis header.
+-->
+<properties>
+  <server>
+    <params>
+      <taskTimeoutMillis>1800000</taskTimeoutMillis>
+    </params>
+  </server>
+</properties>

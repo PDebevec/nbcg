@@ -5,12 +5,30 @@ import { ResourceAccessService } from '../../core/auth/resource-access.service';
 import type { Principal, VisibilityFilter } from '../../core/auth/principal.type';
 import type { SearchQueryDto } from './dto/search-query.dto';
 
+export interface MatchedFile {
+  /** file_attachments.id of the PDF whose extracted text matched */
+  id: string;
+  filename: string;
+  /** Snippets of matched full text within this file */
+  highlights: string[];
+}
+
 export interface SearchHit {
   id: string;
   index: string;
   score: number;
   source: Record<string, unknown>;
+  /** Per-attachment matches, present only when the query used `fullText` */
+  matchedFiles?: MatchedFile[];
+  /** All full-text snippets flattened (kept for backward compatibility) */
+  highlights?: string[];
 }
+
+// extractedText can be megabytes per attachment — never return it to clients
+const SOURCE_EXCLUDES = ['file_attachments.extractedText'];
+
+/** inner_hits name for the fullText nested query */
+const MATCHED_FILES = 'matched_files';
 
 export interface SearchResult {
   total: number;
@@ -20,6 +38,8 @@ export interface SearchResult {
   hits: SearchHit[];
 }
 
+// Flat (non-nested) fields only — file_attachments.filename lives inside the
+// nested mapping and must be queried through a nested clause.
 const SEARCH_FIELDS = [
   'metadata.title^3',
   'metadata.subtitle^2',
@@ -29,7 +49,6 @@ const SEARCH_FIELDS = [
   'metadata.parallelTitle',
   'metadata.seriesTitle',
   'metadata.notes',
-  'file_attachments.filename',
 ];
 
 function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
@@ -38,12 +57,29 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
 
   if (dto.q?.trim()) {
     must.push({
-      multi_match: {
-        query: dto.q,
-        fields: SEARCH_FIELDS,
-        type: 'best_fields',
-        fuzziness: 'AUTO',
-        lenient: true,
+      bool: {
+        should: [
+          {
+            multi_match: {
+              query: dto.q,
+              fields: SEARCH_FIELDS,
+              type: 'best_fields',
+              fuzziness: 'AUTO',
+              lenient: true,
+            },
+          },
+          {
+            nested: {
+              path: 'file_attachments',
+              query: {
+                match: {
+                  'file_attachments.filename': { query: dto.q, fuzziness: 'AUTO' },
+                },
+              },
+            },
+          },
+        ],
+        minimum_should_match: 1,
       },
     });
   }
@@ -107,11 +143,63 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
     filter.push({ term: { 'metadata.cobissId': dto.cobissId } });
   }
 
+  if (dto.fullText?.trim()) {
+    must.push({
+      nested: {
+        path: 'file_attachments',
+        query: {
+          match: {
+            'file_attachments.extractedText': {
+              query: dto.fullText,
+              operator: 'and',
+            },
+          },
+        },
+        inner_hits: {
+          name: MATCHED_FILES,
+          // Only identify the matched attachment — never ship its text
+          _source: { includes: ['file_attachments.id', 'file_attachments.filename'] },
+          highlight: {
+            fields: {
+              'file_attachments.extractedText': {
+                fragment_size: 150,
+                number_of_fragments: 3,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   if (must.length === 0 && filter.length === 0) {
     return { match_all: {} };
   }
 
   return { bool: { ...(must.length ? { must } : {}), ...(filter.length ? { filter } : {}) } };
+}
+
+/** Map a raw OpenSearch hit to a SearchHit, lifting per-attachment matches out of inner_hits. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapHit(hit: any): SearchHit {
+  const innerHits: any[] = hit.inner_hits?.[MATCHED_FILES]?.hits?.hits ?? [];
+  const matchedFiles: MatchedFile[] = innerHits.map((inner) => ({
+    id: inner._source?.id,
+    filename: inner._source?.filename,
+    highlights: inner.highlight
+      ? (Object.values(inner.highlight) as string[][]).flat()
+      : [],
+  }));
+
+  return {
+    id: hit._id,
+    index: hit._index,
+    score: hit._score,
+    source: hit._source,
+    ...(matchedFiles.length
+      ? { matchedFiles, highlights: matchedFiles.flatMap((f) => f.highlights) }
+      : {}),
+  };
 }
 
 @Injectable()
@@ -146,7 +234,13 @@ export class SearchService {
       },
     };
 
-    const body = { from, size: limit, query, track_total_hits: true };
+    const body = {
+      from,
+      size: limit,
+      query,
+      track_total_hits: true,
+      _source: { excludes: SOURCE_EXCLUDES },
+    };
 
     const result = await this.opensearch.search(indices, body);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -160,12 +254,7 @@ export class SearchService {
       page,
       limit,
       pages: Math.ceil(total / limit),
-      hits: hits.map((hit) => ({
-        id: hit._id,
-        index: hit._index,
-        score: hit._score,
-        source: hit._source,
-      })),
+      hits: hits.map(mapHit),
     };
   }
 
@@ -197,7 +286,13 @@ export class SearchService {
       },
     };
 
-    const body = { from, size: limit, query, track_total_hits: true };
+    const body = {
+      from,
+      size: limit,
+      query,
+      track_total_hits: true,
+      _source: { excludes: SOURCE_EXCLUDES },
+    };
     const result = await this.opensearch.search(indices, body);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const raw: any = result;
@@ -210,12 +305,7 @@ export class SearchService {
       page,
       limit,
       pages: Math.ceil(total / limit),
-      hits: hits.map((hit) => ({
-        id: hit._id,
-        index: hit._index,
-        score: hit._score,
-        source: hit._source,
-      })),
+      hits: hits.map(mapHit),
     };
   }
 

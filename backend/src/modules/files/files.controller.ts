@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
@@ -16,6 +17,7 @@ import { GetPrincipal } from '../../core/auth/get-principal.decorator';
 import { ResourceAccessService } from '../../core/auth/resource-access.service';
 import type { Principal } from '../../core/auth/principal.type';
 import { FilesService } from './files.service';
+import { ReextractDto, UploadFilesDto } from './dto/upload-files.dto';
 
 @Controller('files')
 export class FilesController {
@@ -33,9 +35,26 @@ export class FilesController {
     @GetPrincipal() principal: Principal,
     @Param('itemId') itemId: string,
     @UploadedFiles() files: Express.Multer.File[],
+    @Body() body: UploadFilesDto,
   ) {
-    await this.access.assertCanManage(principal, itemId);
-    return this.filesService.upload(itemId, files);
+    // Multer has already written temp files to disk — clean them up if the request is rejected
+    try {
+      await this.access.assertCanManage(principal, itemId);
+    } catch (err) {
+      await this.filesService.cleanupTempFiles(files);
+      throw err;
+    }
+    return this.filesService.upload(itemId, files, body.doOCR ?? false);
+  }
+
+  @Post(':fileId/extract')
+  async reextract(
+    @GetPrincipal() principal: Principal,
+    @Param('fileId') fileId: string,
+    @Body() body: ReextractDto,
+  ) {
+    await this.access.assertCanManageFile(principal, fileId);
+    return this.filesService.reextract(fileId, body.doOCR ?? true);
   }
 
   @Get(':itemId')
