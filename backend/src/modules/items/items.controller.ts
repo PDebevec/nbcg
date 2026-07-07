@@ -38,7 +38,7 @@ export class ItemsController {
   @Post('transition')
   transition(@GetPrincipal() principal: Principal, @Body() dto: TransitionItemsDto) {
     this.access.assertCanTransition(principal);
-    return this.itemsService.transition(dto.ids, dto.targetState);
+    return this.itemsService.transition(dto.ids, dto.targetState, principal.sub);
   }
 
   @Patch(':id')

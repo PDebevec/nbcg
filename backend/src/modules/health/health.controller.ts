@@ -1,14 +1,13 @@
-import { Controller, Get, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { HealthService } from './health.service';
-import { JwtAuthGuard } from '../../core/auth/auth.guard';
 
+// Intentionally unauthenticated — used by monitoring/liveness probes.
 @Controller('health')
-//@UseGuards(JwtAuthGuard)
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
   @Get()
-  getHealth(@Req() req: any) {
+  getHealth() {
     return {
       ...this.healthService.getStatus(),
     };

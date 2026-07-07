@@ -111,8 +111,12 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
   }
 
   if (dto.year) {
+    // Format is validated by the DTO (@Matches: YYYY or YYYY-YYYY)
     const rangeParts = dto.year.split('-');
-    if (rangeParts.length === 2 && rangeParts[0] && rangeParts[1]) {
+    if (rangeParts.length === 2) {
+      if (rangeParts[0] > rangeParts[1]) {
+        throw new BadRequestException('year range start must not be greater than end');
+      }
       filter.push({
         range: {
           'metadata.publication.year': { gte: rangeParts[0], lte: rangeParts[1] },

@@ -30,6 +30,10 @@ export class FilesService {
   }
 
   async upload(itemId: string, files: Express.Multer.File[], doOcr = false) {
+    if (!files?.length) {
+      throw new BadRequestException('No files provided — send multipart form data with a "files" field');
+    }
+
     let itemType: 'draft' | 'record';
     try {
       itemType = await this.resolveItem(itemId);
@@ -39,7 +43,7 @@ export class FilesService {
     }
 
     const created = await Promise.all(
-      (files ?? []).map(async (file) => {
+      files.map(async (file) => {
         const fileType = MIME_TO_FILE_TYPE[file.mimetype] ?? FileType.UNKNOWN;
         const stream = createReadStream(file.path);
         let fid: string;
@@ -50,16 +54,22 @@ export class FilesService {
           await unlink(file.path).catch(() => undefined);
         }
 
-        return this.prisma.fileAttachment.create({
-          data: {
-            ...(itemType === 'draft' ? { draft_id: itemId } : { record_id: itemId }),
-            fileType,
-            originalFid: fid,
-            filename: file.originalname,
-            mimeType: file.mimetype,
-            sizeBytes: file.size,
-          },
-        });
+        try {
+          return await this.prisma.fileAttachment.create({
+            data: {
+              ...(itemType === 'draft' ? { draft_id: itemId } : { record_id: itemId }),
+              fileType,
+              originalFid: fid,
+              filename: file.originalname,
+              mimeType: file.mimetype,
+              sizeBytes: file.size,
+            },
+          });
+        } catch (err) {
+          // DB insert failed after the blob was stored — remove it so it doesn't orphan.
+          await this.seaweedfs.delete(fid).catch(() => {});
+          throw err;
+        }
       }),
     );
 
@@ -122,12 +132,13 @@ export class FilesService {
     });
   }
 
-  async download(fileId: string): Promise<{ buffer: Buffer; mimeType: string; filename: string }> {
+  /** Returns a stream so multi-GB files are never buffered in server memory. */
+  async download(fileId: string) {
     const file = await this.prisma.fileAttachment.findUnique({ where: { id: fileId } });
     if (!file) throw new NotFoundException(`File not found: ${fileId}`);
 
-    const buffer = await this.seaweedfs.download(file.originalFid);
-    return { buffer, mimeType: file.mimeType, filename: file.filename };
+    const { stream, contentLength } = await this.seaweedfs.downloadStream(file.originalFid);
+    return { stream, contentLength, mimeType: file.mimeType, filename: file.filename };
   }
 
   async delete(fileId: string): Promise<void> {
@@ -136,9 +147,8 @@ export class FilesService {
 
     await this.prisma.fileAttachment.delete({ where: { id: fileId } });
     // Delete from storage after DB commit — orphaned blob is harmless, missing DB row is not.
+    // OpenSearch cleanup happens automatically via PGSync when the row is deleted.
     await this.seaweedfs.delete(file.originalFid).catch(() => {});
-
-    // OpenSearch file_texts cleanup will be added in step 5 (SearchModule) — best-effort, non-throwing
   }
 
   private async getItemLanguageCodes(itemId: string, itemType: 'draft' | 'record'): Promise<string[]> {

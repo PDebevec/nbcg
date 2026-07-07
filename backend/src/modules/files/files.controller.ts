@@ -70,10 +70,17 @@ export class FilesController {
     @Res() res: Response,
   ) {
     await this.access.assertCanViewFile(principal, fileId);
-    const { buffer, mimeType, filename } = await this.filesService.download(fileId);
+    const { stream, contentLength, mimeType, filename } = await this.filesService.download(fileId);
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
-    res.send(buffer);
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+    stream.on('error', () => {
+      // Storage stream broke mid-transfer — nothing to do but terminate the response.
+      res.destroy();
+    });
+    // If the client disconnects, stop pulling from storage.
+    res.on('close', () => stream.destroy());
+    stream.pipe(res);
   }
 
   @Delete(':fileId')

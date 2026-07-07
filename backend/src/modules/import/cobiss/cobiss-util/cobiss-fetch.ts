@@ -8,9 +8,11 @@ const logger = new Logger('CobissFetch');
 const COBISS_ENDPOINT =
   'https://ws.cobiss.net/sru_rest/search/COBCG';
 
+const FETCH_TIMEOUT_MS = 30_000;
+
 async function safeFetch(url: string): Promise<{ contentType: string; body: string } | null> {
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 
     if (!res.ok) {
       logger.error(`COBISS fetch failed: ${res.status} ${res.statusText}`);

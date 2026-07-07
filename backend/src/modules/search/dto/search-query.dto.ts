@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SearchQueryDto {
@@ -42,7 +42,7 @@ export class SearchQueryDto {
 
   // Year: "1990" or "1990-2000"
   @IsOptional()
-  @IsString()
+  @Matches(/^\d{4}(-\d{4})?$/, { message: 'year must be YYYY or YYYY-YYYY' })
   year?: string;
 
   // Coded fields

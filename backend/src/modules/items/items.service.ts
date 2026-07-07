@@ -68,7 +68,7 @@ export class ItemsService {
     targetState: ItemType,
     rawMetadata: Record<string, unknown> | undefined,
     userId: string,
-  ): Promise<void> {
+  ) {
     const sanitizedMetadata = this.sanitizeMetadata(rawMetadata ?? {});
 
     for (const { key, validate, message } of REQUIRED_METADATA_VALIDATORS) {
@@ -113,10 +113,9 @@ export class ItemsService {
     };
 
     if (targetState === ItemType.RECORD) {
-      await this.prisma.record.create({ data: data as any });
-    } else {
-      await this.prisma.draft.create({ data: data as any });
+      return this.prisma.record.create({ data: data as any });
     }
+    return this.prisma.draft.create({ data: data as any });
   }
 
   async update(
@@ -213,7 +212,7 @@ export class ItemsService {
     await Promise.all(attachments.map((a) => this.seaweedfs.delete(a.originalFid).catch(() => {})));
   }
 
-  async transition(ids: string[], targetState: ItemType): Promise<void> {
+  async transition(ids: string[], targetState: ItemType, userId: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const [allDrafts, allRecords] = await Promise.all([
         tx.draft.findMany({ where: { id: { in: ids } } }),
@@ -272,7 +271,7 @@ export class ItemsService {
               createdAt: d.createdAt,
               createdByUserId: d.createdByUserId,
               updatedAt: now,
-              updatedByUserId: d.updatedByUserId,
+              updatedByUserId: userId,
             };
           }),
         });
@@ -287,7 +286,7 @@ export class ItemsService {
               createdAt: r.createdAt,
               createdByUserId: r.createdByUserId,
               updatedAt: now,
-              updatedByUserId: r.updatedByUserId,
+              updatedByUserId: userId,
             };
           }),
         });
