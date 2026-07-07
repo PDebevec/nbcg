@@ -40,6 +40,29 @@ export class ItemsService {
     private readonly seaweedfs: SeaweedfsService,
   ) {}
 
+  async stats(): Promise<{
+    records: Record<VisibilityStatus, number>;
+    drafts: Record<VisibilityStatus, number>;
+  }> {
+    const [recordGroups, draftGroups] = await Promise.all([
+      this.prisma.record.groupBy({ by: ['visibilityStatus'], _count: { _all: true } }),
+      this.prisma.draft.groupBy({ by: ['visibilityStatus'], _count: { _all: true } }),
+    ]);
+
+    const empty = (): Record<VisibilityStatus, number> => ({
+      [VisibilityStatus.PUBLIC]: 0,
+      [VisibilityStatus.PRIVATE]: 0,
+      [VisibilityStatus.HIDDEN]: 0,
+    });
+
+    const records = empty();
+    for (const g of recordGroups) records[g.visibilityStatus] = g._count._all;
+    const drafts = empty();
+    for (const g of draftGroups) drafts[g.visibilityStatus] = g._count._all;
+
+    return { records, drafts };
+  }
+
   async create(
     visibilityStatus: VisibilityStatus,
     targetState: ItemType,

@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { GetPrincipal } from '../../core/auth/get-principal.decorator';
+import { RequireScopes } from '../../core/auth/scopes.decorator';
 import { ResourceAccessService } from '../../core/auth/resource-access.service';
 import type { Principal } from '../../core/auth/principal.type';
 import { ItemType } from '../../../generated/prisma/enums';
@@ -15,6 +16,12 @@ export class ItemsController {
     private readonly itemsService: ItemsService,
     private readonly access: ResourceAccessService,
   ) {}
+
+ @Get('stats')
+  @RequireScopes('records:view:hidden', 'drafts:view:hidden')
+  stats() {
+    return this.itemsService.stats();
+  }
 
   @Post()
   create(@GetPrincipal() principal: Principal, @Body() dto: CreateItemDto) {

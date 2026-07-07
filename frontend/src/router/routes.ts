@@ -1,5 +1,13 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean;
+    /** Keycloak scopes the user must ALL hold (checked in router guard). */
+    scopes?: string[];
+  }
+}
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -18,6 +26,42 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
       },
     ],
+  },
+
+  {
+    path: '/admin',
+    component: () => import('layouts/AdminLayout.vue'),
+    meta: {
+      requiresAuth: true,
+      scopes: ['drafts:view:hidden', 'records:view:hidden'],
+    },
+    children: [
+      { path: '', component: () => import('pages/admin/AdminDashboardPage.vue') },
+      {
+        path: 'records',
+        component: () => import('pages/admin/AdminItemsPage.vue'),
+        props: { collection: 'records' },
+        meta: { scopes: ['records:manage'] },
+      },
+      {
+        path: 'drafts',
+        component: () => import('pages/admin/AdminItemsPage.vue'),
+        props: { collection: 'drafts' },
+        meta: { scopes: ['drafts:manage'] },
+      },
+      { path: 'items/new', component: () => import('pages/admin/AdminItemEditPage.vue') },
+      { path: 'items/:id', component: () => import('pages/admin/AdminItemEditPage.vue') },
+      {
+        path: 'import',
+        component: () => import('pages/admin/AdminImportPage.vue'),
+        meta: { scopes: ['import:execute'] },
+      },
+    ],
+  },
+
+  {
+    path: '/403',
+    component: () => import('pages/ForbiddenPage.vue'),
   },
 
   // Always leave this as last one,

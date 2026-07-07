@@ -7,6 +7,7 @@ import {
 } from 'vue-router';
 import routes from './routes';
 import { keycloak, login } from 'src/services/keycloak';
+import { hasAllScopes } from 'src/composables/useAuthz';
 
 /*
  * If not building with SSR mode, you can
@@ -34,11 +35,20 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     history: createHistory(process.env.VUE_ROUTER_BASE),
   });
 
-  // Redirect to Keycloak login for routes flagged with `meta.requiresAuth`.
+  // Redirect to Keycloak login for routes flagged with `meta.requiresAuth`
+  // (routes declaring `meta.scopes` implicitly require auth too).
+  // A logged-in user missing any required scope gets the 403 page instead.
   Router.beforeEach((to) => {
-    if (to.matched.some((r) => r.meta.requiresAuth) && !keycloak.authenticated) {
+    const requiredScopes = to.matched.flatMap((r) => r.meta.scopes ?? []);
+    const needsAuth =
+      to.matched.some((r) => r.meta.requiresAuth) || requiredScopes.length > 0;
+
+    if (needsAuth && !keycloak.authenticated) {
       void login(to.fullPath);
       return false;
+    }
+    if (requiredScopes.length > 0 && !hasAllScopes(...requiredScopes)) {
+      return '/403';
     }
     return true;
   });

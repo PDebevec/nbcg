@@ -12,7 +12,7 @@
         <!-- NAVIGATION -->
         <nav class="header-nav row items-center no-wrap">
           <q-btn
-            v-for="link in navLinks"
+            v-for="link in headerLinks"
             :key="link.to"
             flat
             no-caps
@@ -27,6 +27,9 @@
           <q-separator vertical inset class="q-mx-sm nav-divider" />
 
           <template v-if="auth.authenticated">
+            <q-btn v-if="canAccessAdmin" flat round icon="admin_panel_settings" class="nav-user" to="/admin">
+              <q-tooltip>{{ t('admin.title') }}</q-tooltip>
+            </q-btn>
             <q-btn flat round icon="account_circle" class="nav-user" to="/profil">
               <q-tooltip>{{ auth.username || t('nav.profile') }}</q-tooltip>
             </q-btn>
@@ -71,6 +74,12 @@
                 <q-item-section>{{ t(link.labelKey) }}</q-item-section>
               </q-item>
               <q-separator />
+              <q-item v-if="auth.authenticated && canAccessAdmin" clickable v-close-popup to="/admin">
+                <q-item-section avatar>
+                  <q-icon name="admin_panel_settings" color="primary" />
+                </q-item-section>
+                <q-item-section>{{ t('admin.title') }}</q-item-section>
+              </q-item>
               <q-item v-if="auth.authenticated" clickable v-close-popup to="/profil">
                 <q-item-section avatar>
                   <q-icon name="account_circle" color="primary" />
@@ -177,8 +186,10 @@ import { useI18n } from 'vue-i18n';
 import logo from 'src/assets/logo.png';
 import LanguageSwitcher from 'components/LanguageSwitcher.vue';
 import { auth, login, logout } from 'src/services/keycloak';
+import { useAuthz } from 'src/composables/useAuthz';
 
 const { t } = useI18n();
+const { canAccessAdmin } = useAuthz();
 
 function onLogin() {
   void login('/profil');
@@ -197,6 +208,10 @@ const navLinks = [
   { labelKey: 'nav.advancedSearch', to: '/napredna-pretraga', icon: 'manage_search', exact: false },
   { labelKey: 'nav.contact', to: '/kontakt', icon: 'mail', exact: false },
 ];
+
+// Advanced search is hidden in the header (keeps the toolbar on one line);
+// it stays reachable through the footer and mobile menu.
+const headerLinks = navLinks.filter((l) => l.to !== '/napredna-pretraga');
 </script>
 
 <style scoped lang="sass">
