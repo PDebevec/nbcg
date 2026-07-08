@@ -30,7 +30,7 @@
               "filename": { "type": "text" },
               "mimeType": { "type": "keyword" },
               "sizeBytes": { "type": "long" },
-              "textExtracted": { "type": "boolean" },
+              "textExtractionStatus": { "type": "keyword" },
               "extractedText": { "type": "text" },
               "createdAt": { "type": "date" }
             }
@@ -46,7 +46,7 @@
             "filename",
             "mimeType",
             "sizeBytes",
-            "textExtracted",
+            "textExtractionStatus",
             "extractedText",
             "createdAt"
           ],
@@ -115,7 +115,7 @@
               "filename": { "type": "text" },
               "mimeType": { "type": "keyword" },
               "sizeBytes": { "type": "long" },
-              "textExtracted": { "type": "boolean" },
+              "textExtractionStatus": { "type": "keyword" },
               "extractedText": { "type": "text" },
               "createdAt": { "type": "date" }
             }
@@ -131,7 +131,7 @@
             "filename",
             "mimeType",
             "sizeBytes",
-            "textExtracted",
+            "textExtractionStatus",
             "extractedText",
             "createdAt"
           ],

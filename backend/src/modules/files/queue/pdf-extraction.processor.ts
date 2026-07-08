@@ -1,6 +1,7 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { TextExtractionStatus } from '../../../../generated/prisma/enums';
 import { PrismaService } from 'src/core/prisma/prisma.service';
 import { SeaweedfsService } from 'src/core/seaweedfs/seaweedfs.service';
 import { TikaService } from 'src/core/tika/tika.service';
@@ -40,15 +41,24 @@ export class PdfExtractionProcessor extends WorkerHost {
       extractedText = extractedText.slice(0, MAX_EXTRACTED_TEXT_LENGTH);
     }
 
+    let status: TextExtractionStatus;
+    if (!extractedText) {
+      status = TextExtractionStatus.NO_TEXT;
+    } else if (this.tika.looksGarbled(extractedText)) {
+      status = TextExtractionStatus.GARBAGE;
+    } else {
+      status = TextExtractionStatus.EXTRACTED;
+    }
+
     await this.prisma.fileAttachment.update({
       where: { id: fileAttachmentId },
       data: {
         extractedText: extractedText || null,
-        textExtracted: true,
+        textExtractionStatus: status,
       },
     });
 
-    this.logger.log(`Extraction complete for "${filename}": ${extractedText.length} chars`);
+    this.logger.log(`Extraction complete for "${filename}": ${extractedText.length} chars, status=${status}`);
   }
 
   @OnWorkerEvent('failed')

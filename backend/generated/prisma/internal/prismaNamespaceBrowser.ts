@@ -109,7 +109,7 @@ export const FileAttachmentScalarFieldEnum = {
   filename: 'filename',
   mimeType: 'mimeType',
   sizeBytes: 'sizeBytes',
-  textExtracted: 'textExtracted',
+  textExtractionStatus: 'textExtractionStatus',
   createdAt: 'createdAt'
 } as const
 

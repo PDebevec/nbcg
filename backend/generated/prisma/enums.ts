@@ -33,3 +33,13 @@ export const FileType = {
 } as const
 
 export type FileType = (typeof FileType)[keyof typeof FileType]
+
+
+export const TextExtractionStatus = {
+  NOT_EXTRACTED: 'NOT_EXTRACTED',
+  EXTRACTED: 'EXTRACTED',
+  GARBAGE: 'GARBAGE',
+  NO_TEXT: 'NO_TEXT'
+} as const
+
+export type TextExtractionStatus = (typeof TextExtractionStatus)[keyof typeof TextExtractionStatus]

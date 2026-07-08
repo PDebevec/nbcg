@@ -120,7 +120,7 @@ export class TikaService {
    * 2. Latin and Cyrillic mixed within the same word
    *    (e.g. "итМГепђе" next to "Schilderung" in the same passage)
    */
-  private looksGarbled(text: string): boolean {
+  looksGarbled(text: string): boolean {
     const words = text.slice(0, 5000).split(/\s+/).filter(w => w.length >= 3);
     if (words.length < 10) return false;
 

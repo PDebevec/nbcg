@@ -46,7 +46,7 @@ export type FileAttachmentMinAggregateOutputType = {
   filename: string | null
   mimeType: string | null
   sizeBytes: number | null
-  textExtracted: boolean | null
+  textExtractionStatus: $Enums.TextExtractionStatus | null
   createdAt: Date | null
 }
 
@@ -60,7 +60,7 @@ export type FileAttachmentMaxAggregateOutputType = {
   filename: string | null
   mimeType: string | null
   sizeBytes: number | null
-  textExtracted: boolean | null
+  textExtractionStatus: $Enums.TextExtractionStatus | null
   createdAt: Date | null
 }
 
@@ -74,7 +74,7 @@ export type FileAttachmentCountAggregateOutputType = {
   filename: number
   mimeType: number
   sizeBytes: number
-  textExtracted: number
+  textExtractionStatus: number
   createdAt: number
   _all: number
 }
@@ -98,7 +98,7 @@ export type FileAttachmentMinAggregateInputType = {
   filename?: true
   mimeType?: true
   sizeBytes?: true
-  textExtracted?: true
+  textExtractionStatus?: true
   createdAt?: true
 }
 
@@ -112,7 +112,7 @@ export type FileAttachmentMaxAggregateInputType = {
   filename?: true
   mimeType?: true
   sizeBytes?: true
-  textExtracted?: true
+  textExtractionStatus?: true
   createdAt?: true
 }
 
@@ -126,7 +126,7 @@ export type FileAttachmentCountAggregateInputType = {
   filename?: true
   mimeType?: true
   sizeBytes?: true
-  textExtracted?: true
+  textExtractionStatus?: true
   createdAt?: true
   _all?: true
 }
@@ -227,7 +227,7 @@ export type FileAttachmentGroupByOutputType = {
   filename: string
   mimeType: string
   sizeBytes: number
-  textExtracted: boolean
+  textExtractionStatus: $Enums.TextExtractionStatus
   createdAt: Date
   _count: FileAttachmentCountAggregateOutputType | null
   _avg: FileAttachmentAvgAggregateOutputType | null
@@ -264,7 +264,7 @@ export type FileAttachmentWhereInput = {
   filename?: Prisma.StringFilter<"FileAttachment"> | string
   mimeType?: Prisma.StringFilter<"FileAttachment"> | string
   sizeBytes?: Prisma.IntFilter<"FileAttachment"> | number
-  textExtracted?: Prisma.BoolFilter<"FileAttachment"> | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFilter<"FileAttachment"> | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFilter<"FileAttachment"> | Date | string
   draft?: Prisma.XOR<Prisma.DraftNullableScalarRelationFilter, Prisma.DraftWhereInput> | null
   record?: Prisma.XOR<Prisma.RecordNullableScalarRelationFilter, Prisma.RecordWhereInput> | null
@@ -280,7 +280,7 @@ export type FileAttachmentOrderByWithRelationInput = {
   filename?: Prisma.SortOrder
   mimeType?: Prisma.SortOrder
   sizeBytes?: Prisma.SortOrder
-  textExtracted?: Prisma.SortOrder
+  textExtractionStatus?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   draft?: Prisma.DraftOrderByWithRelationInput
   record?: Prisma.RecordOrderByWithRelationInput
@@ -299,7 +299,7 @@ export type FileAttachmentWhereUniqueInput = Prisma.AtLeast<{
   filename?: Prisma.StringFilter<"FileAttachment"> | string
   mimeType?: Prisma.StringFilter<"FileAttachment"> | string
   sizeBytes?: Prisma.IntFilter<"FileAttachment"> | number
-  textExtracted?: Prisma.BoolFilter<"FileAttachment"> | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFilter<"FileAttachment"> | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFilter<"FileAttachment"> | Date | string
   draft?: Prisma.XOR<Prisma.DraftNullableScalarRelationFilter, Prisma.DraftWhereInput> | null
   record?: Prisma.XOR<Prisma.RecordNullableScalarRelationFilter, Prisma.RecordWhereInput> | null
@@ -315,7 +315,7 @@ export type FileAttachmentOrderByWithAggregationInput = {
   filename?: Prisma.SortOrder
   mimeType?: Prisma.SortOrder
   sizeBytes?: Prisma.SortOrder
-  textExtracted?: Prisma.SortOrder
+  textExtractionStatus?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.FileAttachmentCountOrderByAggregateInput
   _avg?: Prisma.FileAttachmentAvgOrderByAggregateInput
@@ -337,7 +337,7 @@ export type FileAttachmentScalarWhereWithAggregatesInput = {
   filename?: Prisma.StringWithAggregatesFilter<"FileAttachment"> | string
   mimeType?: Prisma.StringWithAggregatesFilter<"FileAttachment"> | string
   sizeBytes?: Prisma.IntWithAggregatesFilter<"FileAttachment"> | number
-  textExtracted?: Prisma.BoolWithAggregatesFilter<"FileAttachment"> | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusWithAggregatesFilter<"FileAttachment"> | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"FileAttachment"> | Date | string
 }
 
@@ -349,7 +349,7 @@ export type FileAttachmentCreateInput = {
   filename: string
   mimeType: string
   sizeBytes: number
-  textExtracted?: boolean
+  textExtractionStatus?: $Enums.TextExtractionStatus
   createdAt?: Date | string
   draft?: Prisma.DraftCreateNestedOneWithoutFileAttachmentsInput
   record?: Prisma.RecordCreateNestedOneWithoutFileAttachmentsInput
@@ -365,7 +365,7 @@ export type FileAttachmentUncheckedCreateInput = {
   filename: string
   mimeType: string
   sizeBytes: number
-  textExtracted?: boolean
+  textExtractionStatus?: $Enums.TextExtractionStatus
   createdAt?: Date | string
 }
 
@@ -377,7 +377,7 @@ export type FileAttachmentUpdateInput = {
   filename?: Prisma.StringFieldUpdateOperationsInput | string
   mimeType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
-  textExtracted?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFieldUpdateOperationsInput | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   draft?: Prisma.DraftUpdateOneWithoutFileAttachmentsNestedInput
   record?: Prisma.RecordUpdateOneWithoutFileAttachmentsNestedInput
@@ -393,7 +393,7 @@ export type FileAttachmentUncheckedUpdateInput = {
   filename?: Prisma.StringFieldUpdateOperationsInput | string
   mimeType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
-  textExtracted?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFieldUpdateOperationsInput | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -407,7 +407,7 @@ export type FileAttachmentCreateManyInput = {
   filename: string
   mimeType: string
   sizeBytes: number
-  textExtracted?: boolean
+  textExtractionStatus?: $Enums.TextExtractionStatus
   createdAt?: Date | string
 }
 
@@ -419,7 +419,7 @@ export type FileAttachmentUpdateManyMutationInput = {
   filename?: Prisma.StringFieldUpdateOperationsInput | string
   mimeType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
-  textExtracted?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFieldUpdateOperationsInput | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -433,7 +433,7 @@ export type FileAttachmentUncheckedUpdateManyInput = {
   filename?: Prisma.StringFieldUpdateOperationsInput | string
   mimeType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
-  textExtracted?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFieldUpdateOperationsInput | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -457,7 +457,7 @@ export type FileAttachmentCountOrderByAggregateInput = {
   filename?: Prisma.SortOrder
   mimeType?: Prisma.SortOrder
   sizeBytes?: Prisma.SortOrder
-  textExtracted?: Prisma.SortOrder
+  textExtractionStatus?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -475,7 +475,7 @@ export type FileAttachmentMaxOrderByAggregateInput = {
   filename?: Prisma.SortOrder
   mimeType?: Prisma.SortOrder
   sizeBytes?: Prisma.SortOrder
-  textExtracted?: Prisma.SortOrder
+  textExtractionStatus?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -489,7 +489,7 @@ export type FileAttachmentMinOrderByAggregateInput = {
   filename?: Prisma.SortOrder
   mimeType?: Prisma.SortOrder
   sizeBytes?: Prisma.SortOrder
-  textExtracted?: Prisma.SortOrder
+  textExtractionStatus?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -593,8 +593,8 @@ export type IntFieldUpdateOperationsInput = {
   divide?: number
 }
 
-export type BoolFieldUpdateOperationsInput = {
-  set?: boolean
+export type EnumTextExtractionStatusFieldUpdateOperationsInput = {
+  set?: $Enums.TextExtractionStatus
 }
 
 export type FileAttachmentCreateWithoutDraftInput = {
@@ -605,7 +605,7 @@ export type FileAttachmentCreateWithoutDraftInput = {
   filename: string
   mimeType: string
   sizeBytes: number
-  textExtracted?: boolean
+  textExtractionStatus?: $Enums.TextExtractionStatus
   createdAt?: Date | string
   record?: Prisma.RecordCreateNestedOneWithoutFileAttachmentsInput
 }
@@ -619,7 +619,7 @@ export type FileAttachmentUncheckedCreateWithoutDraftInput = {
   filename: string
   mimeType: string
   sizeBytes: number
-  textExtracted?: boolean
+  textExtractionStatus?: $Enums.TextExtractionStatus
   createdAt?: Date | string
 }
 
@@ -662,7 +662,7 @@ export type FileAttachmentScalarWhereInput = {
   filename?: Prisma.StringFilter<"FileAttachment"> | string
   mimeType?: Prisma.StringFilter<"FileAttachment"> | string
   sizeBytes?: Prisma.IntFilter<"FileAttachment"> | number
-  textExtracted?: Prisma.BoolFilter<"FileAttachment"> | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFilter<"FileAttachment"> | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFilter<"FileAttachment"> | Date | string
 }
 
@@ -674,7 +674,7 @@ export type FileAttachmentCreateWithoutRecordInput = {
   filename: string
   mimeType: string
   sizeBytes: number
-  textExtracted?: boolean
+  textExtractionStatus?: $Enums.TextExtractionStatus
   createdAt?: Date | string
   draft?: Prisma.DraftCreateNestedOneWithoutFileAttachmentsInput
 }
@@ -688,7 +688,7 @@ export type FileAttachmentUncheckedCreateWithoutRecordInput = {
   filename: string
   mimeType: string
   sizeBytes: number
-  textExtracted?: boolean
+  textExtractionStatus?: $Enums.TextExtractionStatus
   createdAt?: Date | string
 }
 
@@ -727,7 +727,7 @@ export type FileAttachmentCreateManyDraftInput = {
   filename: string
   mimeType: string
   sizeBytes: number
-  textExtracted?: boolean
+  textExtractionStatus?: $Enums.TextExtractionStatus
   createdAt?: Date | string
 }
 
@@ -739,7 +739,7 @@ export type FileAttachmentUpdateWithoutDraftInput = {
   filename?: Prisma.StringFieldUpdateOperationsInput | string
   mimeType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
-  textExtracted?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFieldUpdateOperationsInput | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   record?: Prisma.RecordUpdateOneWithoutFileAttachmentsNestedInput
 }
@@ -753,7 +753,7 @@ export type FileAttachmentUncheckedUpdateWithoutDraftInput = {
   filename?: Prisma.StringFieldUpdateOperationsInput | string
   mimeType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
-  textExtracted?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFieldUpdateOperationsInput | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -766,7 +766,7 @@ export type FileAttachmentUncheckedUpdateManyWithoutDraftInput = {
   filename?: Prisma.StringFieldUpdateOperationsInput | string
   mimeType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
-  textExtracted?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFieldUpdateOperationsInput | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -779,7 +779,7 @@ export type FileAttachmentCreateManyRecordInput = {
   filename: string
   mimeType: string
   sizeBytes: number
-  textExtracted?: boolean
+  textExtractionStatus?: $Enums.TextExtractionStatus
   createdAt?: Date | string
 }
 
@@ -791,7 +791,7 @@ export type FileAttachmentUpdateWithoutRecordInput = {
   filename?: Prisma.StringFieldUpdateOperationsInput | string
   mimeType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
-  textExtracted?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFieldUpdateOperationsInput | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   draft?: Prisma.DraftUpdateOneWithoutFileAttachmentsNestedInput
 }
@@ -805,7 +805,7 @@ export type FileAttachmentUncheckedUpdateWithoutRecordInput = {
   filename?: Prisma.StringFieldUpdateOperationsInput | string
   mimeType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
-  textExtracted?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFieldUpdateOperationsInput | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -818,7 +818,7 @@ export type FileAttachmentUncheckedUpdateManyWithoutRecordInput = {
   filename?: Prisma.StringFieldUpdateOperationsInput | string
   mimeType?: Prisma.StringFieldUpdateOperationsInput | string
   sizeBytes?: Prisma.IntFieldUpdateOperationsInput | number
-  textExtracted?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  textExtractionStatus?: Prisma.EnumTextExtractionStatusFieldUpdateOperationsInput | $Enums.TextExtractionStatus
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -834,7 +834,7 @@ export type FileAttachmentSelect<ExtArgs extends runtime.Types.Extensions.Intern
   filename?: boolean
   mimeType?: boolean
   sizeBytes?: boolean
-  textExtracted?: boolean
+  textExtractionStatus?: boolean
   createdAt?: boolean
   draft?: boolean | Prisma.FileAttachment$draftArgs<ExtArgs>
   record?: boolean | Prisma.FileAttachment$recordArgs<ExtArgs>
@@ -850,7 +850,7 @@ export type FileAttachmentSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   filename?: boolean
   mimeType?: boolean
   sizeBytes?: boolean
-  textExtracted?: boolean
+  textExtractionStatus?: boolean
   createdAt?: boolean
   draft?: boolean | Prisma.FileAttachment$draftArgs<ExtArgs>
   record?: boolean | Prisma.FileAttachment$recordArgs<ExtArgs>
@@ -866,7 +866,7 @@ export type FileAttachmentSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   filename?: boolean
   mimeType?: boolean
   sizeBytes?: boolean
-  textExtracted?: boolean
+  textExtractionStatus?: boolean
   createdAt?: boolean
   draft?: boolean | Prisma.FileAttachment$draftArgs<ExtArgs>
   record?: boolean | Prisma.FileAttachment$recordArgs<ExtArgs>
@@ -882,11 +882,11 @@ export type FileAttachmentSelectScalar = {
   filename?: boolean
   mimeType?: boolean
   sizeBytes?: boolean
-  textExtracted?: boolean
+  textExtractionStatus?: boolean
   createdAt?: boolean
 }
 
-export type FileAttachmentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "draft_id" | "record_id" | "fileType" | "originalFid" | "extractedText" | "filename" | "mimeType" | "sizeBytes" | "textExtracted" | "createdAt", ExtArgs["result"]["fileAttachment"]>
+export type FileAttachmentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "draft_id" | "record_id" | "fileType" | "originalFid" | "extractedText" | "filename" | "mimeType" | "sizeBytes" | "textExtractionStatus" | "createdAt", ExtArgs["result"]["fileAttachment"]>
 export type FileAttachmentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   draft?: boolean | Prisma.FileAttachment$draftArgs<ExtArgs>
   record?: boolean | Prisma.FileAttachment$recordArgs<ExtArgs>
@@ -916,7 +916,7 @@ export type $FileAttachmentPayload<ExtArgs extends runtime.Types.Extensions.Inte
     filename: string
     mimeType: string
     sizeBytes: number
-    textExtracted: boolean
+    textExtractionStatus: $Enums.TextExtractionStatus
     createdAt: Date
   }, ExtArgs["result"]["fileAttachment"]>
   composites: {}
@@ -1352,7 +1352,7 @@ export interface FileAttachmentFieldRefs {
   readonly filename: Prisma.FieldRef<"FileAttachment", 'String'>
   readonly mimeType: Prisma.FieldRef<"FileAttachment", 'String'>
   readonly sizeBytes: Prisma.FieldRef<"FileAttachment", 'Int'>
-  readonly textExtracted: Prisma.FieldRef<"FileAttachment", 'Boolean'>
+  readonly textExtractionStatus: Prisma.FieldRef<"FileAttachment", 'TextExtractionStatus'>
   readonly createdAt: Prisma.FieldRef<"FileAttachment", 'DateTime'>
 }
     

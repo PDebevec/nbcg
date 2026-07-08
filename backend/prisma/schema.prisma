@@ -35,6 +35,13 @@ enum FileType {
   UNKNOWN
 }
 
+enum TextExtractionStatus {
+  NOT_EXTRACTED
+  EXTRACTED
+  GARBAGE
+  NO_TEXT
+}
+
 model Draft {
   id               String           @id @default(cuid())
   visibilityStatus VisibilityStatus
@@ -71,12 +78,12 @@ model FileAttachment {
   record        Record?  @relation(fields: [record_id], references: [id], onDelete: Cascade)
   fileType      FileType
   originalFid   String
-  extractedText String?
-  filename      String
-  mimeType      String
-  sizeBytes     Int
-  textExtracted Boolean  @default(false)
-  createdAt     DateTime @default(now())
+  extractedText        String?
+  filename             String
+  mimeType             String
+  sizeBytes            Int
+  textExtractionStatus TextExtractionStatus @default(NOT_EXTRACTED)
+  createdAt            DateTime             @default(now())
 
   @@index([draft_id])
   @@index([record_id])

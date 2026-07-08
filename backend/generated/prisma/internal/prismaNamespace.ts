@@ -778,7 +778,7 @@ export const FileAttachmentScalarFieldEnum = {
   filename: 'filename',
   mimeType: 'mimeType',
   sizeBytes: 'sizeBytes',
-  textExtracted: 'textExtracted',
+  textExtractionStatus: 'textExtractionStatus',
   createdAt: 'createdAt'
 } as const
 
@@ -928,9 +928,16 @@ export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel,
 
 
 /**
- * Reference to a field of type 'Boolean'
+ * Reference to a field of type 'TextExtractionStatus'
  */
-export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+export type EnumTextExtractionStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TextExtractionStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'TextExtractionStatus[]'
+ */
+export type ListEnumTextExtractionStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TextExtractionStatus[]'>
     
 
 
