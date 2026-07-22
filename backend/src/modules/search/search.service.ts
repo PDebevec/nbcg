@@ -244,6 +244,7 @@ export class SearchService {
       query,
       track_total_hits: true,
       _source: { excludes: SOURCE_EXCLUDES },
+      ...(dto.sort === 'newest' ? { sort: [{ createdAt: 'desc' as const }] } : {}),
     };
 
     const result = await this.opensearch.search(indices, body);

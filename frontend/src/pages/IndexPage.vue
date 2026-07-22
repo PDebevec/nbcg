@@ -61,7 +61,8 @@
 
       <!-- COLLECTIONS -->
       <section class="q-mb-xl">
-        <h2 class="text-h5 text-weight-bold text-library-primary q-mt-none q-mb-md">{{ t('index.collectionsTitle') }}</h2>
+        <h2 class="text-h5 text-weight-bold text-library-primary text-center q-mt-none q-mb-sm">{{ t('index.collectionsTitle') }}</h2>
+        <q-separator class="section-separator q-mb-md" />
         <div class="row q-col-gutter-md">
           <div v-for="col in collections" :key="col.key" class="col-6 col-sm-3">
             <q-card
@@ -80,8 +81,13 @@
 
       <!-- THEMATIC COLLECTIONS -->
       <section class="q-mb-xl">
-        <h2 class="text-h5 text-weight-bold text-library-primary q-mt-none q-mb-md">{{ t('index.thematicTitle') }}</h2>
-        <div class="thematic-carousel">
+        <h2 class="text-h5 text-weight-bold text-library-primary text-center q-mt-none q-mb-sm">{{ t('index.thematicTitle') }}</h2>
+        <q-separator class="section-separator q-mb-md" />
+        <div
+          class="thematic-carousel"
+          @mouseenter="thematicPaused = true"
+          @mouseleave="thematicPaused = false"
+        >
           <q-card
             v-for="(tc, i) in thematicCollections"
             :key="tc.key"
@@ -92,15 +98,49 @@
             :style="thematicStyle(i)"
             @click="goToThematic(i)"
           >
-            <q-img :src="tc.image" :ratio="4/3" class="thematic-card-img" />
-            <q-card-section class="q-pa-sm text-center">
-              <div class="text-weight-semibold text-library-ink text-body2">{{ t(`index.thematic.${tc.key}.title`) }}</div>
-              <div
-                v-if="i === thematicIndex"
-                class="text-caption text-library-muted q-mt-xs"
-              >{{ t(`index.thematic.${tc.key}.description`) }}</div>
+            <q-img :src="tc.image" :ratio="1" class="thematic-card-img">
+              <div class="absolute-bottom thematic-img-overlay text-center">
+                <div class="thematic-slide-title">{{ t(`index.thematic.${tc.key}.title`) }}</div>
+              </div>
+            </q-img>
+            <q-card-section
+              v-if="i === thematicIndex"
+              class="thematic-desc q-pa-md text-center"
+            >
+              <div class="desc-accent q-mb-sm" />
+              <div class="text-caption text-library-muted">{{ t(`index.thematic.${tc.key}.description`) }}</div>
             </q-card-section>
           </q-card>
+        </div>
+      </section>
+
+      <!-- NEWEST ADDITIONS -->
+      <section v-if="newestItems.length" class="q-mb-xl">
+        <h2 class="text-h5 text-weight-bold text-library-primary q-mt-none q-mb-sm">{{ t('index.newestTitle') }}</h2>
+        <q-separator class="section-separator section-separator--left q-mb-md" />
+        <div class="row q-col-gutter-md">
+          <div v-for="item in newestItems" :key="item.id" class="col-12 col-sm-6">
+            <q-card flat v-ripple class="newest-card cursor-pointer" @click="openRecord(item)">
+              <div class="row no-wrap full-height">
+                <q-img :src="coverUrl(item)" fit="cover" class="newest-cover" />
+                <div class="col q-pa-md column justify-between">
+                  <div>
+                    <div
+                      v-if="item.source.metadata.materialType?.en"
+                      class="newest-type"
+                      :class="`text-${typeColor(item.source.metadata.materialType.en)}`"
+                    >{{ item.source.metadata.materialType.en }}</div>
+                    <div class="text-weight-bold text-library-ink ellipsis-2-lines q-mt-xs">{{ item.source.metadata.title }}</div>
+                    <div class="text-caption text-library-muted ellipsis q-mt-xs">{{ item.source.metadata.firstResponsibility }}</div>
+                  </div>
+                  <div class="row items-center justify-between q-mt-sm">
+                    <span class="text-caption text-library-muted">{{ item.source.metadata.publicationDate1 }}</span>
+                    <q-icon name="arrow_forward" size="18px" color="primary" class="newest-arrow" />
+                  </div>
+                </div>
+              </div>
+            </q-card>
+          </div>
         </div>
       </section>
 
@@ -132,9 +172,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import imageStock from 'src/assets/image-stock.jpg';
+import { searchItems, type SearchHit } from 'src/api/search';
 
 const router = useRouter();
 const { t } = useI18n();
@@ -205,23 +247,76 @@ function thematicStyle(i: number) {
   const abs = Math.abs(d);
   if (abs > 2) {
     return {
-      transform: 'translate(-50%, -50%) scale(0.4)',
+      transform: 'translate(-50%, -50%) perspective(1200px) scale(0.4)',
       opacity: '0',
       pointerEvents: 'none' as const,
       zIndex: '0',
     };
   }
-  const shift = d * 48;
-  const scale = abs === 0 ? 1 : abs === 1 ? 0.68 : 0.5;
+  const shift = d * 55;
+  const scale = abs === 0 ? 1 : abs === 1 ? 0.78 : 0.6;
+  const tilt = d === 0 ? 0 : d > 0 ? -9 : 9;
   return {
-    transform: `translate(calc(-50% + ${shift}%), -50%) scale(${scale})`,
-    opacity: abs === 0 ? '1' : abs === 1 ? '0.95' : '0.85',
+    transform: `translate(calc(-50% + ${shift}%), -50%) perspective(1200px) rotateY(${tilt}deg) scale(${scale})`,
+    opacity: abs === 0 ? '1' : abs === 1 ? '0.95' : '0.8',
+    filter: abs === 0 ? 'none' : 'saturate(0.6) brightness(0.94)',
     zIndex: String(10 - abs * 3),
   };
 }
 
 function goToThematic(i: number) {
   thematicIndex.value = i;
+}
+
+// Auto-advance, paused while the pointer is over the carousel
+const thematicPaused = ref(false);
+let thematicTimer: ReturnType<typeof setInterval> | undefined;
+
+onMounted(() => {
+  thematicTimer = setInterval(() => {
+    if (!thematicPaused.value) {
+      thematicIndex.value = (thematicIndex.value + 1) % thematicCollections.length;
+    }
+  }, 5000);
+});
+
+onBeforeUnmount(() => {
+  clearInterval(thematicTimer);
+});
+
+// Newest additions
+const newestItems = ref<SearchHit[]>([]);
+
+onMounted(async () => {
+  try {
+    const result = await searchItems({ type: 'records', sort: 'newest', limit: 4 });
+    newestItems.value = result.hits;
+  } catch {
+    newestItems.value = [];
+  }
+});
+
+function openRecord(item: SearchHit) {
+  void router.push(`/catalog/${item.id}`);
+}
+
+function coverUrl(item: SearchHit): string {
+  const img = item.source.file_attachments?.find((f) => f.fileType === 'IMAGE');
+  return img ? `/api/files/${img.id}/download` : imageStock;
+}
+
+const typeColorMap: Record<string, string> = {
+  'Monograph':          'primary',
+  'Serial publication': 'secondary',
+  'Manuscript':         'accent',
+  'Map':                'positive',
+  'Printed music':      'info',
+  'Sound recording':    'purple',
+  'Visual material':    'warning',
+};
+
+function typeColor(type: string) {
+  return typeColorMap[type] ?? 'grey-6';
 }
 
 async function doSearch() {
@@ -279,6 +374,16 @@ async function doSearch() {
   max-width: 1280px
   margin: 0 auto
 
+.section-separator
+  width: 80px
+  height: 3px
+  border-radius: 2px
+  margin-left: auto
+  margin-right: auto
+  background: $secondary
+  &--left
+    margin-left: 0
+
 .section-label
   letter-spacing: 0.08em
   text-transform: uppercase
@@ -297,28 +402,95 @@ async function doSearch() {
 
 .thematic-carousel
   position: relative
-  height: 480px
+  height: 560px
   overflow: hidden
+  // Fade the far edges so half-hidden cards dissolve into the page
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%)
+  mask-image: linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%)
 
 .thematic-slide
   position: absolute
   top: 50%
   left: 50%
-  width: min(440px, 74vw)
-  border-radius: 12px
+  width: min(420px, 72vw)
+  border-radius: 14px
   overflow: hidden
   border: 1px solid $divider
   background: #ffffff
   cursor: pointer
-  transition: transform 0.35s ease, opacity 0.35s ease, box-shadow 0.2s
+  will-change: transform, opacity
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease, filter 0.5s ease, box-shadow 0.3s ease, border-color 0.3s ease
   &:not(.is-active):hover
-    box-shadow: 0 4px 18px rgba($dark, 0.15)
+    box-shadow: 0 6px 24px rgba($dark, 0.18)
   &.is-active
     cursor: default
-    box-shadow: 0 8px 32px rgba($dark, 0.18)
+    border-color: rgba($secondary, 0.35)
+    box-shadow: 0 18px 48px rgba($primary, 0.22)
 
 .thematic-card-img
   display: block
+
+.thematic-slide .thematic-img-overlay
+  background: linear-gradient(180deg, rgba($dark, 0) 0%, rgba($dark, 0.55) 45%, rgba($dark, 0.82) 100%)
+  padding: 28px 16px 12px
+
+.thematic-slide-title
+  color: #fff
+  font-weight: 700
+  font-size: 1.05rem
+  letter-spacing: 0.01em
+  text-shadow: 0 1px 8px rgba($dark, 0.6)
+
+.thematic-desc
+  animation: thematic-fade-up 0.45s ease both
+
+.desc-accent
+  width: 36px
+  height: 2px
+  border-radius: 2px
+  margin: 0 auto
+  background: $secondary
+
+@keyframes thematic-fade-up
+  from
+    opacity: 0
+    transform: translateY(8px)
+  to
+    opacity: 1
+    transform: translateY(0)
+
+.newest-card
+  height: 164px
+  border-radius: 14px
+  overflow: hidden
+  background: #ffffff
+  border: 1px solid $divider
+  transition: box-shadow 0.25s ease, transform 0.2s ease, border-color 0.25s ease
+  .newest-arrow
+    transition: transform 0.25s ease
+  &:hover
+    border-color: rgba($primary, 0.35)
+    box-shadow: 0 10px 32px rgba($primary, 0.16)
+    transform: translateY(-3px)
+    .newest-arrow
+      transform: translateX(4px)
+
+.newest-cover
+  width: 110px
+  min-width: 110px
+  height: 100%
+
+.newest-type
+  font-size: 0.68rem
+  font-weight: 700
+  letter-spacing: 0.08em
+  text-transform: uppercase
+
+.ellipsis-2-lines
+  display: -webkit-box
+  -webkit-line-clamp: 2
+  -webkit-box-orient: vertical
+  overflow: hidden
 
 .about-section
   background: linear-gradient(180deg, color.adjust($paper, $lightness: 2%), $paper)

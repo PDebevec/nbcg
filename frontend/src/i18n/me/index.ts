@@ -27,7 +27,7 @@ export default {
       periodicals: 'Periodika',
       manuscripts: 'Rukopisi',
     },
-    collectionsTitle: 'Kolekcije',
+    collectionsTitle: 'Pretraga po kolekcijama',
     collections: {
       books: 'Knjige',
       newspapers: 'Novine',
@@ -38,7 +38,8 @@ export default {
       photographs: 'Fotografije i razglednice',
       audiovisual: 'Muzička i video građa',
     },
-    thematicTitle: 'Tematske zbirke',
+    thematicTitle: 'Pretraga po temama',
+    newestTitle: 'Nedavno dodato',
     thematic: {
       oldRareBooks: {
         title: 'Stare i rijetke knjige',

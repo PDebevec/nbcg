@@ -168,6 +168,7 @@ export interface SearchParams {
   isbn?: string;
   issn?: string;
   cobissId?: string;
+  sort?: 'relevance' | 'newest';
 }
 
 export interface SearchHit {

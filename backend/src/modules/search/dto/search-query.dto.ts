@@ -70,4 +70,8 @@ export class SearchQueryDto {
   @IsOptional()
   @IsString()
   fullText?: string;
+
+  @IsOptional()
+  @IsEnum(['relevance', 'newest'])
+  sort?: 'relevance' | 'newest' = 'relevance';
 }

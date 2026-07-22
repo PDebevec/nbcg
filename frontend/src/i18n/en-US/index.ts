@@ -27,7 +27,7 @@ export default {
       periodicals: 'Periodicals',
       manuscripts: 'Manuscripts',
     },
-    collectionsTitle: 'Collections',
+    collectionsTitle: 'Search by collection',
     collections: {
       books: 'Books',
       newspapers: 'Newspapers',
@@ -38,7 +38,8 @@ export default {
       photographs: 'Photographs and postcards',
       audiovisual: 'Music and video material',
     },
-    thematicTitle: 'Thematic collections',
+    thematicTitle: 'Search by theme',
+    newestTitle: 'Recently added',
     thematic: {
       oldRareBooks: {
         title: 'Old and rare books',
