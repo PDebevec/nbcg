@@ -14,6 +14,10 @@ body
 	color: $ink
 	font-family: $typography-font-family
 
+// Slow down the header/footer reveal slide (Quasar default is 0.12s)
+.q-body--layout-animate .q-layout__section--marginal
+	transition: transform 0.28s ease, left 0.12s, right 0.12s !important
+
 .text-library-primary
 	color: $primary !important
 

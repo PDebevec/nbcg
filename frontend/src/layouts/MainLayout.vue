@@ -1,6 +1,6 @@
 <template>
   <q-layout view="lHh Lpr lff" class="library-shell">
-    <q-header class="app-header" bordered>
+    <q-header reveal class="app-header" bordered>
       <q-toolbar class="header-toolbar q-px-md">
         <!-- LOGO -->
         <router-link to="/" class="logo-link">
@@ -18,21 +18,33 @@
             no-caps
             :label="t(link.labelKey)"
             :to="link.to"
-            :exact="link.exact"
             class="nav-btn"
-            active-class="nav-btn--active"
+            :class="{ 'nav-btn--active': isLinkActive(link.to, link.exact) }"
           />
 
           <q-separator vertical class="nav-divider q-mx-md" />
 
           <template v-if="auth.authenticated">
-            <q-btn v-if="canAccessAdmin" flat round icon="admin_panel_settings" size="md" class="nav-user" to="/admin">
+            <q-btn
+              v-if="canAccessAdmin"
+              flat
+              icon="admin_panel_settings"
+              class="nav-btn nav-user"
+              :class="{ 'nav-btn--active': isLinkActive('/admin') }"
+              to="/admin"
+            >
               <q-tooltip>{{ t('admin.title') }}</q-tooltip>
             </q-btn>
-            <q-btn flat round icon="account_circle" size="md" class="nav-user" to="/profil">
+            <q-btn
+              flat
+              icon="account_circle"
+              class="nav-btn nav-user"
+              :class="{ 'nav-btn--active': isLinkActive('/profil') }"
+              to="/profil"
+            >
               <q-tooltip>{{ auth.username || t('nav.profile') }}</q-tooltip>
             </q-btn>
-            <q-btn flat round icon="logout" size="md" class="nav-user" @click="onLogout">
+            <q-btn flat icon="logout" class="nav-btn nav-user" @click="onLogout">
               <q-tooltip>{{ t('auth.logout') }}</q-tooltip>
             </q-btn>
           </template>
@@ -43,7 +55,7 @@
             color="primary"
             icon="login"
             :label="t('auth.login')"
-            class="nav-login"
+            class="nav-login self-center"
             @click="onLogin"
           />
 
@@ -107,7 +119,11 @@
     </q-header>
 
     <q-page-container>
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <transition name="page-transition" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
     </q-page-container>
 
     <!-- FOOTER -->
@@ -179,6 +195,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import logo from 'src/assets/logoV2_trimmed_white.jpg';
 import LanguageSwitcher from 'components/LanguageSwitcher.vue';
 import { auth, login, logout } from 'src/services/keycloak';
@@ -186,6 +203,11 @@ import { useAuthz } from 'src/composables/useAuthz';
 
 const { t } = useI18n();
 const { canAccessAdmin } = useAuthz();
+const route = useRoute();
+
+function isLinkActive(to: string, exact = false) {
+  return exact ? route.path === to : route.path.startsWith(to);
+}
 
 function onLogin() {
   void login('/profil');
@@ -247,18 +269,33 @@ const headerLinks = navLinks.filter((l) => l.to !== '/napredna-pretraga');
 
 .header-nav
   gap: 4px
+  align-self: stretch
+
+  .lang-switcher
+    height: 100%
+    border-radius: 0
 
 .nav-btn
   color: $dark
   font-weight: 500
   font-size: 0.88rem
-  border-radius: 8px
-  min-height: 40px
+  border-radius: 0
+  height: 100%
   padding: 0 14px
+  position: relative
 
   &--active
     color: $primary
-    background: rgba($primary, 0.08)
+    background: rgba($primary, 0.04)
+    &::after
+      content: ''
+      position: absolute
+      left: 0
+      right: 0
+      bottom: -1px
+      height: 3px
+      background: $primary
+      z-index: 1
 
 .nav-login
   border-radius: 8px
@@ -271,6 +308,7 @@ const headerLinks = navLinks.filter((l) => l.to !== '/napredna-pretraga');
 
 .nav-user
   color: $dark
+  padding: 0 10px
 
 .nav-menu-btn
   display: none
@@ -280,6 +318,18 @@ const headerLinks = navLinks.filter((l) => l.to !== '/napredna-pretraga');
     display: none
   .nav-menu-btn
     display: inline-flex
+
+.page-transition-enter-active,
+.page-transition-leave-active
+  transition: opacity 0.18s ease, transform 0.18s ease
+
+.page-transition-enter-from
+  opacity: 0
+  transform: translateY(10px)
+
+.page-transition-leave-to
+  opacity: 0
+  transform: translateY(-6px)
 
 // FOOTER
 .app-footer
