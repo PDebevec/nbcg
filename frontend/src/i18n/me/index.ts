@@ -65,6 +65,10 @@ export default {
         title: 'Narodno stvaralaštvo',
         description: 'Zapisi i publikacije o crnogorskoj tradiciji i narodnom stvaralaštvu.',
       },
+      njegos: {
+        title: 'Njegoš i njegovo doba',
+        description: 'Djela Petra II Petrovića Njegoša i građa o njegovom životu i epohi.',
+      },
     },
     aboutKicker: 'O nama',
     aboutTitle: 'O Digitalnoj biblioteci Crne Gore',

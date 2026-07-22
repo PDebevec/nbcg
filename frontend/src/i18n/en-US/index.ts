@@ -65,6 +65,10 @@ export default {
         title: 'Folk heritage',
         description: 'Records and publications on Montenegrin tradition and folk creativity.',
       },
+      njegos: {
+        title: 'Njegoš and his time',
+        description: 'Works by Petar II Petrović-Njegoš and material about his life and era.',
+      },
     },
     aboutKicker: 'About us',
     aboutTitle: 'About the Digital Library of Montenegro',
