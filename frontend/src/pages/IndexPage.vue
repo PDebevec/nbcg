@@ -229,6 +229,7 @@ const thematicCollections: ThematicCollection[] = [
   { key: 'cartography',    image: 'https://picsum.photos/seed/nbcg-cartography/480/360' },
   { key: 'artAndPosters',  image: 'https://picsum.photos/seed/nbcg-art-posters/480/360' },
   { key: 'folkHeritage',   image: 'https://picsum.photos/seed/nbcg-folk-heritage/480/360' },
+  { key: 'njegos',         image: 'https://picsum.photos/seed/nbcg-njegos/480/360' },
 ];
 
 const thematicIndex = ref(0);
@@ -245,7 +246,7 @@ function thematicOffset(i: number) {
 function thematicStyle(i: number) {
   const d = thematicOffset(i);
   const abs = Math.abs(d);
-  if (abs > 2) {
+  if (abs > 3) {
     return {
       transform: 'translate(-50%, -50%) perspective(1200px) scale(0.4)',
       opacity: '0',
@@ -253,14 +254,14 @@ function thematicStyle(i: number) {
       zIndex: '0',
     };
   }
-  const shift = d * 58;
-  const scale = abs === 0 ? 1 : abs === 1 ? 0.86 : 0.7;
+  const shift = d * 54;
+  const scale = abs === 0 ? 1 : abs === 1 ? 0.85 : abs === 2 ? 0.71 : 0.58;
   const tilt = d === 0 ? 0 : d > 0 ? -9 : 9;
   return {
     transform: `translate(calc(-50% + ${shift}%), -50%) perspective(1200px) rotateY(${tilt}deg) scale(${scale})`,
-    opacity: abs === 0 ? '1' : abs === 1 ? '0.95' : '0.8',
+    opacity: abs === 0 ? '1' : abs === 1 ? '0.95' : abs === 2 ? '0.85' : '0.7',
     filter: abs === 0 ? 'none' : 'saturate(0.6) brightness(0.94)',
-    zIndex: String(10 - abs * 3),
+    zIndex: String(10 - abs * 2),
   };
 }
 
@@ -392,7 +393,7 @@ async function doSearch() {
 
 .thematic-carousel
   position: relative
-  height: 560px
+  height: 520px
   overflow: hidden
   // Fade the far edges so half-hidden cards dissolve into the page
   -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%)
@@ -402,7 +403,7 @@ async function doSearch() {
   position: absolute
   top: 50%
   left: 50%
-  width: min(420px, 72vw)
+  width: min(380px, 68vw)
   border-radius: 14px
   overflow: hidden
   border: 1px solid $divider
