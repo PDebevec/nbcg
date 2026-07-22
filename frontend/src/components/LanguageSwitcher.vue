@@ -53,7 +53,10 @@ function setLocale(value: string) {
 .lang-switcher
   color: $dark
   font-weight: 600
-  font-size: 0.82rem
+  font-size: 0.85rem
+  min-height: 40px
+  border-radius: 8px
+  padding: 0 10px
 
 .lang-active
   color: $primary

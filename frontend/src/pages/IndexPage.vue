@@ -253,8 +253,8 @@ function thematicStyle(i: number) {
       zIndex: '0',
     };
   }
-  const shift = d * 55;
-  const scale = abs === 0 ? 1 : abs === 1 ? 0.78 : 0.6;
+  const shift = d * 58;
+  const scale = abs === 0 ? 1 : abs === 1 ? 0.86 : 0.7;
   const tilt = d === 0 ? 0 : d > 0 ? -9 : 9;
   return {
     transform: `translate(calc(-50% + ${shift}%), -50%) perspective(1200px) rotateY(${tilt}deg) scale(${scale})`,

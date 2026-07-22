@@ -16,7 +16,6 @@
             :key="link.to"
             flat
             no-caps
-            :icon="link.icon"
             :label="t(link.labelKey)"
             :to="link.to"
             :exact="link.exact"
@@ -24,23 +23,18 @@
             active-class="nav-btn--active"
           />
 
-          <q-separator vertical inset class="q-mx-sm nav-divider" />
+          <q-separator vertical class="nav-divider q-mx-md" />
 
           <template v-if="auth.authenticated">
-            <q-btn v-if="canAccessAdmin" flat round icon="admin_panel_settings" class="nav-user" to="/admin">
+            <q-btn v-if="canAccessAdmin" flat round icon="admin_panel_settings" size="md" class="nav-user" to="/admin">
               <q-tooltip>{{ t('admin.title') }}</q-tooltip>
             </q-btn>
-            <q-btn flat round icon="account_circle" class="nav-user" to="/profil">
+            <q-btn flat round icon="account_circle" size="md" class="nav-user" to="/profil">
               <q-tooltip>{{ auth.username || t('nav.profile') }}</q-tooltip>
             </q-btn>
-            <q-btn
-              flat
-              no-caps
-              icon="logout"
-              :label="t('auth.logout')"
-              class="nav-btn"
-              @click="onLogout"
-            />
+            <q-btn flat round icon="logout" size="md" class="nav-user" @click="onLogout">
+              <q-tooltip>{{ t('auth.logout') }}</q-tooltip>
+            </q-btn>
           </template>
           <q-btn
             v-else
@@ -49,11 +43,13 @@
             color="primary"
             icon="login"
             :label="t('auth.login')"
-            class="q-ml-xs"
+            class="nav-login"
             @click="onLogin"
           />
 
-          <LanguageSwitcher class="q-ml-xs" />
+          <q-separator vertical class="nav-divider q-mx-md" />
+
+          <LanguageSwitcher />
         </nav>
 
         <!-- MOBILE MENU -->
@@ -250,20 +246,28 @@ const headerLinks = navLinks.filter((l) => l.to !== '/napredna-pretraga');
   padding: 6px 10px
 
 .header-nav
-  gap: 2px
+  gap: 4px
 
 .nav-btn
   color: $dark
   font-weight: 500
-  font-size: 0.84rem
+  font-size: 0.88rem
   border-radius: 8px
+  min-height: 40px
+  padding: 0 14px
 
   &--active
     color: $primary
     background: rgba($primary, 0.08)
 
+.nav-login
+  border-radius: 8px
+  min-height: 40px
+  padding: 0 16px
+
 .nav-divider
-  height: 24px
+  height: 22px
+  align-self: center
 
 .nav-user
   color: $dark
