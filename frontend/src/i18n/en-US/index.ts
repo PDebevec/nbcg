@@ -30,13 +30,40 @@ export default {
     collectionsTitle: 'Collections',
     collections: {
       books: 'Books',
-      periodicals: 'Periodicals',
+      newspapers: 'Newspapers',
+      magazines: 'Magazines',
       manuscripts: 'Manuscripts and documents',
       maps: 'Maps and plans',
       posters: 'Posters and artwork',
       photographs: 'Photographs and postcards',
       audiovisual: 'Music and video material',
-      thematic: 'Thematic collections',
+    },
+    thematicTitle: 'Thematic collections',
+    thematic: {
+      oldRareBooks: {
+        title: 'Old and rare books',
+        description: 'A selection of the most valuable and oldest titles from the National Library collection.',
+      },
+      montenegrinPress: {
+        title: 'Montenegrin periodicals',
+        description: 'Historical newspapers and magazines printed in Montenegro.',
+      },
+      cetinjeHeritage: {
+        title: 'Cetinje heritage',
+        description: 'Material related to the history and culture of the capital, Cetinje.',
+      },
+      cartography: {
+        title: 'Cartographic heritage',
+        description: 'Historical maps and plans of Montenegrin towns and territories.',
+      },
+      artAndPosters: {
+        title: 'Art and posters',
+        description: 'Visual material, posters and promotional items from the library collection.',
+      },
+      folkHeritage: {
+        title: 'Folk heritage',
+        description: 'Records and publications on Montenegrin tradition and folk creativity.',
+      },
     },
     aboutKicker: 'About us',
     aboutTitle: 'About the Digital Library of Montenegro',

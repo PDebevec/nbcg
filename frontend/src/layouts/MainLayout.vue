@@ -183,7 +183,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import logo from 'src/assets/logo.png';
+import logo from 'src/assets/logoV2_trimmed_white.jpg';
 import LanguageSwitcher from 'components/LanguageSwitcher.vue';
 import { auth, login, logout } from 'src/services/keycloak';
 import { useAuthz } from 'src/composables/useAuthz';
@@ -237,21 +237,23 @@ const headerLinks = navLinks.filter((l) => l.to !== '/napredna-pretraga');
   align-items: center
 
 .header-logo
-  height: 46px
+  height: 56px
   width: auto
   display: block
 
 .footer-logo
-  height: 44px
+  height: 56px
   width: auto
-  filter: brightness(0) invert(1)
-  opacity: 0.92
+  display: block
+  background: #ffffff
+  border-radius: 8px
+  padding: 6px 10px
 
 .header-nav
   gap: 2px
 
 .nav-btn
-  color: $ink
+  color: $dark
   font-weight: 500
   font-size: 0.84rem
   border-radius: 8px
@@ -264,7 +266,7 @@ const headerLinks = navLinks.filter((l) => l.to !== '/napredna-pretraga');
   height: 24px
 
 .nav-user
-  color: $ink
+  color: $dark
 
 .nav-menu-btn
   display: none

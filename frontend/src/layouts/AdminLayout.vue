@@ -70,7 +70,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import logo from 'src/assets/logo.png';
+import logo from 'src/assets/logoV2_trimmed_white.jpg';
 import LanguageSwitcher from 'components/LanguageSwitcher.vue';
 import { auth } from 'src/services/keycloak';
 import { useAuthz } from 'src/composables/useAuthz';
@@ -91,9 +91,9 @@ const { canManageRecords, canManageDrafts, canImport } = useAuthz();
   // Same divider as the q-separator under the drawer's logo container
   border-bottom: 1px solid rgba(0, 0, 0, 0.12)
 
-  // Match the drawer's logo container height (36px logo + 2 × 16px q-py-md)
+  // Match the drawer's logo container height (44px logo + 2 × 16px q-py-md)
   .q-toolbar
-    min-height: 68px
+    min-height: 76px
 
 .admin-drawer
   background: #eceff1
@@ -110,7 +110,7 @@ const { canManageRecords, canManageDrafts, canImport } = useAuthz();
   justify-content: center
 
 .header-logo
-  height: 36px
+  height: 44px
   width: auto
   display: block
 
@@ -122,6 +122,6 @@ const { canManageRecords, canManageDrafts, canImport } = useAuthz();
   color: $primary
 
 .nav-btn
-  color: $ink
+  color: $dark
   font-weight: 500
 </style>

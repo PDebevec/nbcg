@@ -30,13 +30,40 @@ export default {
     collectionsTitle: 'Kolekcije',
     collections: {
       books: 'Knjige',
-      periodicals: 'Periodika',
+      newspapers: 'Novine',
+      magazines: 'Časopisi',
       manuscripts: 'Rukopisi i dokumenta',
       maps: 'Karte i planovi',
       posters: 'Plakati i likovna građa',
       photographs: 'Fotografije i razglednice',
       audiovisual: 'Muzička i video građa',
-      thematic: 'Tematske zbirke',
+    },
+    thematicTitle: 'Tematske zbirke',
+    thematic: {
+      oldRareBooks: {
+        title: 'Stare i rijetke knjige',
+        description: 'Izbor najvrednijih i najstarijih naslova iz fonda Nacionalne biblioteke.',
+      },
+      montenegrinPress: {
+        title: 'Crnogorska periodika',
+        description: 'Istorijske novine i časopisi štampani na teritoriji Crne Gore.',
+      },
+      cetinjeHeritage: {
+        title: 'Cetinjska baština',
+        description: 'Građa vezana za istoriju i kulturu prijestonice Cetinje.',
+      },
+      cartography: {
+        title: 'Kartografska baština',
+        description: 'Istorijske karte i planovi crnogorskih gradova i teritorija.',
+      },
+      artAndPosters: {
+        title: 'Umjetnost i plakati',
+        description: 'Likovna građa, plakati i promotivni materijali iz fonda biblioteke.',
+      },
+      folkHeritage: {
+        title: 'Narodno stvaralaštvo',
+        description: 'Zapisi i publikacije o crnogorskoj tradiciji i narodnom stvaralaštvu.',
+      },
     },
     aboutKicker: 'O nama',
     aboutTitle: 'O Digitalnoj biblioteci Crne Gore',
