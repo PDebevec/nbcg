@@ -10,7 +10,7 @@
       <div class="row justify-center">
         <div class="col-12 col-md-11 col-lg-10">
           <!-- SEARCH BAR -->
-          <div class="search-bar row no-wrap items-center">
+          <div class="search-bar bg-white row no-wrap items-center">
             <q-select
               v-model="searchType"
               :options="searchTypes"
@@ -61,15 +61,15 @@
 
       <!-- COLLECTIONS -->
       <section class="q-mb-xl">
-        <h2 class="text-h5 text-weight-bold text-library-primary text-center q-mt-none q-mb-sm">{{ t('index.collectionsTitle') }}</h2>
-        <q-separator class="section-separator q-mb-md" />
+        <h2 class="text-h5 text-weight-bold text-primary text-center q-mt-none q-mb-sm">{{ t('index.collectionsTitle') }}</h2>
+        <q-separator color="secondary" size="3px" class="section-separator q-mb-md" />
         <div class="row q-col-gutter-md">
           <div v-for="col in collections" :key="col.key" class="col-6 col-sm-3">
             <q-card
               flat
               bordered
               v-ripple
-              class="collection-card text-center q-pa-lg cursor-pointer full-height"
+              class="collection-card bg-white text-center q-pa-lg cursor-pointer full-height"
               @click="openCollection(col)"
             >
               <q-icon :name="col.icon" size="40px" color="primary" />
@@ -81,8 +81,8 @@
 
       <!-- THEMATIC COLLECTIONS -->
       <section class="q-mb-xl">
-        <h2 class="text-h5 text-weight-bold text-library-primary text-center q-mt-none q-mb-sm">{{ t('index.thematicTitle') }}</h2>
-        <q-separator class="section-separator q-mb-md" />
+        <h2 class="text-h5 text-weight-bold text-primary text-center q-mt-none q-mb-sm">{{ t('index.thematicTitle') }}</h2>
+        <q-separator color="secondary" size="3px" class="section-separator q-mb-md" />
         <div
           class="thematic-carousel"
           @mouseenter="thematicPaused = true"
@@ -93,21 +93,21 @@
             :key="tc.key"
             flat
             bordered
-            class="thematic-slide"
+            class="thematic-slide bg-white"
             :class="{ 'is-active': i === thematicIndex }"
             :style="thematicStyle(i)"
             @click="goToThematic(i)"
           >
             <q-img :src="tc.image" :ratio="1" class="thematic-card-img">
               <div class="absolute-bottom thematic-img-overlay text-center">
-                <div class="thematic-slide-title">{{ t(`index.thematic.${tc.key}.title`) }}</div>
+                <div class="thematic-slide-title text-white text-weight-bold">{{ t(`index.thematic.${tc.key}.title`) }}</div>
               </div>
             </q-img>
             <q-card-section
               v-if="i === thematicIndex"
               class="thematic-desc q-pa-md text-center"
             >
-              <div class="desc-accent q-mb-sm" />
+              <q-separator color="secondary" size="2px" class="desc-accent q-mb-sm" />
               <div class="text-caption text-library-muted">{{ t(`index.thematic.${tc.key}.description`) }}</div>
             </q-card-section>
           </q-card>
@@ -116,18 +116,18 @@
 
       <!-- NEWEST ADDITIONS -->
       <section v-if="newestItems.length" class="q-mb-xl">
-        <h2 class="text-h5 text-weight-bold text-library-primary q-mt-none q-mb-sm">{{ t('index.newestTitle') }}</h2>
-        <q-separator class="section-separator section-separator--left q-mb-md" />
+        <h2 class="text-h5 text-weight-bold text-primary q-mt-none q-mb-sm">{{ t('index.newestTitle') }}</h2>
+        <q-separator color="secondary" size="3px" class="section-separator section-separator--left q-mb-md" />
         <div class="row q-col-gutter-md">
           <div v-for="item in newestItems" :key="item.id" class="col-12 col-sm-6">
-            <q-card flat v-ripple class="newest-card cursor-pointer" @click="openRecord(item)">
+            <q-card flat v-ripple class="newest-card bg-white cursor-pointer" @click="openRecord(item)">
               <div class="row no-wrap full-height">
                 <q-img :src="coverUrl(item)" fit="cover" class="newest-cover" />
                 <div class="col q-pa-md column justify-between">
                   <div>
                     <div
                       v-if="item.source.metadata.materialType?.en"
-                      class="newest-type"
+                      class="newest-type text-uppercase text-weight-bold"
                       :class="`text-${typeColor(item.source.metadata.materialType.en)}`"
                     >{{ item.source.metadata.materialType.en }}</div>
                     <div class="text-weight-bold text-library-ink ellipsis-2-lines q-mt-xs">{{ item.source.metadata.title }}</div>
@@ -145,9 +145,9 @@
       </section>
 
       <!-- ABOUT -->
-      <section class="about-section q-pa-xl">
-        <div class="section-label text-library-muted q-mb-xs">{{ t('index.aboutKicker') }}</div>
-        <h2 class="text-h5 text-weight-bold text-library-primary q-mt-none q-mb-md">
+      <q-card flat class="about-section q-pa-xl">
+        <div class="text-caption text-uppercase text-weight-bold text-library-muted q-mb-xs">{{ t('index.aboutKicker') }}</div>
+        <h2 class="text-h5 text-weight-bold text-primary q-mt-none q-mb-md">
           {{ t('index.aboutTitle') }}
         </h2>
         <div class="about-text text-library-ink">
@@ -165,7 +165,7 @@
           to="/o-nama"
           class="q-mt-sm"
         />
-      </section>
+      </q-card>
 
     </div>
   </q-page>
@@ -355,7 +355,6 @@ async function doSearch() {
   z-index: 1
 
 .search-bar
-  background: #fff
   border-radius: 14px
   box-shadow: 0 12px 48px rgba($dark, 0.32)
   max-width: 1080px
@@ -376,24 +375,15 @@ async function doSearch() {
 
 .section-separator
   width: 80px
-  height: 3px
   border-radius: 2px
   margin-left: auto
   margin-right: auto
-  background: $secondary
   &--left
     margin-left: 0
-
-.section-label
-  letter-spacing: 0.08em
-  text-transform: uppercase
-  font-size: 0.72rem
-  font-weight: 700
 
 .collection-card
   border-radius: 16px
   border: 1px solid $divider
-  background: #ffffff
   transition: box-shadow 0.2s, border-color 0.2s, transform 0.15s
   &:hover
     border-color: $secondary
@@ -416,7 +406,6 @@ async function doSearch() {
   border-radius: 14px
   overflow: hidden
   border: 1px solid $divider
-  background: #ffffff
   cursor: pointer
   will-change: transform, opacity
   transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease, filter 0.5s ease, box-shadow 0.3s ease, border-color 0.3s ease
@@ -435,8 +424,6 @@ async function doSearch() {
   padding: 28px 16px 12px
 
 .thematic-slide-title
-  color: #fff
-  font-weight: 700
   font-size: 1.05rem
   letter-spacing: 0.01em
   text-shadow: 0 1px 8px rgba($dark, 0.6)
@@ -446,10 +433,8 @@ async function doSearch() {
 
 .desc-accent
   width: 36px
-  height: 2px
   border-radius: 2px
   margin: 0 auto
-  background: $secondary
 
 @keyframes thematic-fade-up
   from
@@ -463,7 +448,6 @@ async function doSearch() {
   height: 164px
   border-radius: 14px
   overflow: hidden
-  background: #ffffff
   border: 1px solid $divider
   transition: box-shadow 0.25s ease, transform 0.2s ease, border-color 0.25s ease
   .newest-arrow
@@ -482,15 +466,7 @@ async function doSearch() {
 
 .newest-type
   font-size: 0.68rem
-  font-weight: 700
   letter-spacing: 0.08em
-  text-transform: uppercase
-
-.ellipsis-2-lines
-  display: -webkit-box
-  -webkit-line-clamp: 2
-  -webkit-box-orient: vertical
-  overflow: hidden
 
 .about-section
   background: linear-gradient(180deg, color.adjust($paper, $lightness: 2%), $paper)
