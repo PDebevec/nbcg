@@ -22,13 +22,24 @@ export type RecordModel = runtime.Types.Result.DefaultSelection<Prisma.$RecordPa
 
 export type AggregateRecord = {
   _count: RecordCountAggregateOutputType | null
+  _avg: RecordAvgAggregateOutputType | null
+  _sum: RecordSumAggregateOutputType | null
   _min: RecordMinAggregateOutputType | null
   _max: RecordMaxAggregateOutputType | null
+}
+
+export type RecordAvgAggregateOutputType = {
+  version: number | null
+}
+
+export type RecordSumAggregateOutputType = {
+  version: number | null
 }
 
 export type RecordMinAggregateOutputType = {
   id: string | null
   visibilityStatus: $Enums.VisibilityStatus | null
+  version: number | null
   createdAt: Date | null
   updatedAt: Date | null
   createdByUserId: string | null
@@ -38,6 +49,7 @@ export type RecordMinAggregateOutputType = {
 export type RecordMaxAggregateOutputType = {
   id: string | null
   visibilityStatus: $Enums.VisibilityStatus | null
+  version: number | null
   createdAt: Date | null
   updatedAt: Date | null
   createdByUserId: string | null
@@ -48,6 +60,7 @@ export type RecordCountAggregateOutputType = {
   id: number
   visibilityStatus: number
   metadata:PrismaJson.RecordMetadata
+  version: number
   createdAt: number
   updatedAt: number
   createdByUserId: number
@@ -56,9 +69,18 @@ export type RecordCountAggregateOutputType = {
 }
 
 
+export type RecordAvgAggregateInputType = {
+  version?: true
+}
+
+export type RecordSumAggregateInputType = {
+  version?: true
+}
+
 export type RecordMinAggregateInputType = {
   id?: true
   visibilityStatus?: true
+  version?: true
   createdAt?: true
   updatedAt?: true
   createdByUserId?: true
@@ -68,6 +90,7 @@ export type RecordMinAggregateInputType = {
 export type RecordMaxAggregateInputType = {
   id?: true
   visibilityStatus?: true
+  version?: true
   createdAt?: true
   updatedAt?: true
   createdByUserId?: true
@@ -78,6 +101,7 @@ export type RecordCountAggregateInputType = {
   id?: true
   visibilityStatus?: true
   metadata?: true
+  version?: true
   createdAt?: true
   updatedAt?: true
   createdByUserId?: true
@@ -123,6 +147,18 @@ export type RecordAggregateArgs<ExtArgs extends runtime.Types.Extensions.Interna
   /**
    * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
    * 
+   * Select which fields to average
+  **/
+  _avg?: RecordAvgAggregateInputType
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+   * 
+   * Select which fields to sum
+  **/
+  _sum?: RecordSumAggregateInputType
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+   * 
    * Select which fields to find the minimum value
   **/
   _min?: RecordMinAggregateInputType
@@ -153,6 +189,8 @@ export type RecordGroupByArgs<ExtArgs extends runtime.Types.Extensions.InternalA
   take?: number
   skip?: number
   _count?: RecordCountAggregateInputType | true
+  _avg?: RecordAvgAggregateInputType
+  _sum?: RecordSumAggregateInputType
   _min?: RecordMinAggregateInputType
   _max?: RecordMaxAggregateInputType
 }
@@ -161,11 +199,14 @@ export type RecordGroupByOutputType = {
   id: string
   visibilityStatus: $Enums.VisibilityStatus
   metadata:PrismaJson.RecordMetadata | null
+  version: number
   createdAt: Date
   updatedAt: Date
   createdByUserId: string
   updatedByUserId: string | null
   _count: RecordCountAggregateOutputType | null
+  _avg: RecordAvgAggregateOutputType | null
+  _sum: RecordSumAggregateOutputType | null
   _min: RecordMinAggregateOutputType | null
   _max: RecordMaxAggregateOutputType | null
 }
@@ -192,6 +233,7 @@ export type RecordWhereInput = {
   id?: Prisma.StringFilter<"Record"> | string
   visibilityStatus?: Prisma.EnumVisibilityStatusFilter<"Record"> | $Enums.VisibilityStatus
   metadata?: Prisma.JsonNullableFilter<"Record">
+  version?: Prisma.IntFilter<"Record"> | number
   createdAt?: Prisma.DateTimeFilter<"Record"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Record"> | Date | string
   createdByUserId?: Prisma.StringFilter<"Record"> | string
@@ -203,6 +245,7 @@ export type RecordOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   visibilityStatus?: Prisma.SortOrder
   metadata?: Prisma.SortOrderInput | Prisma.SortOrder
+  version?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
@@ -217,6 +260,7 @@ export type RecordWhereUniqueInput = Prisma.AtLeast<{
   NOT?: Prisma.RecordWhereInput | Prisma.RecordWhereInput[]
   visibilityStatus?: Prisma.EnumVisibilityStatusFilter<"Record"> | $Enums.VisibilityStatus
   metadata?: Prisma.JsonNullableFilter<"Record">
+  version?: Prisma.IntFilter<"Record"> | number
   createdAt?: Prisma.DateTimeFilter<"Record"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Record"> | Date | string
   createdByUserId?: Prisma.StringFilter<"Record"> | string
@@ -228,13 +272,16 @@ export type RecordOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   visibilityStatus?: Prisma.SortOrder
   metadata?: Prisma.SortOrderInput | Prisma.SortOrder
+  version?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.RecordCountOrderByAggregateInput
+  _avg?: Prisma.RecordAvgOrderByAggregateInput
   _max?: Prisma.RecordMaxOrderByAggregateInput
   _min?: Prisma.RecordMinOrderByAggregateInput
+  _sum?: Prisma.RecordSumOrderByAggregateInput
 }
 
 export type RecordScalarWhereWithAggregatesInput = {
@@ -244,6 +291,7 @@ export type RecordScalarWhereWithAggregatesInput = {
   id?: Prisma.StringWithAggregatesFilter<"Record"> | string
   visibilityStatus?: Prisma.EnumVisibilityStatusWithAggregatesFilter<"Record"> | $Enums.VisibilityStatus
   metadata?: Prisma.JsonNullableWithAggregatesFilter<"Record">
+  version?: Prisma.IntWithAggregatesFilter<"Record"> | number
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Record"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Record"> | Date | string
   createdByUserId?: Prisma.StringWithAggregatesFilter<"Record"> | string
@@ -254,6 +302,7 @@ export type RecordCreateInput = {
   id?: string
   visibilityStatus: $Enums.VisibilityStatus
   metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  version?: number
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
@@ -265,6 +314,7 @@ export type RecordUncheckedCreateInput = {
   id?: string
   visibilityStatus: $Enums.VisibilityStatus
   metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  version?: number
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
@@ -276,6 +326,7 @@ export type RecordUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   visibilityStatus?: Prisma.EnumVisibilityStatusFieldUpdateOperationsInput | $Enums.VisibilityStatus
   metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  version?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -287,6 +338,7 @@ export type RecordUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   visibilityStatus?: Prisma.EnumVisibilityStatusFieldUpdateOperationsInput | $Enums.VisibilityStatus
   metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  version?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -298,6 +350,7 @@ export type RecordCreateManyInput = {
   id?: string
   visibilityStatus: $Enums.VisibilityStatus
   metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  version?: number
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
@@ -308,6 +361,7 @@ export type RecordUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   visibilityStatus?: Prisma.EnumVisibilityStatusFieldUpdateOperationsInput | $Enums.VisibilityStatus
   metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  version?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -318,6 +372,7 @@ export type RecordUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   visibilityStatus?: Prisma.EnumVisibilityStatusFieldUpdateOperationsInput | $Enums.VisibilityStatus
   metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  version?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -328,15 +383,21 @@ export type RecordCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   visibilityStatus?: Prisma.SortOrder
   metadata?: Prisma.SortOrder
+  version?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrder
 }
 
+export type RecordAvgOrderByAggregateInput = {
+  version?: Prisma.SortOrder
+}
+
 export type RecordMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   visibilityStatus?: Prisma.SortOrder
+  version?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
@@ -346,10 +407,15 @@ export type RecordMaxOrderByAggregateInput = {
 export type RecordMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   visibilityStatus?: Prisma.SortOrder
+  version?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrder
+}
+
+export type RecordSumOrderByAggregateInput = {
+  version?: Prisma.SortOrder
 }
 
 export type RecordNullableScalarRelationFilter = {
@@ -377,6 +443,7 @@ export type RecordCreateWithoutFileAttachmentsInput = {
   id?: string
   visibilityStatus: $Enums.VisibilityStatus
   metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  version?: number
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
@@ -387,6 +454,7 @@ export type RecordUncheckedCreateWithoutFileAttachmentsInput = {
   id?: string
   visibilityStatus: $Enums.VisibilityStatus
   metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  version?: number
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
@@ -413,6 +481,7 @@ export type RecordUpdateWithoutFileAttachmentsInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   visibilityStatus?: Prisma.EnumVisibilityStatusFieldUpdateOperationsInput | $Enums.VisibilityStatus
   metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  version?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -423,6 +492,7 @@ export type RecordUncheckedUpdateWithoutFileAttachmentsInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   visibilityStatus?: Prisma.EnumVisibilityStatusFieldUpdateOperationsInput | $Enums.VisibilityStatus
   metadata?:PrismaJson.RecordMetadata | Prisma.NullableJsonNullValueInput
+  version?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
@@ -464,6 +534,7 @@ export type RecordSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   id?: boolean
   visibilityStatus?: boolean
   metadata?: boolean
+  version?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
@@ -476,6 +547,7 @@ export type RecordSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
   id?: boolean
   visibilityStatus?: boolean
   metadata?: boolean
+  version?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
@@ -486,6 +558,7 @@ export type RecordSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
   id?: boolean
   visibilityStatus?: boolean
   metadata?: boolean
+  version?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
@@ -496,13 +569,14 @@ export type RecordSelectScalar = {
   id?: boolean
   visibilityStatus?: boolean
   metadata?: boolean
+  version?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
   updatedByUserId?: boolean
 }
 
-export type RecordOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "visibilityStatus" | "metadata" | "createdAt" | "updatedAt" | "createdByUserId" | "updatedByUserId", ExtArgs["result"]["record"]>
+export type RecordOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "visibilityStatus" | "metadata" | "version" | "createdAt" | "updatedAt" | "createdByUserId" | "updatedByUserId", ExtArgs["result"]["record"]>
 export type RecordInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   fileAttachments?: boolean | Prisma.Record$fileAttachmentsArgs<ExtArgs>
   _count?: boolean | Prisma.RecordCountOutputTypeDefaultArgs<ExtArgs>
@@ -522,6 +596,7 @@ export type $RecordPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
      * [RecordMetadata]
      */
     metadata:PrismaJson.RecordMetadata | null
+    version: number
     createdAt: Date
     updatedAt: Date
     createdByUserId: string
@@ -953,6 +1028,7 @@ export interface RecordFieldRefs {
   readonly id: Prisma.FieldRef<"Record", 'String'>
   readonly visibilityStatus: Prisma.FieldRef<"Record", 'VisibilityStatus'>
   readonly metadata: Prisma.FieldRef<"Record", 'Json'>
+  readonly version: Prisma.FieldRef<"Record", 'Int'>
   readonly createdAt: Prisma.FieldRef<"Record", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Record", 'DateTime'>
   readonly createdByUserId: Prisma.FieldRef<"Record", 'String'>

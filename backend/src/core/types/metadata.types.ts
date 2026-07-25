@@ -1,4 +1,4 @@
-import type { DomainRecord, FieldValidator } from 'src/modules/import/cobiss/cobiss-util/cobiss.types';
+import type { DomainRecord, FieldValidator } from '../../modules/import/cobiss/cobiss-util/cobiss.types';
 
 /**
  * Fields that EVERY import source must populate.

@@ -2,10 +2,10 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { ImportJobData, ImportJobProgress } from './import-job.types';
-import { fetchCobissRecord } from 'src/modules/import/cobiss/cobiss-util/cobiss-fetch';
-import { PrismaService } from 'src/core/prisma/prisma.service';
-import { generateDeterministicId } from 'src/shared/util/generateUuidFromCobissId';
-import type { CobissMetadata } from 'src/core/types/metadata.types';
+import { fetchCobissRecord } from '../cobiss/cobiss-util/cobiss-fetch';
+import { PrismaService } from '../../../core/prisma/prisma.service';
+import { generateDeterministicId } from '../../../shared/util/generateUuidFromCobissId';
+import type { CobissMetadata } from '../../../core/types/metadata.types';
 import { ItemType, VisibilityStatus } from '../../../../generated/prisma/enums';
 
 const BATCH_SIZE = 5;

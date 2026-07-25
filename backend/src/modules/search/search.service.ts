@@ -4,6 +4,9 @@ import { OpenSearchService } from '../../core/opensearch/opensearch.service';
 import { ResourceAccessService } from '../../core/auth/resource-access.service';
 import type { Principal, VisibilityFilter } from '../../core/auth/principal.type';
 import type { SearchQueryDto } from './dto/search-query.dto';
+import type { SuggestQueryDto } from './dto/suggest-query.dto';
+import { SUGGEST_FIELDS } from './suggest-fields';
+import type { SuggestFieldConfig } from './suggest-fields';
 
 export interface MatchedFile {
   /** file_attachments.id of the PDF whose extracted text matched */
@@ -38,9 +41,11 @@ export interface SearchResult {
   hits: SearchHit[];
 }
 
-// Flat (non-nested) fields only — file_attachments.filename lives inside the
-// nested mapping and must be queried through a nested clause.
-const SEARCH_FIELDS = [
+/**
+ * Fields searched by the general `q` param, with boosting.
+ * file_attachments.filename is nested and handled separately.
+ */
+const GENERAL_SEARCH_FIELDS = [
   'metadata.title^3',
   'metadata.subtitle^2',
   'metadata.firstResponsibility^2',
@@ -51,21 +56,33 @@ const SEARCH_FIELDS = [
   'metadata.notes',
 ];
 
+/** Split a comma-separated query param into trimmed non-empty values. */
+function parseMultiValue(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw.split(',').map((v) => v.trim()).filter(Boolean);
+}
+
+// ─── Query builder ───────────────────────────────────────────────────────────
+
 function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
   const must: unknown[] = [];
   const filter: unknown[] = [];
 
+  // ── q: general search ──
+  // All words required (AND). Each word must match in at least one of the
+  // boosted fields or in a file attachment filename. Uses fuzziness AUTO with
+  // prefix_length 1 for typo tolerance without excessive expansion.
   if (dto.q?.trim()) {
-    must.push({
+    const words = dto.q.trim().split(/\s+/).filter(Boolean);
+    const perWord = words.map((word) => ({
       bool: {
         should: [
           {
             multi_match: {
-              query: dto.q,
-              fields: SEARCH_FIELDS,
-              type: 'best_fields',
+              query: word,
+              fields: GENERAL_SEARCH_FIELDS,
               fuzziness: 'AUTO',
-              lenient: true,
+              prefix_length: 1,
             },
           },
           {
@@ -73,7 +90,11 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
               path: 'file_attachments',
               query: {
                 match: {
-                  'file_attachments.filename': { query: dto.q, fuzziness: 'AUTO' },
+                  'file_attachments.filename': {
+                    query: word,
+                    fuzziness: 'AUTO',
+                    prefix_length: 1,
+                  },
                 },
               },
             },
@@ -81,60 +102,78 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
         ],
         minimum_should_match: 1,
       },
+    }));
+    must.push({ bool: { must: perWord } });
+  }
+
+  // ── title: fuzzy per-word AND ──
+  if (dto.title?.trim()) {
+    must.push({
+      match: {
+        'metadata.title': {
+          query: dto.title,
+          operator: 'and',
+          fuzziness: 'AUTO',
+          prefix_length: 1,
+        },
+      },
     });
   }
 
-  if (dto.title) {
-    must.push({ match_phrase_prefix: { 'metadata.title': dto.title } });
-  }
-
-  if (dto.author) {
+  // ── author: fuzzy per-word AND across name fields ──
+  if (dto.author?.trim()) {
     must.push({
       multi_match: {
         query: dto.author,
         fields: ['metadata.authors.familyName^2', 'metadata.authors.firstName'],
+        operator: 'and',
         fuzziness: 'AUTO',
+        prefix_length: 1,
       },
     });
   }
 
-  if (dto.publisher) {
-    must.push({
-      match: {
-        'metadata.publication.publisher': { query: dto.publisher, fuzziness: 'AUTO' },
+  // ── publisher: exact multi-select (comma-separated) ──
+  const publishers = parseMultiValue(dto.publisher);
+  if (publishers.length) {
+    filter.push({
+      bool: {
+        should: publishers.map((p) => ({
+          match_phrase: { 'metadata.publication.publisher': p },
+        })),
+        minimum_should_match: 1,
       },
     });
   }
 
-  if (dto.series) {
-    must.push({ match_phrase_prefix: { 'metadata.seriesTitle': dto.series } });
+  // ── language: exact multi-select ──
+  const languages = parseMultiValue(dto.language);
+  if (languages.length) {
+    filter.push({ terms: { 'metadata.language.en': languages } });
   }
 
-  if (dto.year) {
-    // Format is validated by the DTO (@Matches: YYYY or YYYY-YYYY)
-    const rangeParts = dto.year.split('-');
-    if (rangeParts.length === 2) {
-      if (rangeParts[0] > rangeParts[1]) {
-        throw new BadRequestException('year range start must not be greater than end');
-      }
-      filter.push({
-        range: {
-          'metadata.publication.year': { gte: rangeParts[0], lte: rangeParts[1] },
-        },
-      });
-    } else {
-      filter.push({ term: { 'metadata.publication.year': dto.year } });
+  // ── materialType: exact multi-select ──
+  const materialTypes = parseMultiValue(dto.materialType);
+  if (materialTypes.length) {
+    filter.push({ terms: { 'metadata.materialType.en': materialTypes } });
+  }
+
+  // ── year range ──
+  if (dto.yearFrom || dto.yearTo) {
+    if (dto.yearFrom && dto.yearTo && dto.yearFrom > dto.yearTo) {
+      throw new BadRequestException('yearFrom must not be greater than yearTo');
     }
+    filter.push({
+      range: {
+        'metadata.publication.year': {
+          ...(dto.yearFrom ? { gte: dto.yearFrom } : {}),
+          ...(dto.yearTo ? { lte: dto.yearTo } : {}),
+        },
+      },
+    });
   }
 
-  if (dto.language) {
-    filter.push({ term: { 'metadata.language.en': dto.language } });
-  }
-
-  if (dto.materialType) {
-    filter.push({ term: { 'metadata.materialType.en': dto.materialType } });
-  }
-
+  // ── exact identifiers ──
   if (dto.isbn) {
     filter.push({ term: { 'metadata.isbn': dto.isbn.replace(/-/g, '') } });
   }
@@ -147,6 +186,7 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
     filter.push({ term: { 'metadata.cobissId': dto.cobissId } });
   }
 
+  // ── fullText: nested search in extracted PDF text ──
   if (dto.fullText?.trim()) {
     must.push({
       nested: {
@@ -161,7 +201,6 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
         },
         inner_hits: {
           name: MATCHED_FILES,
-          // Only identify the matched attachment — never ship its text
           _source: { includes: ['file_attachments.id', 'file_attachments.filename'] },
           highlight: {
             fields: {
@@ -181,6 +220,19 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
   }
 
   return { bool: { ...(must.length ? { must } : {}), ...(filter.length ? { filter } : {}) } };
+}
+
+/** Build `_source` control based on the `fields` query param. */
+function buildSourceControl(fields?: string): Record<string, unknown> {
+  if (!fields?.trim()) {
+    // Default: return everything except extracted text
+    return { excludes: SOURCE_EXCLUDES };
+  }
+
+  const requested = fields.split(',').map((f) => f.trim()).filter(Boolean);
+  // Always include id; deduplicate
+  const includes = [...new Set(['id', ...requested])];
+  return { includes };
 }
 
 /** Map a raw OpenSearch hit to a SearchHit, lifting per-attachment matches out of inner_hits. */
@@ -204,6 +256,205 @@ function mapHit(hit: any): SearchHit {
       ? { matchedFiles, highlights: matchedFiles.flatMap((f) => f.highlights) }
       : {}),
   };
+}
+
+// ─── Suggest types & query builders ──────────────────────────────────────────
+
+export interface SuggestItem {
+  value: unknown;
+  count: number;
+}
+
+export interface SuggestResult {
+  field: string;
+  suggestions: SuggestItem[];
+}
+
+function buildStringSuggestBody(
+  config: SuggestFieldConfig,
+  q: string | undefined,
+  limit: number,
+  visibilityClause: Record<string, unknown>,
+): Record<string, unknown> {
+  const must: unknown[] = [];
+  if (q?.trim()) {
+    must.push({ match_phrase_prefix: { [config.matchPath]: { query: q } } });
+  }
+
+  return {
+    size: 0,
+    query: {
+      bool: {
+        ...(must.length ? { must } : {}),
+        filter: [visibilityClause],
+      },
+    },
+    aggs: {
+      suggestions: {
+        terms: { field: config.keywordPath, size: limit, order: { _count: 'desc' } },
+      },
+    },
+  };
+}
+
+function buildResolvedCodeSuggestBody(
+  config: SuggestFieldConfig,
+  q: string | undefined,
+  limit: number,
+  visibilityClause: Record<string, unknown>,
+): Record<string, unknown> {
+  const rc = config.resolvedCode!;
+  const must: unknown[] = [];
+
+  if (q?.trim()) {
+    must.push({
+      bool: {
+        should: rc.matchPaths.map((path) => ({
+          match_phrase_prefix: { [path]: { query: q } },
+        })),
+        minimum_should_match: 1,
+      },
+    });
+  }
+
+  return {
+    size: 0,
+    query: {
+      bool: {
+        ...(must.length ? { must } : {}),
+        filter: [visibilityClause],
+      },
+    },
+    aggs: {
+      suggestions: {
+        terms: { field: rc.codePath, size: limit, order: { _count: 'desc' } },
+        aggs: {
+          sample: {
+            top_hits: { size: 1, _source: { includes: rc.sourceIncludes } },
+          },
+        },
+      },
+    },
+  };
+}
+
+function buildAuthorSuggestBody(
+  config: SuggestFieldConfig,
+  q: string | undefined,
+  limit: number,
+  visibilityClause: Record<string, unknown>,
+): Record<string, unknown> {
+  const ac = config.author!;
+  const must: unknown[] = [];
+
+  if (q?.trim()) {
+    must.push({
+      multi_match: {
+        query: q,
+        fields: ac.searchFields,
+        type: 'phrase_prefix',
+      },
+    });
+  }
+
+  return {
+    size: 0,
+    query: {
+      bool: {
+        ...(must.length ? { must } : {}),
+        filter: [visibilityClause],
+      },
+    },
+    aggs: {
+      by_family: {
+        terms: { field: ac.primaryAggField, size: limit, order: { _count: 'desc' } },
+        aggs: {
+          by_first: {
+            terms: { field: ac.secondaryAggField, size: 1 },
+            aggs: {
+              sample: {
+                top_hits: { size: 1, _source: { includes: ac.sourceIncludes } },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+// ─── Suggest result mappers ──────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapStringSuggestResult(field: string, raw: any): SuggestResult {
+  const buckets = raw?.aggregations?.suggestions?.buckets ?? [];
+  return {
+    field,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    suggestions: buckets.map((b: any) => ({ value: b.key, count: b.doc_count })),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapResolvedCodeSuggestResult(field: string, config: SuggestFieldConfig, raw: any): SuggestResult {
+  const buckets = raw?.aggregations?.suggestions?.buckets ?? [];
+  const rc = config.resolvedCode!;
+  // The sourceIncludes path is like "metadata.language" — extract the last segment
+  const metaField = rc.sourceIncludes[0].replace('metadata.', '');
+
+  return {
+    field,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    suggestions: buckets.map((b: any) => {
+      const hit = b.sample?.hits?.hits?.[0]?._source;
+      const fieldValue = hit?.metadata?.[metaField];
+
+      // For array ResolvedCode fields (e.g. language[]), find the element matching the bucket code
+      let resolved: unknown = fieldValue;
+      if (Array.isArray(fieldValue)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        resolved = fieldValue.find((el: any) => el?.code === b.key) ?? { code: b.key };
+      }
+
+      return { value: resolved, count: b.doc_count };
+    }),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapAuthorSuggestResult(field: string, raw: any): SuggestResult {
+  const familyBuckets = raw?.aggregations?.by_family?.buckets ?? [];
+  const suggestions: SuggestItem[] = [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const fb of familyBuckets) {
+    const firstBuckets = fb.by_first?.buckets ?? [];
+    if (firstBuckets.length === 0) {
+      suggestions.push({ value: { familyName: fb.key }, count: fb.doc_count });
+      continue;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const fnb of firstBuckets) {
+      const hit = fnb.sample?.hits?.hits?.[0]?._source;
+      const authors: any[] = hit?.metadata?.authors ?? [];
+      // Find the matching author from the document's author array
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const matched = authors.find((a: any) => a.familyName === fb.key && a.firstName === fnb.key);
+
+      if (matched) {
+        const { responsibility, ...authorData } = matched;
+        suggestions.push({ value: authorData, count: fb.doc_count });
+      } else {
+        suggestions.push({
+          value: { familyName: fb.key, firstName: fnb.key },
+          count: fb.doc_count,
+        });
+      }
+    }
+  }
+
+  return { field, suggestions };
 }
 
 @Injectable()
@@ -243,7 +494,7 @@ export class SearchService {
       size: limit,
       query,
       track_total_hits: true,
-      _source: { excludes: SOURCE_EXCLUDES },
+      _source: buildSourceControl(dto.fields),
       ...(dto.sort === 'newest' ? { sort: [{ createdAt: 'desc' as const }] } : {}),
     };
 
@@ -296,7 +547,7 @@ export class SearchService {
       size: limit,
       query,
       track_total_hits: true,
-      _source: { excludes: SOURCE_EXCLUDES },
+      _source: buildSourceControl(dto.fields),
     };
     const result = await this.opensearch.search(indices, body);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -331,6 +582,52 @@ export class SearchService {
     }
 
     return { id, index: result.index, score: 1, source: result.source };
+  }
+
+  // ─── Suggest ──────────────────────────────────────────────────────────────
+
+  async suggest(dto: SuggestQueryDto, principal: Principal): Promise<SuggestResult> {
+    const config = SUGGEST_FIELDS[dto.field];
+    if (!config) {
+      throw new BadRequestException(
+        `Unknown field "${dto.field}". Supported: ${Object.keys(SUGGEST_FIELDS).join(', ')}`,
+      );
+    }
+
+    const limit = dto.limit ?? 10;
+    const visFilter = this.access.visibilityFilter(principal);
+    const requestedType = dto.type ?? 'all';
+    const { indices, visibilityClause } = this.buildVisibilityQuery(requestedType, visFilter);
+
+    if (indices.length === 0) {
+      return { field: dto.field, suggestions: [] };
+    }
+
+    let body: Record<string, unknown>;
+    switch (config.type) {
+      case 'string':
+        body = buildStringSuggestBody(config, dto.q, limit, visibilityClause);
+        break;
+      case 'resolvedCode':
+        body = buildResolvedCodeSuggestBody(config, dto.q, limit, visibilityClause);
+        break;
+      case 'author':
+        body = buildAuthorSuggestBody(config, dto.q, limit, visibilityClause);
+        break;
+    }
+
+    const result = await this.opensearch.search(indices, body);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw: any = result;
+
+    switch (config.type) {
+      case 'string':
+        return mapStringSuggestResult(dto.field, raw);
+      case 'resolvedCode':
+        return mapResolvedCodeSuggestResult(dto.field, config, raw);
+      case 'author':
+        return mapAuthorSuggestResult(dto.field, raw);
+    }
   }
 
   /**

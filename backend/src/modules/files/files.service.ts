@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createReadStream } from 'fs';
 import { unlink } from 'fs/promises';
-import { FileType } from '../../../generated/prisma/enums';
+import { FileRole, FileType, TextExtractionStatus } from '../../../generated/prisma/enums';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
+import { TikaService } from '../../core/tika/tika.service';
 import { PdfExtractionQueueService } from './queue/pdf-extraction-queue.service';
 
 const MIME_TO_FILE_TYPE: Record<string, FileType> = {
@@ -20,6 +21,7 @@ export class FilesService {
     private readonly prisma: PrismaService,
     private readonly seaweedfs: SeaweedfsService,
     private readonly pdfQueue: PdfExtractionQueueService,
+    private readonly tika: TikaService,
   ) {}
 
   /** Best-effort removal of Multer temp files (e.g. when the request is rejected before upload). */
@@ -29,9 +31,22 @@ export class FilesService {
     );
   }
 
-  async upload(itemId: string, files: Express.Multer.File[], doOcr = false) {
+  async upload(itemId: string, files: Express.Multer.File[], doOcr = false, extractedTextsJson?: string, role?: FileRole) {
     if (!files?.length) {
       throw new BadRequestException('No files provided — send multipart form data with a "files" field');
+    }
+
+    // Parse the optional extracted-texts map: { "filename.pdf": "text..." }
+    let extractedTexts: Record<string, string> | undefined;
+    if (extractedTextsJson) {
+      try {
+        extractedTexts = JSON.parse(extractedTextsJson);
+        if (typeof extractedTexts !== 'object' || extractedTexts === null || Array.isArray(extractedTexts)) {
+          throw new Error('not an object');
+        }
+      } catch {
+        throw new BadRequestException('extractedTexts must be a JSON object mapping filenames to text strings');
+      }
     }
 
     let itemType: 'draft' | 'record';
@@ -54,15 +69,25 @@ export class FilesService {
           await unlink(file.path).catch(() => undefined);
         }
 
+        // Check if the client supplied pre-extracted text for this file
+        const suppliedText = extractedTexts?.[file.originalname];
+        const hasSuppliedText = suppliedText !== undefined;
+
         try {
           return await this.prisma.fileAttachment.create({
             data: {
               ...(itemType === 'draft' ? { draft_id: itemId } : { record_id: itemId }),
               fileType,
+              ...(role ? { role } : {}),
               originalFid: fid,
               filename: file.originalname,
               mimeType: file.mimetype,
               sizeBytes: file.size,
+              // If text was supplied, store it immediately and mark extraction status
+              ...(hasSuppliedText ? {
+                extractedText: suppliedText || null,
+                textExtractionStatus: this.classifyText(suppliedText),
+              } : {}),
             },
           });
         } catch (err) {
@@ -73,14 +98,17 @@ export class FilesService {
       }),
     );
 
+    // Enqueue Tika extraction only for PDFs that did NOT have text pre-supplied.
     // Best-effort: files are already stored at this point, so a queue failure
     // (e.g. Redis down) must not fail the request — extraction can be
     // re-triggered later via POST /files/:fileId/extract.
-    const pdfs = created.filter((f) => f.mimeType === 'application/pdf');
-    if (pdfs.length > 0) {
+    const pdfsNeedingExtraction = created.filter(
+      (f) => f.mimeType === 'application/pdf' && !extractedTexts?.[f.filename],
+    );
+    if (pdfsNeedingExtraction.length > 0) {
       try {
         const languageCodes = await this.getItemLanguageCodes(itemId, itemType);
-        for (const file of pdfs) {
+        for (const file of pdfsNeedingExtraction) {
           await this.pdfQueue.enqueue({
             fileAttachmentId: file.id,
             originalFid: file.originalFid,
@@ -98,6 +126,84 @@ export class FilesService {
     }
 
     return created;
+  }
+
+  /**
+   * Replace an existing attachment's blob (and optionally its text) in place.
+   * The attachment id stays stable — only the underlying file content changes.
+   */
+  async replace(fileId: string, file: Express.Multer.File, doOcr = false, extractedText?: string) {
+    const existing = await this.prisma.fileAttachment.findUnique({ where: { id: fileId } });
+    if (!existing) {
+      await unlink(file.path).catch(() => undefined);
+      throw new NotFoundException(`File not found: ${fileId}`);
+    }
+
+    const fileType = MIME_TO_FILE_TYPE[file.mimetype] ?? FileType.UNKNOWN;
+    const stream = createReadStream(file.path);
+    let fid: string;
+    try {
+      fid = await this.seaweedfs.upload(stream, file.originalname, file.mimetype, file.size);
+    } finally {
+      stream.destroy();
+      await unlink(file.path).catch(() => undefined);
+    }
+
+    const hasSuppliedText = extractedText !== undefined;
+    const oldFid = existing.originalFid;
+
+    let updated;
+    try {
+      updated = await this.prisma.fileAttachment.update({
+        where: { id: fileId },
+        data: {
+          originalFid: fid,
+          filename: file.originalname,
+          mimeType: file.mimetype,
+          sizeBytes: file.size,
+          fileType,
+          ...(hasSuppliedText ? {
+            extractedText: extractedText || null,
+            textExtractionStatus: this.classifyText(extractedText),
+          } : {
+            // No text supplied — reset extraction status so Tika can re-extract
+            extractedText: null,
+            textExtractionStatus: TextExtractionStatus.NOT_EXTRACTED,
+          }),
+        },
+      });
+    } catch (err) {
+      // DB update failed — remove the newly uploaded blob
+      await this.seaweedfs.delete(fid).catch(() => {});
+      throw err;
+    }
+
+    // DB row updated — now safe to delete the old blob (orphan-safe ordering)
+    await this.seaweedfs.delete(oldFid).catch(() => {});
+
+    // Enqueue Tika extraction for PDFs without pre-supplied text
+    if (file.mimetype === 'application/pdf' && !hasSuppliedText) {
+      try {
+        const itemId = existing.draft_id ?? existing.record_id;
+        const languageCodes = itemId
+          ? await this.getItemLanguageCodes(itemId, existing.draft_id ? 'draft' : 'record')
+          : [];
+        await this.pdfQueue.enqueue({
+          fileAttachmentId: fileId,
+          originalFid: fid,
+          filename: file.originalname,
+          languageCodes,
+          doOcr,
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to enqueue PDF extraction after replace for ${fileId} — extraction must be re-triggered`,
+          err instanceof Error ? err.stack : String(err),
+        );
+      }
+    }
+
+    return updated;
   }
 
   /** Re-enqueue text extraction for an already-uploaded PDF attachment. Defaults to OCR — that's what the endpoint is for. */
@@ -149,6 +255,31 @@ export class FilesService {
     // Delete from storage after DB commit — orphaned blob is harmless, missing DB row is not.
     // OpenSearch cleanup happens automatically via PGSync when the row is deleted.
     await this.seaweedfs.delete(file.originalFid).catch(() => {});
+  }
+
+  /**
+   * Set (or replace) extracted text on an existing file attachment.
+   * Useful for the archive to push OCR text after the initial upload.
+   */
+  async setText(fileId: string, text: string): Promise<{ updated: true }> {
+    const file = await this.prisma.fileAttachment.findUnique({ where: { id: fileId } });
+    if (!file) throw new NotFoundException(`File not found: ${fileId}`);
+
+    await this.prisma.fileAttachment.update({
+      where: { id: fileId },
+      data: {
+        extractedText: text || null,
+        textExtractionStatus: this.classifyText(text),
+      },
+    });
+    return { updated: true };
+  }
+
+  /** Classify extracted text as EXTRACTED, GARBAGE, or NO_TEXT. */
+  private classifyText(text: string | undefined | null): TextExtractionStatus {
+    if (!text) return TextExtractionStatus.NO_TEXT;
+    if (this.tika.looksGarbled(text)) return TextExtractionStatus.GARBAGE;
+    return TextExtractionStatus.EXTRACTED;
   }
 
   private async getItemLanguageCodes(itemId: string, itemType: 'draft' | 'record'): Promise<string[]> {

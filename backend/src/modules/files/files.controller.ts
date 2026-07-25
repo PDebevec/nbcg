@@ -1,15 +1,18 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Param,
   Post,
+  Put,
   Res,
+  UploadedFile,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as os from 'os';
 import type { Response } from 'express';
@@ -17,7 +20,7 @@ import { GetPrincipal } from '../../core/auth/get-principal.decorator';
 import { ResourceAccessService } from '../../core/auth/resource-access.service';
 import type { Principal } from '../../core/auth/principal.type';
 import { FilesService } from './files.service';
-import { ReextractDto, UploadFilesDto } from './dto/upload-files.dto';
+import { ReextractDto, ReplaceFileDto, SetTextDto, UploadFilesDto } from './dto/upload-files.dto';
 
 @Controller('files')
 export class FilesController {
@@ -44,7 +47,40 @@ export class FilesController {
       await this.filesService.cleanupTempFiles(files);
       throw err;
     }
-    return this.filesService.upload(itemId, files, body.doOCR ?? false);
+    return this.filesService.upload(itemId, files, body.doOCR ?? false, body.extractedTexts, body.role);
+  }
+
+  @Put(':fileId')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({ destination: os.tmpdir() }),
+    limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB hard cap
+  }))
+  async replace(
+    @GetPrincipal() principal: Principal,
+    @Param('fileId') fileId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: ReplaceFileDto,
+  ) {
+    try {
+      await this.access.assertCanManageFile(principal, fileId);
+    } catch (err) {
+      await this.filesService.cleanupTempFiles(file ? [file] : undefined);
+      throw err;
+    }
+    if (!file) {
+      throw new BadRequestException('No file provided — send multipart form data with a "file" field');
+    }
+    return this.filesService.replace(fileId, file, body.doOCR ?? false, body.extractedText);
+  }
+
+  @Put(':fileId/text')
+  async setText(
+    @GetPrincipal() principal: Principal,
+    @Param('fileId') fileId: string,
+    @Body() body: SetTextDto,
+  ) {
+    await this.access.assertCanManageFile(principal, fileId);
+    return this.filesService.setText(fileId, body.text);
   }
 
   @Post(':fileId/extract')

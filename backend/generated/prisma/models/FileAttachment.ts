@@ -41,6 +41,7 @@ export type FileAttachmentMinAggregateOutputType = {
   draft_id: string | null
   record_id: string | null
   fileType: $Enums.FileType | null
+  role: $Enums.FileRole | null
   originalFid: string | null
   extractedText: string | null
   filename: string | null
@@ -55,6 +56,7 @@ export type FileAttachmentMaxAggregateOutputType = {
   draft_id: string | null
   record_id: string | null
   fileType: $Enums.FileType | null
+  role: $Enums.FileRole | null
   originalFid: string | null
   extractedText: string | null
   filename: string | null
@@ -69,6 +71,7 @@ export type FileAttachmentCountAggregateOutputType = {
   draft_id: number
   record_id: number
   fileType: number
+  role: number
   originalFid: number
   extractedText: number
   filename: number
@@ -93,6 +96,7 @@ export type FileAttachmentMinAggregateInputType = {
   draft_id?: true
   record_id?: true
   fileType?: true
+  role?: true
   originalFid?: true
   extractedText?: true
   filename?: true
@@ -107,6 +111,7 @@ export type FileAttachmentMaxAggregateInputType = {
   draft_id?: true
   record_id?: true
   fileType?: true
+  role?: true
   originalFid?: true
   extractedText?: true
   filename?: true
@@ -121,6 +126,7 @@ export type FileAttachmentCountAggregateInputType = {
   draft_id?: true
   record_id?: true
   fileType?: true
+  role?: true
   originalFid?: true
   extractedText?: true
   filename?: true
@@ -222,6 +228,7 @@ export type FileAttachmentGroupByOutputType = {
   draft_id: string | null
   record_id: string | null
   fileType: $Enums.FileType
+  role: $Enums.FileRole
   originalFid: string
   extractedText: string | null
   filename: string
@@ -259,6 +266,7 @@ export type FileAttachmentWhereInput = {
   draft_id?: Prisma.StringNullableFilter<"FileAttachment"> | string | null
   record_id?: Prisma.StringNullableFilter<"FileAttachment"> | string | null
   fileType?: Prisma.EnumFileTypeFilter<"FileAttachment"> | $Enums.FileType
+  role?: Prisma.EnumFileRoleFilter<"FileAttachment"> | $Enums.FileRole
   originalFid?: Prisma.StringFilter<"FileAttachment"> | string
   extractedText?: Prisma.StringNullableFilter<"FileAttachment"> | string | null
   filename?: Prisma.StringFilter<"FileAttachment"> | string
@@ -275,6 +283,7 @@ export type FileAttachmentOrderByWithRelationInput = {
   draft_id?: Prisma.SortOrderInput | Prisma.SortOrder
   record_id?: Prisma.SortOrderInput | Prisma.SortOrder
   fileType?: Prisma.SortOrder
+  role?: Prisma.SortOrder
   originalFid?: Prisma.SortOrder
   extractedText?: Prisma.SortOrderInput | Prisma.SortOrder
   filename?: Prisma.SortOrder
@@ -294,6 +303,7 @@ export type FileAttachmentWhereUniqueInput = Prisma.AtLeast<{
   draft_id?: Prisma.StringNullableFilter<"FileAttachment"> | string | null
   record_id?: Prisma.StringNullableFilter<"FileAttachment"> | string | null
   fileType?: Prisma.EnumFileTypeFilter<"FileAttachment"> | $Enums.FileType
+  role?: Prisma.EnumFileRoleFilter<"FileAttachment"> | $Enums.FileRole
   originalFid?: Prisma.StringFilter<"FileAttachment"> | string
   extractedText?: Prisma.StringNullableFilter<"FileAttachment"> | string | null
   filename?: Prisma.StringFilter<"FileAttachment"> | string
@@ -310,6 +320,7 @@ export type FileAttachmentOrderByWithAggregationInput = {
   draft_id?: Prisma.SortOrderInput | Prisma.SortOrder
   record_id?: Prisma.SortOrderInput | Prisma.SortOrder
   fileType?: Prisma.SortOrder
+  role?: Prisma.SortOrder
   originalFid?: Prisma.SortOrder
   extractedText?: Prisma.SortOrderInput | Prisma.SortOrder
   filename?: Prisma.SortOrder
@@ -332,6 +343,7 @@ export type FileAttachmentScalarWhereWithAggregatesInput = {
   draft_id?: Prisma.StringNullableWithAggregatesFilter<"FileAttachment"> | string | null
   record_id?: Prisma.StringNullableWithAggregatesFilter<"FileAttachment"> | string | null
   fileType?: Prisma.EnumFileTypeWithAggregatesFilter<"FileAttachment"> | $Enums.FileType
+  role?: Prisma.EnumFileRoleWithAggregatesFilter<"FileAttachment"> | $Enums.FileRole
   originalFid?: Prisma.StringWithAggregatesFilter<"FileAttachment"> | string
   extractedText?: Prisma.StringNullableWithAggregatesFilter<"FileAttachment"> | string | null
   filename?: Prisma.StringWithAggregatesFilter<"FileAttachment"> | string
@@ -344,6 +356,7 @@ export type FileAttachmentScalarWhereWithAggregatesInput = {
 export type FileAttachmentCreateInput = {
   id?: string
   fileType: $Enums.FileType
+  role?: $Enums.FileRole
   originalFid: string
   extractedText?: string | null
   filename: string
@@ -360,6 +373,7 @@ export type FileAttachmentUncheckedCreateInput = {
   draft_id?: string | null
   record_id?: string | null
   fileType: $Enums.FileType
+  role?: $Enums.FileRole
   originalFid: string
   extractedText?: string | null
   filename: string
@@ -372,6 +386,7 @@ export type FileAttachmentUncheckedCreateInput = {
 export type FileAttachmentUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   fileType?: Prisma.EnumFileTypeFieldUpdateOperationsInput | $Enums.FileType
+  role?: Prisma.EnumFileRoleFieldUpdateOperationsInput | $Enums.FileRole
   originalFid?: Prisma.StringFieldUpdateOperationsInput | string
   extractedText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filename?: Prisma.StringFieldUpdateOperationsInput | string
@@ -388,6 +403,7 @@ export type FileAttachmentUncheckedUpdateInput = {
   draft_id?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   record_id?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fileType?: Prisma.EnumFileTypeFieldUpdateOperationsInput | $Enums.FileType
+  role?: Prisma.EnumFileRoleFieldUpdateOperationsInput | $Enums.FileRole
   originalFid?: Prisma.StringFieldUpdateOperationsInput | string
   extractedText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filename?: Prisma.StringFieldUpdateOperationsInput | string
@@ -402,6 +418,7 @@ export type FileAttachmentCreateManyInput = {
   draft_id?: string | null
   record_id?: string | null
   fileType: $Enums.FileType
+  role?: $Enums.FileRole
   originalFid: string
   extractedText?: string | null
   filename: string
@@ -414,6 +431,7 @@ export type FileAttachmentCreateManyInput = {
 export type FileAttachmentUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   fileType?: Prisma.EnumFileTypeFieldUpdateOperationsInput | $Enums.FileType
+  role?: Prisma.EnumFileRoleFieldUpdateOperationsInput | $Enums.FileRole
   originalFid?: Prisma.StringFieldUpdateOperationsInput | string
   extractedText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filename?: Prisma.StringFieldUpdateOperationsInput | string
@@ -428,6 +446,7 @@ export type FileAttachmentUncheckedUpdateManyInput = {
   draft_id?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   record_id?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fileType?: Prisma.EnumFileTypeFieldUpdateOperationsInput | $Enums.FileType
+  role?: Prisma.EnumFileRoleFieldUpdateOperationsInput | $Enums.FileRole
   originalFid?: Prisma.StringFieldUpdateOperationsInput | string
   extractedText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filename?: Prisma.StringFieldUpdateOperationsInput | string
@@ -452,6 +471,7 @@ export type FileAttachmentCountOrderByAggregateInput = {
   draft_id?: Prisma.SortOrder
   record_id?: Prisma.SortOrder
   fileType?: Prisma.SortOrder
+  role?: Prisma.SortOrder
   originalFid?: Prisma.SortOrder
   extractedText?: Prisma.SortOrder
   filename?: Prisma.SortOrder
@@ -470,6 +490,7 @@ export type FileAttachmentMaxOrderByAggregateInput = {
   draft_id?: Prisma.SortOrder
   record_id?: Prisma.SortOrder
   fileType?: Prisma.SortOrder
+  role?: Prisma.SortOrder
   originalFid?: Prisma.SortOrder
   extractedText?: Prisma.SortOrder
   filename?: Prisma.SortOrder
@@ -484,6 +505,7 @@ export type FileAttachmentMinOrderByAggregateInput = {
   draft_id?: Prisma.SortOrder
   record_id?: Prisma.SortOrder
   fileType?: Prisma.SortOrder
+  role?: Prisma.SortOrder
   originalFid?: Prisma.SortOrder
   extractedText?: Prisma.SortOrder
   filename?: Prisma.SortOrder
@@ -585,12 +607,8 @@ export type EnumFileTypeFieldUpdateOperationsInput = {
   set?: $Enums.FileType
 }
 
-export type IntFieldUpdateOperationsInput = {
-  set?: number
-  increment?: number
-  decrement?: number
-  multiply?: number
-  divide?: number
+export type EnumFileRoleFieldUpdateOperationsInput = {
+  set?: $Enums.FileRole
 }
 
 export type EnumTextExtractionStatusFieldUpdateOperationsInput = {
@@ -600,6 +618,7 @@ export type EnumTextExtractionStatusFieldUpdateOperationsInput = {
 export type FileAttachmentCreateWithoutDraftInput = {
   id?: string
   fileType: $Enums.FileType
+  role?: $Enums.FileRole
   originalFid: string
   extractedText?: string | null
   filename: string
@@ -614,6 +633,7 @@ export type FileAttachmentUncheckedCreateWithoutDraftInput = {
   id?: string
   record_id?: string | null
   fileType: $Enums.FileType
+  role?: $Enums.FileRole
   originalFid: string
   extractedText?: string | null
   filename: string
@@ -657,6 +677,7 @@ export type FileAttachmentScalarWhereInput = {
   draft_id?: Prisma.StringNullableFilter<"FileAttachment"> | string | null
   record_id?: Prisma.StringNullableFilter<"FileAttachment"> | string | null
   fileType?: Prisma.EnumFileTypeFilter<"FileAttachment"> | $Enums.FileType
+  role?: Prisma.EnumFileRoleFilter<"FileAttachment"> | $Enums.FileRole
   originalFid?: Prisma.StringFilter<"FileAttachment"> | string
   extractedText?: Prisma.StringNullableFilter<"FileAttachment"> | string | null
   filename?: Prisma.StringFilter<"FileAttachment"> | string
@@ -669,6 +690,7 @@ export type FileAttachmentScalarWhereInput = {
 export type FileAttachmentCreateWithoutRecordInput = {
   id?: string
   fileType: $Enums.FileType
+  role?: $Enums.FileRole
   originalFid: string
   extractedText?: string | null
   filename: string
@@ -683,6 +705,7 @@ export type FileAttachmentUncheckedCreateWithoutRecordInput = {
   id?: string
   draft_id?: string | null
   fileType: $Enums.FileType
+  role?: $Enums.FileRole
   originalFid: string
   extractedText?: string | null
   filename: string
@@ -722,6 +745,7 @@ export type FileAttachmentCreateManyDraftInput = {
   id?: string
   record_id?: string | null
   fileType: $Enums.FileType
+  role?: $Enums.FileRole
   originalFid: string
   extractedText?: string | null
   filename: string
@@ -734,6 +758,7 @@ export type FileAttachmentCreateManyDraftInput = {
 export type FileAttachmentUpdateWithoutDraftInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   fileType?: Prisma.EnumFileTypeFieldUpdateOperationsInput | $Enums.FileType
+  role?: Prisma.EnumFileRoleFieldUpdateOperationsInput | $Enums.FileRole
   originalFid?: Prisma.StringFieldUpdateOperationsInput | string
   extractedText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filename?: Prisma.StringFieldUpdateOperationsInput | string
@@ -748,6 +773,7 @@ export type FileAttachmentUncheckedUpdateWithoutDraftInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   record_id?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fileType?: Prisma.EnumFileTypeFieldUpdateOperationsInput | $Enums.FileType
+  role?: Prisma.EnumFileRoleFieldUpdateOperationsInput | $Enums.FileRole
   originalFid?: Prisma.StringFieldUpdateOperationsInput | string
   extractedText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filename?: Prisma.StringFieldUpdateOperationsInput | string
@@ -761,6 +787,7 @@ export type FileAttachmentUncheckedUpdateManyWithoutDraftInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   record_id?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fileType?: Prisma.EnumFileTypeFieldUpdateOperationsInput | $Enums.FileType
+  role?: Prisma.EnumFileRoleFieldUpdateOperationsInput | $Enums.FileRole
   originalFid?: Prisma.StringFieldUpdateOperationsInput | string
   extractedText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filename?: Prisma.StringFieldUpdateOperationsInput | string
@@ -774,6 +801,7 @@ export type FileAttachmentCreateManyRecordInput = {
   id?: string
   draft_id?: string | null
   fileType: $Enums.FileType
+  role?: $Enums.FileRole
   originalFid: string
   extractedText?: string | null
   filename: string
@@ -786,6 +814,7 @@ export type FileAttachmentCreateManyRecordInput = {
 export type FileAttachmentUpdateWithoutRecordInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   fileType?: Prisma.EnumFileTypeFieldUpdateOperationsInput | $Enums.FileType
+  role?: Prisma.EnumFileRoleFieldUpdateOperationsInput | $Enums.FileRole
   originalFid?: Prisma.StringFieldUpdateOperationsInput | string
   extractedText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filename?: Prisma.StringFieldUpdateOperationsInput | string
@@ -800,6 +829,7 @@ export type FileAttachmentUncheckedUpdateWithoutRecordInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   draft_id?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fileType?: Prisma.EnumFileTypeFieldUpdateOperationsInput | $Enums.FileType
+  role?: Prisma.EnumFileRoleFieldUpdateOperationsInput | $Enums.FileRole
   originalFid?: Prisma.StringFieldUpdateOperationsInput | string
   extractedText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filename?: Prisma.StringFieldUpdateOperationsInput | string
@@ -813,6 +843,7 @@ export type FileAttachmentUncheckedUpdateManyWithoutRecordInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   draft_id?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fileType?: Prisma.EnumFileTypeFieldUpdateOperationsInput | $Enums.FileType
+  role?: Prisma.EnumFileRoleFieldUpdateOperationsInput | $Enums.FileRole
   originalFid?: Prisma.StringFieldUpdateOperationsInput | string
   extractedText?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   filename?: Prisma.StringFieldUpdateOperationsInput | string
@@ -829,6 +860,7 @@ export type FileAttachmentSelect<ExtArgs extends runtime.Types.Extensions.Intern
   draft_id?: boolean
   record_id?: boolean
   fileType?: boolean
+  role?: boolean
   originalFid?: boolean
   extractedText?: boolean
   filename?: boolean
@@ -845,6 +877,7 @@ export type FileAttachmentSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   draft_id?: boolean
   record_id?: boolean
   fileType?: boolean
+  role?: boolean
   originalFid?: boolean
   extractedText?: boolean
   filename?: boolean
@@ -861,6 +894,7 @@ export type FileAttachmentSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   draft_id?: boolean
   record_id?: boolean
   fileType?: boolean
+  role?: boolean
   originalFid?: boolean
   extractedText?: boolean
   filename?: boolean
@@ -877,6 +911,7 @@ export type FileAttachmentSelectScalar = {
   draft_id?: boolean
   record_id?: boolean
   fileType?: boolean
+  role?: boolean
   originalFid?: boolean
   extractedText?: boolean
   filename?: boolean
@@ -886,7 +921,7 @@ export type FileAttachmentSelectScalar = {
   createdAt?: boolean
 }
 
-export type FileAttachmentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "draft_id" | "record_id" | "fileType" | "originalFid" | "extractedText" | "filename" | "mimeType" | "sizeBytes" | "textExtractionStatus" | "createdAt", ExtArgs["result"]["fileAttachment"]>
+export type FileAttachmentOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "draft_id" | "record_id" | "fileType" | "role" | "originalFid" | "extractedText" | "filename" | "mimeType" | "sizeBytes" | "textExtractionStatus" | "createdAt", ExtArgs["result"]["fileAttachment"]>
 export type FileAttachmentInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   draft?: boolean | Prisma.FileAttachment$draftArgs<ExtArgs>
   record?: boolean | Prisma.FileAttachment$recordArgs<ExtArgs>
@@ -911,6 +946,7 @@ export type $FileAttachmentPayload<ExtArgs extends runtime.Types.Extensions.Inte
     draft_id: string | null
     record_id: string | null
     fileType: $Enums.FileType
+    role: $Enums.FileRole
     originalFid: string
     extractedText: string | null
     filename: string
@@ -1347,6 +1383,7 @@ export interface FileAttachmentFieldRefs {
   readonly draft_id: Prisma.FieldRef<"FileAttachment", 'String'>
   readonly record_id: Prisma.FieldRef<"FileAttachment", 'String'>
   readonly fileType: Prisma.FieldRef<"FileAttachment", 'FileType'>
+  readonly role: Prisma.FieldRef<"FileAttachment", 'FileRole'>
   readonly originalFid: Prisma.FieldRef<"FileAttachment", 'String'>
   readonly extractedText: Prisma.FieldRef<"FileAttachment", 'String'>
   readonly filename: Prisma.FieldRef<"FileAttachment", 'String'>

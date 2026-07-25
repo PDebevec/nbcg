@@ -43,3 +43,13 @@ export const TextExtractionStatus = {
 } as const
 
 export type TextExtractionStatus = (typeof TextExtractionStatus)[keyof typeof TextExtractionStatus]
+
+
+export const FileRole = {
+  SOURCE: 'SOURCE',
+  ARCHIVAL: 'ARCHIVAL',
+  WEB: 'WEB',
+  THUMBNAIL: 'THUMBNAIL'
+} as const
+
+export type FileRole = (typeof FileRole)[keyof typeof FileRole]

@@ -915,3 +915,22 @@ export function resolveRelatorCode(code: string): ResolvedCode {
   const entry = RELATOR_CODE_MAP[code];
   return { code, en: entry?.[0] ?? code, cnr: entry?.[1] ?? code };
 }
+
+// ---------------------------------------------------------------------------
+// "getAll" helpers — return every code in a map as ResolvedCode[]
+// Used by the schema endpoint to expose allowed values for coded fields.
+// ---------------------------------------------------------------------------
+
+const mapToResolved = (m: Record<string, [string, string]>): ResolvedCode[] =>
+  Object.entries(m).map(([code, [en, cnr]]) => ({ code, en, cnr }));
+
+export const getAllLanguageCodes           = () => mapToResolved(LANGUAGE_MAP);
+export const getAllCountryCodes            = () => mapToResolved(COUNTRY_MAP);
+export const getAllRecordTypeCodes         = () => mapToResolved(RECORD_TYPE_MAP);
+export const getAllBibliographicLevelCodes = () => mapToResolved(BIBLIOGRAPHIC_LEVEL_MAP);
+export const getAllMaterialTypeCodes       = () => mapToResolved(MATERIAL_TYPE_MAP);
+export const getAllIllustrationCodes       = () => mapToResolved(ILLUSTRATION_CODE_MAP);
+export const getAllContentTypeCodes        = () => mapToResolved(CONTENT_TYPE_MAP);
+export const getAllLiteraryFormCodes       = () => mapToResolved(LITERARY_FORM_MAP);
+export const getAllBiographyCodes          = () => mapToResolved(BIOGRAPHY_CODE_MAP);
+export const getAllRelatorCodes            = () => mapToResolved(RELATOR_CODE_MAP);

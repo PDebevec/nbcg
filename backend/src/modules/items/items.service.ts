@@ -123,7 +123,8 @@ export class ItemsService {
     visibilityStatus: VisibilityStatus | undefined,
     rawMetadata: Record<string, unknown> | undefined,
     userId: string,
-  ): Promise<void> {
+    expectedVersion: number,
+  ) {
     const metadataUpdate = rawMetadata ? this.sanitizeMetadata(rawMetadata) : undefined;
 
     // Validate required fields only when they are present in the incoming payload.
@@ -153,20 +154,50 @@ export class ItemsService {
     }
 
     const existing = draft ?? record!;
+
+    if (existing.version !== expectedVersion) {
+      throw new ConflictException(
+        `Version conflict: expected ${expectedVersion}, current ${existing.version}. Re-fetch the item and retry.`,
+      );
+    }
+
     const existingMetadata =
       (existing.metadata as unknown as Record<string, unknown>) ?? {};
 
-    const data: Record<string, unknown> = { updatedByUserId: userId };
+    const data: Record<string, unknown> = {
+      updatedByUserId: userId,
+      version: existing.version + 1,
+    };
     if (visibilityStatus) data.visibilityStatus = visibilityStatus;
     if (hasMetadataChanges) {
       data.metadata = { ...existingMetadata, ...metadataUpdate };
     }
 
+    // Use a WHERE clause that includes version to guard against races
+    // between the read above and this write.
     if (draft) {
-      await this.prisma.draft.update({ where: { id }, data });
+      const result = await this.prisma.draft.updateMany({
+        where: { id, version: existing.version },
+        data,
+      });
+      if (result.count === 0) {
+        throw new ConflictException(
+          'Version conflict: the item was modified by another request. Re-fetch and retry.',
+        );
+      }
     } else {
-      await this.prisma.record.update({ where: { id }, data });
+      const result = await this.prisma.record.updateMany({
+        where: { id, version: existing.version },
+        data,
+      });
+      if (result.count === 0) {
+        throw new ConflictException(
+          'Version conflict: the item was modified by another request. Re-fetch and retry.',
+        );
+      }
     }
+
+    return { version: existing.version + 1 };
   }
 
   async delete(ids: string[]): Promise<void> {
@@ -268,6 +299,7 @@ export class ItemsService {
               id: d.id,
               visibilityStatus: d.visibilityStatus,
               metadata: d.metadata ?? undefined,
+              version: d.version + 1,
               createdAt: d.createdAt,
               createdByUserId: d.createdByUserId,
               updatedAt: now,
@@ -283,6 +315,7 @@ export class ItemsService {
               id: r.id,
               visibilityStatus: r.visibilityStatus,
               metadata: r.metadata ?? undefined,
+              version: r.version + 1,
               createdAt: r.createdAt,
               createdByUserId: r.createdByUserId,
               updatedAt: now,

@@ -12,6 +12,7 @@ import { RelationsModule } from './modules/relations/relations.module';
 import { ItemsModule } from './modules/items/items.module';
 import { FilesModule } from './modules/files/files.module';
 import { SearchModule } from './modules/search/search.module';
+import { SchemaModule } from './modules/schema/schema.module';
 import { PrismaModule } from './core/prisma/prisma.module';
 import { SeaweedfsModule } from './core/seaweedfs/seaweedfs.module';
 
@@ -32,6 +33,7 @@ import { SeaweedfsModule } from './core/seaweedfs/seaweedfs.module';
     ItemsModule,
     FilesModule,
     SearchModule,
+    SchemaModule,
   ],
   controllers: [AppController],
   providers: [

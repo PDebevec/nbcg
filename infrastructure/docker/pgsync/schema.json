@@ -8,6 +8,7 @@
         "id",
         "visibilityStatus",
         "metadata",
+        "version",
         "createdAt",
         "updatedAt",
         "createdByUserId",
@@ -18,6 +19,7 @@
           "id": { "type": "keyword" },
           "visibilityStatus": { "type": "keyword" },
           "metadata": { "type": "object", "enabled": true },
+          "version": { "type": "integer" },
           "createdAt": { "type": "date" },
           "updatedAt": { "type": "date" },
           "createdByUserId": { "type": "keyword" },
@@ -27,6 +29,7 @@
             "properties": {
               "id": { "type": "keyword" },
               "fileType": { "type": "keyword" },
+              "role": { "type": "keyword" },
               "filename": { "type": "text" },
               "mimeType": { "type": "keyword" },
               "sizeBytes": { "type": "long" },
@@ -43,6 +46,7 @@
           "columns": [
             "id",
             "fileType",
+            "role",
             "filename",
             "mimeType",
             "sizeBytes",
@@ -93,6 +97,7 @@
         "id",
         "visibilityStatus",
         "metadata",
+        "version",
         "createdAt",
         "updatedAt",
         "createdByUserId",
@@ -103,6 +108,7 @@
           "id": { "type": "keyword" },
           "visibilityStatus": { "type": "keyword" },
           "metadata": { "type": "object", "enabled": true },
+          "version": { "type": "integer" },
           "createdAt": { "type": "date" },
           "updatedAt": { "type": "date" },
           "createdByUserId": { "type": "keyword" },
@@ -112,6 +118,7 @@
             "properties": {
               "id": { "type": "keyword" },
               "fileType": { "type": "keyword" },
+              "role": { "type": "keyword" },
               "filename": { "type": "text" },
               "mimeType": { "type": "keyword" },
               "sizeBytes": { "type": "long" },
@@ -128,6 +135,7 @@
           "columns": [
             "id",
             "fileType",
+            "role",
             "filename",
             "mimeType",
             "sizeBytes",

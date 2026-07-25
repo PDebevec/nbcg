@@ -746,6 +746,7 @@ export const DraftScalarFieldEnum = {
   id: 'id',
   visibilityStatus: 'visibilityStatus',
   metadata: 'metadata',
+  version: 'version',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   createdByUserId: 'createdByUserId',
@@ -759,6 +760,7 @@ export const RecordScalarFieldEnum = {
   id: 'id',
   visibilityStatus: 'visibilityStatus',
   metadata: 'metadata',
+  version: 'version',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   createdByUserId: 'createdByUserId',
@@ -773,6 +775,7 @@ export const FileAttachmentScalarFieldEnum = {
   draft_id: 'draft_id',
   record_id: 'record_id',
   fileType: 'fileType',
+  role: 'role',
   originalFid: 'originalFid',
   extractedText: 'extractedText',
   filename: 'filename',
@@ -886,6 +889,20 @@ export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$Prisma
 
 
 /**
+ * Reference to a field of type 'Int'
+ */
+export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
+    
+
+
+/**
+ * Reference to a field of type 'Int[]'
+ */
+export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+    
+
+
+/**
  * Reference to a field of type 'DateTime'
  */
 export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
@@ -914,16 +931,16 @@ export type ListEnumFileTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$Pri
 
 
 /**
- * Reference to a field of type 'Int'
+ * Reference to a field of type 'FileRole'
  */
-export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
+export type EnumFileRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'FileRole'>
     
 
 
 /**
- * Reference to a field of type 'Int[]'
+ * Reference to a field of type 'FileRole[]'
  */
-export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+export type ListEnumFileRoleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'FileRole[]'>
     
 
 

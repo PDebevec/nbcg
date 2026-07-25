@@ -2,6 +2,7 @@ import { IsEnum, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-va
 import { Type } from 'class-transformer';
 
 export class SearchQueryDto {
+  /** General search — fuzzy per-word AND across title, subtitle, authors, notes, filenames */
   @IsOptional()
   @IsString()
   q?: string;
@@ -23,38 +24,54 @@ export class SearchQueryDto {
   @Max(100)
   limit?: number = 20;
 
-  // Text filters
+  // ── Text filters (fuzzy, operator AND — contribute to scoring) ──
+
+  /** Title — fuzzy per-word AND on metadata.title */
   @IsOptional()
   @IsString()
   title?: string;
 
+  /** Author — fuzzy per-word AND on familyName / firstName */
   @IsOptional()
   @IsString()
   author?: string;
 
+  /** Full-text — searches inside extracted PDF text (nested, operator AND) */
+  @IsOptional()
+  @IsString()
+  fullText?: string;
+
+  // ── Multi-select exact filters (comma-separated, filter context) ──
+
+  /** Publisher — comma-separated exact values */
   @IsOptional()
   @IsString()
   publisher?: string;
 
-  @IsOptional()
-  @IsString()
-  series?: string;
-
-  // Year: "1990" or "1990-2000"
-  @IsOptional()
-  @Matches(/^\d{4}(-\d{4})?$/, { message: 'year must be YYYY or YYYY-YYYY' })
-  year?: string;
-
-  // Coded fields
+  /** Language — comma-separated language name values (metadata.language.en) */
   @IsOptional()
   @IsString()
   language?: string;
 
+  /** Material type — comma-separated type name values (metadata.materialType.en) */
   @IsOptional()
   @IsString()
   materialType?: string;
 
-  // Exact identifiers
+  // ── Range filters ──
+
+  /** Publication year start (YYYY) */
+  @IsOptional()
+  @Matches(/^\d{4}$/, { message: 'yearFrom must be YYYY' })
+  yearFrom?: string;
+
+  /** Publication year end (YYYY) */
+  @IsOptional()
+  @Matches(/^\d{4}$/, { message: 'yearTo must be YYYY' })
+  yearTo?: string;
+
+  // ── Exact identifiers ──
+
   @IsOptional()
   @IsString()
   isbn?: string;
@@ -67,9 +84,12 @@ export class SearchQueryDto {
   @IsString()
   cobissId?: string;
 
+  // ── Response shape ──
+
+  /** Comma-separated field names to include in the response. If omitted, all fields are returned. `id` is always included. */
   @IsOptional()
   @IsString()
-  fullText?: string;
+  fields?: string;
 
   @IsOptional()
   @IsEnum(['relevance', 'newest'])

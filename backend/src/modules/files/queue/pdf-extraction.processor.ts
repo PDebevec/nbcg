@@ -2,9 +2,9 @@ import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { TextExtractionStatus } from '../../../../generated/prisma/enums';
-import { PrismaService } from 'src/core/prisma/prisma.service';
-import { SeaweedfsService } from 'src/core/seaweedfs/seaweedfs.service';
-import { TikaService } from 'src/core/tika/tika.service';
+import { PrismaService } from '../../../core/prisma/prisma.service';
+import { SeaweedfsService } from '../../../core/seaweedfs/seaweedfs.service';
+import { TikaService } from '../../../core/tika/tika.service';
 import { PdfExtractionJobData } from './pdf-extraction-job.types';
 
 const MAX_EXTRACTED_TEXT_LENGTH = 5_000_000;

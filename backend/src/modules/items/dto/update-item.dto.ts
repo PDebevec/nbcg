@@ -1,4 +1,4 @@
-import { IsEnum, IsObject, IsOptional } from 'class-validator';
+import { IsEnum, IsInt, IsObject, IsOptional, Min } from 'class-validator';
 import { VisibilityStatus } from '../../../../generated/prisma/enums';
 
 export class UpdateItemDto {
@@ -9,4 +9,8 @@ export class UpdateItemDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
+
+  @IsInt()
+  @Min(0)
+  expectedVersion: number;
 }

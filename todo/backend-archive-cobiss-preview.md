@@ -1,6 +1,6 @@
 # Backend: Synchronous COBISS preview (fetch without persist)
 
-## Status: TODO
+## Status: DONE (backend) / TODO (frontend wire-up)
 
 ## Why we need it
 
@@ -34,9 +34,9 @@ left behind. A synchronous preview returns the normalized metadata for the form
 
 ## Tasks
 
-- [ ] Add the preview route (controller) reusing the existing fetch/parse utils.
-- [ ] Return normalized `CobissMetadata`; define error responses.
-- [ ] Require an appropriate scope (`import:execute`?) — decide during impl.
+- [x] Add the preview route (controller) reusing the existing fetch/parse utils.
+- [x] Return normalized `CobissMetadata`; define error responses.
+- [x] Require an appropriate scope (`import:execute`) — decided during impl.
 - [ ] Archive: wire "Get data" to call preview and prefill the form.
 
 ## Key Files

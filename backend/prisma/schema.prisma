@@ -42,11 +42,19 @@ enum TextExtractionStatus {
   NO_TEXT
 }
 
+enum FileRole {
+  SOURCE
+  ARCHIVAL
+  WEB
+  THUMBNAIL
+}
+
 model Draft {
   id               String           @id @default(cuid())
   visibilityStatus VisibilityStatus
   /// [RecordMetadata]
   metadata         Json?
+  version          Int              @default(0)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   createdByUserId  String
@@ -61,6 +69,7 @@ model Record {
   visibilityStatus VisibilityStatus
   /// [RecordMetadata]
   metadata         Json?
+  version          Int              @default(0)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   createdByUserId  String
@@ -77,6 +86,7 @@ model FileAttachment {
   draft         Draft?   @relation(fields: [draft_id], references: [id], onDelete: Cascade)
   record        Record?  @relation(fields: [record_id], references: [id], onDelete: Cascade)
   fileType      FileType
+  role          FileRole @default(SOURCE)
   originalFid   String
   extractedText        String?
   filename             String

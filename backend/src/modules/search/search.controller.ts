@@ -3,6 +3,7 @@ import { GetPrincipal } from '../../core/auth/get-principal.decorator';
 import type { Principal } from '../../core/auth/principal.type';
 import { SearchService } from './search.service';
 import { SearchQueryDto } from './dto/search-query.dto';
+import { SuggestQueryDto } from './dto/suggest-query.dto';
 
 @Controller('search')
 export class SearchController {
@@ -11,6 +12,12 @@ export class SearchController {
   @Get()
   search(@GetPrincipal() principal: Principal, @Query() dto: SearchQueryDto) {
     return this.searchService.search(dto, principal);
+  }
+
+  // Must be above :id to avoid "suggest" being captured as an id param
+  @Get('suggest')
+  suggest(@GetPrincipal() principal: Principal, @Query() dto: SuggestQueryDto) {
+    return this.searchService.suggest(dto, principal);
   }
 
   @Get(':id/children')

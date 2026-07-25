@@ -45,10 +45,16 @@ export class ItemsController {
   async update(
     @GetPrincipal() principal: Principal,
     @Param('id') id: string,
-    @Body() dto: UpdateItemDto = {},
+    @Body() dto: UpdateItemDto,
   ) {
     await this.access.assertCanManage(principal, id);
-    return this.itemsService.update(id, dto.visibilityStatus, dto.metadata, principal.sub);
+    return this.itemsService.update(
+      id,
+      dto.visibilityStatus,
+      dto.metadata,
+      principal.sub,
+      dto.expectedVersion,
+    );
   }
 
   @Delete()
