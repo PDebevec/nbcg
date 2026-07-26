@@ -199,9 +199,16 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
-import { getItem, type FileAttachment, type RecordMetadata } from 'src/api/search';
 import {
+  getItem,
+  type FileAttachment,
+  type IndexedRecord,
+  type RecordMetadata,
+} from 'src/api/search';
+import {
+  conflictCurrentVersion,
   createItem,
+  isVersionConflict,
   updateItem,
   listFiles,
   uploadFiles,
@@ -232,6 +239,12 @@ const visibilityStatus = ref<VisibilityStatus>('PRIVATE');
 
 // Full metadata object as loaded (preserves fields the form doesn't expose)
 let metadata: Record<string, unknown> = {};
+
+// Optimistic concurrency: last version we know of, plus a snapshot of the
+// loaded state so a 409 can be resolved by comparing what changed on each side.
+const currentVersion = ref(0);
+let originalMetadata: Record<string, unknown> = {};
+let originalVisibility: VisibilityStatus = 'PRIVATE';
 
 // Flat form model over the most common metadata fields
 const form = reactive({
@@ -316,13 +329,21 @@ const files = ref<FileAttachment[]>([]);
 const pendingFiles = ref<File[]>([]);
 const uploading = ref(false);
 
+function applyServerState(source: IndexedRecord) {
+  metadata = (source.metadata as unknown as Record<string, unknown>) ?? {};
+  visibilityStatus.value = source.visibilityStatus;
+  currentVersion.value = source.version ?? 0;
+  originalMetadata = structuredClone(metadata);
+  originalVisibility = source.visibilityStatus;
+  metadataToForm(metadata);
+  if (tab.value === 'json') jsonText.value = JSON.stringify(formToMetadata(), null, 2);
+}
+
 onMounted(async () => {
   if (isNew.value) return;
   try {
     const hit = await getItem(itemId.value!);
-    metadata = (hit.source.metadata as unknown as Record<string, unknown>) ?? {};
-    visibilityStatus.value = hit.source.visibilityStatus;
-    metadataToForm(metadata);
+    applyServerState(hit.source);
     files.value = await listFiles(itemId.value!);
   } catch {
     loadError.value = true;
@@ -353,10 +374,145 @@ async function onSave() {
         metadata: meta,
       });
     } else {
-      await updateItem(itemId.value!, {
-        visibilityStatus: visibilityStatus.value,
-        metadata: meta,
-      });
+      try {
+        await updateItem(itemId.value!, {
+          visibilityStatus: visibilityStatus.value,
+          metadata: meta,
+          expectedVersion: currentVersion.value,
+        });
+      } catch (err) {
+        if (!isVersionConflict(err)) throw err;
+        await handleConflict(meta as Record<string, unknown>, err);
+        return;
+      }
+    }
+    $q.notify({ type: 'positive', message: t('admin.edit.saved') });
+    goBack();
+  } catch (err) {
+    const detail =
+      (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+    $q.notify({
+      type: 'negative',
+      message: detail ? String(detail) : t('admin.items.actionFailed'),
+    });
+  } finally {
+    saving.value = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Optimistic concurrency (409) handling
+// ---------------------------------------------------------------------------
+
+function changedKeys(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): string[] {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...keys].filter(
+    (k) => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null),
+  );
+}
+
+// pgsync → OpenSearch indexing is eventually consistent; poll until the index
+// has caught up with the version the 409 reported.
+async function fetchFreshItem(minVersion: number): Promise<IndexedRecord | undefined> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 800));
+    try {
+      const hit = await getItem(itemId.value!);
+      if ((hit.source.version ?? 0) >= minVersion) return hit.source;
+    } catch {
+      // keep polling
+    }
+  }
+  return undefined;
+}
+
+async function handleConflict(attemptedMeta: Record<string, unknown>, err: unknown) {
+  const attemptedVisibility = visibilityStatus.value;
+  const serverVersion = conflictCurrentVersion(err);
+  const server = await fetchFreshItem(serverVersion ?? currentVersion.value + 1);
+
+  if (server) {
+    const serverMeta = (server.metadata as unknown as Record<string, unknown>) ?? {};
+    const userKeys = changedKeys(originalMetadata, attemptedMeta);
+    const serverKeys = changedKeys(originalMetadata, serverMeta);
+    const metadataOverlap = userKeys.some(
+      (k) =>
+        serverKeys.includes(k) &&
+        JSON.stringify(attemptedMeta[k] ?? null) !== JSON.stringify(serverMeta[k] ?? null),
+    );
+    const visibilityOverlap =
+      attemptedVisibility !== originalVisibility &&
+      server.visibilityStatus !== originalVisibility &&
+      server.visibilityStatus !== attemptedVisibility;
+
+    if (!metadataOverlap && !visibilityOverlap) {
+      // Both sides touched different fields (e.g. the server-side count
+      // trigger bumped the version): merge onto the server state and retry
+      // without bothering the user.
+      const mergedMeta: Record<string, unknown> = { ...serverMeta };
+      for (const k of userKeys) mergedMeta[k] = attemptedMeta[k];
+      try {
+        const result = await updateItem(itemId.value!, {
+          visibilityStatus: attemptedVisibility,
+          metadata: mergedMeta as Partial<RecordMetadata>,
+          expectedVersion: server.version ?? 0,
+        });
+        currentVersion.value = result?.version ?? (server.version ?? 0) + 1;
+        $q.notify({ type: 'positive', message: t('admin.edit.saved') });
+        goBack();
+        return;
+      } catch (retryErr) {
+        if (!isVersionConflict(retryErr)) throw retryErr;
+      }
+    }
+    applyServerState(server);
+  }
+
+  $q.notify({
+    type: 'warning',
+    timeout: 0,
+    multiLine: true,
+    message: t('admin.edit.conflictRefreshed'),
+    actions: [
+      {
+        label: t('admin.edit.saveAnyway'),
+        color: 'dark',
+        noCaps: true,
+        handler: () => void forceSave(attemptedMeta, attemptedVisibility),
+      },
+      { label: t('admin.edit.dismiss'), color: 'dark', noCaps: true },
+    ],
+  });
+}
+
+// Last-write-wins override: re-apply the user's attempted changes on top of
+// the freshest version we can determine.
+async function forceSave(
+  attemptedMeta: Record<string, unknown>,
+  attemptedVisibility: VisibilityStatus,
+) {
+  saving.value = true;
+  try {
+    let expected = currentVersion.value;
+    try {
+      const hit = await getItem(itemId.value!);
+      expected = Math.max(expected, hit.source.version ?? 0);
+    } catch {
+      // fall back to the last version we know
+    }
+    const payload = {
+      visibilityStatus: attemptedVisibility,
+      metadata: attemptedMeta as Partial<RecordMetadata>,
+    };
+    try {
+      await updateItem(itemId.value!, { ...payload, expectedVersion: expected });
+    } catch (err) {
+      const current = isVersionConflict(err) ? conflictCurrentVersion(err) : undefined;
+      if (current === undefined) throw err;
+      await updateItem(itemId.value!, { ...payload, expectedVersion: current });
     }
     $q.notify({ type: 'positive', message: t('admin.edit.saved') });
     goBack();

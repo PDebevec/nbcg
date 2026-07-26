@@ -322,6 +322,10 @@ export default {
       fileDeleted: 'Datoteka je obrisana.',
       save: 'Sačuvaj',
       saved: 'Sačuvano.',
+      conflictRefreshed:
+        'Ovaj zapis je u međuvremenu izmijenio drugi korisnik, pa vaše izmjene nijesu sačuvane. Obrazac je osvježen najnovijim podacima — ponovo unesite izmjene ili izaberite „Ipak sačuvaj“ da prepišete tuđe izmjene.',
+      saveAnyway: 'Ipak sačuvaj',
+      dismiss: 'Zatvori',
     },
     import: {
       title: 'COBISS uvoz',

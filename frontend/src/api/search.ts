@@ -140,6 +140,7 @@ export interface IndexedRecord {
   id: string;
   visibilityStatus: 'PUBLIC' | 'PRIVATE' | 'HIDDEN';
   metadata: RecordMetadata;
+  version: number;
   createdAt: string;
   updatedAt: string;
   createdByUserId: string;

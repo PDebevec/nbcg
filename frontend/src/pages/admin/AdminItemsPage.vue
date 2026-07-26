@@ -158,7 +158,9 @@ import { useI18n } from 'vue-i18n';
 import { useQuasar, type QTableColumn, type QTableProps } from 'quasar';
 import { searchItems, type IndexedRecord } from 'src/api/search';
 import {
+  conflictCurrentVersion,
   deleteItems,
+  isVersionConflict,
   transitionItems,
   updateItem,
   VISIBILITY_STATUSES,
@@ -181,6 +183,7 @@ interface Row {
   cobissId: string;
   visibilityStatus: VisibilityStatus;
   updatedAt: string;
+  version: number;
 }
 
 const rows = ref<Row[]>([]);
@@ -224,6 +227,7 @@ function toRow(source: IndexedRecord): Row {
     cobissId: m?.cobissId ?? '',
     visibilityStatus: source.visibilityStatus,
     updatedAt: source.updatedAt,
+    version: source.version ?? 0,
   };
 }
 
@@ -320,13 +324,30 @@ async function bulkTransition() {
   await runAction(() => transitionItems(ids, target), t('admin.items.transitioned'));
 }
 
+// A visibility-only PATCH cannot clash with concurrent metadata edits, so on a
+// version conflict (search index may lag behind the DB) simply retry with the
+// current version the server reported.
+async function setVisibility(item: { id: string; version: number }, status: VisibilityStatus) {
+  let expectedVersion = item.version;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await updateItem(item.id, { visibilityStatus: status, expectedVersion });
+      return;
+    } catch (err) {
+      const current = isVersionConflict(err) ? conflictCurrentVersion(err) : undefined;
+      if (current === undefined || attempt >= 2) throw err;
+      expectedVersion = current;
+    }
+  }
+}
+
 async function bulkSetVisibility(status: VisibilityStatus) {
-  const ids = selected.value.map((r) => r.id);
+  const targets = selected.value.map((r) => ({ id: r.id, version: r.version }));
   await runAction(
     async () => {
-      await Promise.all(ids.map((id) => updateItem(id, { visibilityStatus: status })));
+      await Promise.all(targets.map((item) => setVisibility(item, status)));
     },
-    t('admin.items.visibilityUpdated', { count: ids.length }),
+    t('admin.items.visibilityUpdated', { count: targets.length }),
   );
 }
 </script>

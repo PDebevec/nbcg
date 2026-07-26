@@ -34,9 +34,27 @@ export async function createItem(params: {
 
 export async function updateItem(
   id: string,
-  params: { visibilityStatus?: VisibilityStatus; metadata?: Partial<RecordMetadata> },
-): Promise<void> {
-  await api.patch(`/items/${id}`, params);
+  params: {
+    visibilityStatus?: VisibilityStatus;
+    metadata?: Partial<RecordMetadata>;
+    expectedVersion: number;
+  },
+): Promise<{ version: number } | undefined> {
+  const { data } = await api.patch<{ version: number } | ''>(`/items/${id}`, params);
+  // The backend returns an empty body when the payload contained no changes.
+  return data && typeof data === 'object' ? data : undefined;
+}
+
+export function isVersionConflict(err: unknown): boolean {
+  return (err as { response?: { status?: number } })?.response?.status === 409;
+}
+
+/** Extract the server's current version from a 409 message ("expected 2, current 3"). */
+export function conflictCurrentVersion(err: unknown): number | undefined {
+  const message = (err as { response?: { data?: { message?: string } } })?.response?.data
+    ?.message;
+  const match = /current (\d+)/.exec(String(message ?? ''));
+  return match ? Number(match[1]) : undefined;
 }
 
 export async function deleteItems(ids: string[]): Promise<void> {

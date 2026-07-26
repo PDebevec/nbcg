@@ -322,6 +322,10 @@ export default {
       fileDeleted: 'File deleted.',
       save: 'Save',
       saved: 'Saved.',
+      conflictRefreshed:
+        'This item was modified by another user, so your changes were not saved. The form has been refreshed with the latest data — re-apply your changes, or choose "Save anyway" to overwrite.',
+      saveAnyway: 'Save anyway',
+      dismiss: 'Dismiss',
     },
     import: {
       title: 'COBISS import',
