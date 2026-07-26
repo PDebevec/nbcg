@@ -160,15 +160,23 @@ export interface SearchParams {
   limit?: number;
   title?: string;
   author?: string;
+  /** Full-text search inside extracted PDF text */
+  fullText?: string;
+  /** Comma-separated multi-select; each value matched as exact phrase */
   publisher?: string;
-  series?: string;
-  /** "1990" or "1990-2000" */
-  year?: string;
+  /** Publication year range start ("YYYY") */
+  yearFrom?: string;
+  /** Publication year range end ("YYYY") */
+  yearTo?: string;
+  /** Comma-separated multi-select of language names (metadata.language.en) */
   language?: string;
+  /** Comma-separated multi-select of material type names (metadata.materialType.en) */
   materialType?: string;
   isbn?: string;
   issn?: string;
   cobissId?: string;
+  /** Comma-separated field names for _source.includes; `id` is always returned */
+  fields?: string;
   sort?: 'relevance' | 'newest';
 }
 
@@ -188,11 +196,78 @@ export interface SearchResult {
 }
 
 // ---------------------------------------------------------------------------
-// Typed API call
+// Suggest API (GET /search/suggest) — universal autocomplete / dropdown values
+// ---------------------------------------------------------------------------
+
+/** Fields whose suggestions are plain strings (typeahead text inputs) */
+export type SuggestStringField =
+  | 'title'
+  | 'subtitle'
+  | 'seriesTitle'
+  | 'publisher'
+  | 'place'
+  | 'firstResponsibility'
+  | 'edition'
+  | 'notes';
+
+/** Fields whose suggestions are ResolvedCode objects (enum dropdowns) */
+export type SuggestCodeField =
+  | 'language'
+  | 'originalLanguage'
+  | 'materialType'
+  | 'country'
+  | 'recordType'
+  | 'bibliographicLevel';
+
+export type SuggestField = SuggestStringField | SuggestCodeField | 'author';
+
+export interface AuthorSuggestion {
+  familyName?: string;
+  firstName?: string;
+  prefix?: string;
+  dates?: string;
+  role?: ResolvedCode;
+}
+
+export interface SuggestItem<V = string | ResolvedCode | AuthorSuggestion> {
+  value: V;
+  count: number;
+}
+
+export interface SuggestResult<V = string | ResolvedCode | AuthorSuggestion> {
+  field: string;
+  suggestions: SuggestItem<V>[];
+}
+
+export interface SuggestParams {
+  field: SuggestField;
+  /** Partial text for typeahead filtering; omit to get top values by frequency */
+  q?: string;
+  /** 1–50, default 10 */
+  limit?: number;
+  type?: 'all' | 'records' | 'drafts';
+}
+
+// ---------------------------------------------------------------------------
+// Typed API calls
 // ---------------------------------------------------------------------------
 
 export async function searchItems(params: SearchParams): Promise<SearchResult> {
   const { data } = await api.get<SearchResult>('/search', { params });
+  return data;
+}
+
+export async function suggestValues(
+  params: SuggestParams & { field: SuggestStringField },
+): Promise<SuggestResult<string>>;
+export async function suggestValues(
+  params: SuggestParams & { field: SuggestCodeField },
+): Promise<SuggestResult<ResolvedCode>>;
+export async function suggestValues(
+  params: SuggestParams & { field: 'author' },
+): Promise<SuggestResult<AuthorSuggestion>>;
+export async function suggestValues(params: SuggestParams): Promise<SuggestResult> {
+  const { data } = await api.get<SuggestResult>('/search/suggest', { params });
   return data;
 }
 

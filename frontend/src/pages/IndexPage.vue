@@ -10,7 +10,7 @@
       <div class="row justify-center">
         <div class="col-12 col-md-11 col-lg-10">
           <!-- SEARCH BAR -->
-          <div class="search-bar bg-white row no-wrap items-center">
+          <div class="search-bar bg-library-surface row no-wrap items-center">
             <q-select
               v-model="searchType"
               :options="searchTypes"
@@ -34,7 +34,7 @@
               round
               dense
               :icon="fullTextSearch ? 'manage_search' : 'text_fields'"
-              :color="fullTextSearch ? 'primary' : 'grey-5'"
+              :color="fullTextSearch ? 'primary' : 'library-muted'"
               size="sm"
               class="q-mr-xs"
               @click="fullTextSearch = !fullTextSearch"
@@ -44,7 +44,7 @@
             <q-separator vertical inset class="q-mr-xs" />
             <q-btn
               unelevated
-              color="secondary"
+              color="primary"
               text-color="white"
               icon="search"
               :label="t('common.search')"
@@ -69,11 +69,11 @@
               flat
               bordered
               v-ripple
-              class="collection-card bg-white text-center q-pa-lg cursor-pointer full-height"
+              class="collection-card bg-library-surface text-center q-pa-lg cursor-pointer full-height"
               @click="openCollection(col)"
             >
               <q-icon :name="col.icon" size="40px" color="primary" />
-              <div class="text-weight-semibold text-library-ink q-mt-sm">{{ t(`index.collections.${col.key}`) }}</div>
+              <div class="text-weight-semibold text-library-muted q-mt-sm">{{ t(`index.collections.${col.key}`) }}</div>
             </q-card>
           </div>
         </div>
@@ -93,7 +93,7 @@
             :key="tc.key"
             flat
             bordered
-            class="thematic-slide bg-white"
+            class="thematic-slide bg-library-surface"
             :class="{ 'is-active': i === thematicIndex }"
             :style="thematicStyle(i)"
             @click="goToThematic(i)"
@@ -120,7 +120,7 @@
         <q-separator color="secondary" size="3px" class="section-separator section-separator--left q-mb-md" />
         <div class="row q-col-gutter-md">
           <div v-for="item in newestItems" :key="item.id" class="col-12 col-sm-6">
-            <q-card flat v-ripple class="newest-card bg-white cursor-pointer" @click="openRecord(item)">
+            <q-card flat v-ripple class="newest-card bg-library-surface cursor-pointer" @click="openRecord(item)">
               <div class="row no-wrap full-height">
                 <q-img :src="coverUrl(item)" fit="cover" class="newest-cover" />
                 <div class="col q-pa-md column justify-between">
@@ -150,7 +150,7 @@
         <h2 class="text-h5 text-weight-bold text-primary q-mt-none q-mb-md">
           {{ t('index.aboutTitle') }}
         </h2>
-        <div class="about-text text-library-ink">
+        <div class="about-text text-library-muted">
           <p>{{ t('index.aboutP1') }}</p>
           <p>{{ t('index.aboutP2') }}</p>
           <p>{{ t('index.aboutP3') }}</p>
@@ -290,7 +290,19 @@ const newestItems = ref<SearchHit[]>([]);
 
 onMounted(async () => {
   try {
-    const result = await searchItems({ type: 'records', sort: 'newest', limit: 4 });
+    const result = await searchItems({
+      type: 'records',
+      sort: 'newest',
+      limit: 4,
+      fields: [
+        'metadata.title',
+        'metadata.firstResponsibility',
+        'metadata.publicationDate1',
+        'metadata.materialType',
+        'file_attachments.id',
+        'file_attachments.fileType',
+      ].join(','),
+    });
     newestItems.value = result.hits;
   } catch {
     newestItems.value = [];
@@ -312,12 +324,12 @@ const typeColorMap: Record<string, string> = {
   'Manuscript':         'accent',
   'Map':                'positive',
   'Printed music':      'info',
-  'Sound recording':    'purple',
+  'Sound recording':    'negative',
   'Visual material':    'warning',
 };
 
 function typeColor(type: string) {
-  return typeColorMap[type] ?? 'grey-6';
+  return typeColorMap[type] ?? 'library-muted';
 }
 
 async function doSearch() {
@@ -470,7 +482,7 @@ async function doSearch() {
   letter-spacing: 0.08em
 
 .about-section
-  background: linear-gradient(180deg, color.adjust($paper, $lightness: 2%), $paper)
+  background: linear-gradient(180deg, $surface, $paper)
   border: 1px solid $divider
   border-radius: 16px
   box-shadow: 0 4px 20px rgba($dark, 0.06)

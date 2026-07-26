@@ -48,7 +48,7 @@
 
           <!-- Bulk actions -->
           <div v-if="selected.length > 0" class="row items-center q-gutter-sm">
-            <span class="text-caption text-grey-8">
+            <span class="text-caption text-library-muted">
               {{ t('admin.items.selected', { count: selected.length }) }}
             </span>
             <q-btn-dropdown
@@ -117,7 +117,7 @@
               dense
               round
               icon="open_in_new"
-              color="grey-7"
+              color="library-muted"
               :to="`/catalog/${cellProps.row.id}`"
               target="_blank"
             >
@@ -143,7 +143,7 @@
         </template>
 
         <template #no-data>
-          <div class="full-width text-center q-pa-lg text-grey-7">
+          <div class="full-width text-center q-pa-lg text-library-muted">
             {{ t('admin.items.empty') }}
           </div>
         </template>
@@ -238,6 +238,16 @@ async function fetchPage(page: number, limit: number) {
       type: props.collection,
       page,
       limit,
+      fields: [
+        'metadata.title',
+        'metadata.firstResponsibility',
+        'metadata.publication.year',
+        'metadata.publicationDate1',
+        'metadata.cobissId',
+        'visibilityStatus',
+        'updatedAt',
+        'version',
+      ].join(','),
       ...(searchText.value ? { q: searchText.value } : {}),
     });
     rows.value = result.hits.map((h) => toRow(h.source));
@@ -358,7 +368,7 @@ async function bulkSetVisibility(status: VisibilityStatus) {
   margin: 0 auto
 
 .items-table
-  background: white
+  background: $surface
   border-radius: 12px
 
 .title-link

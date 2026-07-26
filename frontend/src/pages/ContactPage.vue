@@ -12,27 +12,27 @@
         <div class="row items-center q-gutter-md q-mb-lg">
           <q-icon name="call" color="primary" size="28px" />
           <div>
-            <div class="text-weight-semibold text-library-ink">{{ t('contact.phone') }}</div>
+            <div class="text-weight-semibold text-library-muted">{{ t('contact.phone') }}</div>
             <div class="text-library-muted">+ 382 41 234 243, lokal 13</div>
           </div>
         </div>
 
-        <q-separator color="grey-3" class="q-my-md" />
+        <q-separator color="library-divider" class="q-my-md" />
 
         <div class="row items-center q-gutter-md q-mb-lg">
           <q-icon name="mail" color="primary" size="28px" />
           <div>
-            <div class="text-weight-semibold text-library-ink">{{ t('contact.email') }}</div>
+            <div class="text-weight-semibold text-library-muted">{{ t('contact.email') }}</div>
             <a href="mailto:info@dlib.me" class="contact-link">info@dlib.me</a>
           </div>
         </div>
 
-        <q-separator color="grey-3" class="q-my-md" />
+        <q-separator color="library-divider" class="q-my-md" />
 
         <div class="row items-center q-gutter-md">
           <q-icon name="location_on" color="primary" size="28px" />
           <div>
-            <div class="text-weight-semibold text-library-ink">{{ t('contact.address') }}</div>
+            <div class="text-weight-semibold text-library-muted">{{ t('contact.address') }}</div>
             <div class="text-library-muted">
               {{ t('contact.addressValue') }}
             </div>
@@ -90,7 +90,7 @@ const { t } = useI18n();
   margin: 0 auto
 
 .content-card
-  background: $paper
+  background: $surface
   border: 1px solid $divider
   border-radius: 16px
   box-shadow: 0 4px 20px rgba($dark, 0.06)

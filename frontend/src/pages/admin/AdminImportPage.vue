@@ -69,7 +69,7 @@
                 <q-btn flat dense round icon="refresh" color="primary" @click="refreshJobs" />
               </div>
 
-              <div v-if="jobs.length === 0" class="text-grey-7 text-center q-pa-md">
+              <div v-if="jobs.length === 0" class="text-library-muted text-center q-pa-md">
                 {{ t('admin.import.noJobs') }}
               </div>
 
@@ -179,7 +179,7 @@ function stateColor(job: ImportJobStatus): string {
     case 'active':
       return 'primary';
     default:
-      return 'grey-7';
+      return 'library-muted';
   }
 }
 
@@ -277,6 +277,6 @@ onUnmounted(stopPolling);
   margin: 0 auto
 
 .panel-card
-  background: white
+  background: $surface
   border-radius: 12px
 </style>

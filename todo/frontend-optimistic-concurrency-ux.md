@@ -1,6 +1,31 @@
 # Frontend: Handle optimistic concurrency conflicts (409)
 
-## Status: TODO
+## Status: DONE (Options A + C; Option B left for a future iteration)
+
+## Implementation notes (2026-07-26)
+
+- Corrections to the context below, discovered during implementation:
+  - The frontend is Quasar/Vue (not Next.js) and there is no separate archive
+    desktop app in this repo.
+  - `expectedVersion` is **required** by the backend DTO (`update-item.dto.ts`),
+    not optional — a PATCH without it fails validation with 400. "Save anyway"
+    therefore does not omit the version; it re-fetches the current version and
+    retries with it (same last-write-wins effect).
+- `version` is available to the client because pgsync indexes it into
+  OpenSearch (`infrastructure/docker/pgsync/schema.json`) and the search API
+  returns it in `_source`.
+- Changed files:
+  - `frontend/src/api/search.ts` — `IndexedRecord.version`.
+  - `frontend/src/api/admin.ts` — `updateItem` takes `expectedVersion`, returns
+    `{ version }`; `isVersionConflict()` / `conflictCurrentVersion()` helpers.
+  - `frontend/src/pages/admin/AdminItemEditPage.vue` — tracks version + a
+    snapshot of the loaded state; on 409 re-fetches (polling past pgsync lag),
+    merges & retries silently when the changes don't overlap, otherwise
+    refreshes the form and shows a sticky warning with a "Save anyway" action.
+  - `frontend/src/pages/admin/AdminItemsPage.vue` — rows carry `version`; bulk
+    visibility changes retry on 409 with the server's reported current version.
+  - `frontend/src/i18n/en-US/index.ts`, `frontend/src/i18n/me/index.ts` — new
+    `admin.edit.conflictRefreshed` / `saveAnyway` / `dismiss` strings.
 
 ## Context
 
@@ -81,12 +106,12 @@ Show a warning/error notification or modal:
 
 ## Tasks
 
-- [ ] Store `version` from item fetch responses in client state.
-- [ ] Include `expectedVersion` in PATCH request body.
-- [ ] Intercept 409 responses in the API client / fetch wrapper.
-- [ ] Implement auto-retry for non-conflicting field changes.
-- [ ] Show conflict warning with auto-refresh (Option A).
-- [ ] (Optional) Add "Save anyway" escape hatch (Option C).
+- [x] Store `version` from item fetch responses in client state.
+- [x] Include `expectedVersion` in PATCH request body.
+- [x] Intercept 409 responses in the API client / fetch wrapper.
+- [x] Implement auto-retry for non-conflicting field changes.
+- [x] Show conflict warning with auto-refresh (Option A).
+- [x] (Optional) Add "Save anyway" escape hatch (Option C).
 - [ ] (Future) Side-by-side conflict resolution UI (Option B).
 
 ## Key Files

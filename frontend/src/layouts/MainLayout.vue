@@ -236,11 +236,11 @@ const headerLinks = navLinks.filter((l) => l.to !== '/napredna-pretraga');
 @use 'sass:color'
 
 .library-shell
-  background: linear-gradient(180deg, color.adjust($paper, $lightness: 3%), $paper 35%, #ffffff)
+  background: linear-gradient(180deg, $surface, $paper 35%, $surface)
   min-height: 100vh
 
 .app-header
-  background: #ffffff
+  background: $surface
   color: $ink
   box-shadow: 0 2px 12px rgba($dark, 0.10)
 
@@ -263,7 +263,7 @@ const headerLinks = navLinks.filter((l) => l.to !== '/napredna-pretraga');
   height: 56px
   width: auto
   display: block
-  background: #ffffff
+  background: $surface
   border-radius: 8px
   padding: 6px 10px
 

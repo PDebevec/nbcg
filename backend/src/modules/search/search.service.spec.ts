@@ -114,7 +114,7 @@ describe('SearchService – query building', () => {
     const body = await searchWith({ language: 'Slovenian,English' });
     const userQuery = body.query.bool.must[0];
     const langFilter = userQuery.bool.filter[0];
-    expect(langFilter.terms['metadata.language.en']).toEqual(['Slovenian', 'English']);
+    expect(langFilter.terms['metadata.language.en.keyword']).toEqual(['Slovenian', 'English']);
   });
 
   // ── Material type (multi-select) ──
@@ -123,7 +123,7 @@ describe('SearchService – query building', () => {
     const body = await searchWith({ materialType: 'Book,Journal' });
     const userQuery = body.query.bool.must[0];
     const mtFilter = userQuery.bool.filter[0];
-    expect(mtFilter.terms['metadata.materialType.en']).toEqual(['Book', 'Journal']);
+    expect(mtFilter.terms['metadata.materialType.en.keyword']).toEqual(['Book', 'Journal']);
   });
 
   // ── Year range ──

@@ -1,6 +1,6 @@
 # Frontend: Update Search API to Match Backend Changes
 
-## Status: TODO
+## Status: DONE
 
 ## Summary
 
@@ -46,57 +46,58 @@ Universal autocomplete/dropdown endpoint. Params: `field`, `q` (optional), `limi
 
 ### 1. `frontend/src/api/search.ts` — Types & API Client
 
-- [ ] Update `SearchParams` interface:
+- [x] Update `SearchParams` interface:
   - Remove `series` property
   - Remove `year` property
   - Add `yearFrom?: string` and `yearTo?: string`
-  - Add `fields?: string`
+  - Add `fields?: string` (also added `fullText?: string` to mirror the backend DTO)
   - Update `publisher`, `language`, `materialType` JSDoc to note comma-separated multi-select
-- [ ] Add `SuggestParams` interface: `{ field: string; q?: string; limit?: number; type?: 'all' | 'records' | 'drafts' }`
-- [ ] Add `SuggestResult` and `SuggestItem` response interfaces
-- [ ] Add `suggestValues(params: SuggestParams): Promise<SuggestResult>` API function (GET /search/suggest)
+- [x] Add `SuggestParams` interface: `{ field: string; q?: string; limit?: number; type?: 'all' | 'records' | 'drafts' }`
+- [x] Add `SuggestResult` and `SuggestItem` response interfaces (generic over value type; `AuthorSuggestion` added)
+- [x] Add `suggestValues(params: SuggestParams): Promise<SuggestResult>` API function (GET /search/suggest) — overloaded so string/code/author fields return typed values. Locale-aware labels for `ResolvedCode` values live in `src/composables/useCodeLabel.ts` ('me' → cnr, otherwise en).
 
 ### 2. `frontend/src/pages/CatalogPage.vue` — Main Catalog Search
 
 This is the primary search consumer with the most filters.
 
-- [ ] **Language filter**: Replace hardcoded language options with a call to `suggestValues({ field: 'language' })`. Allow true multi-select and send as comma-separated string.
-- [ ] **MaterialType filter**: Replace hardcoded material type options with a call to `suggestValues({ field: 'materialType' })`. Allow multi-select (backend now supports comma-separated).
-- [ ] **Year/Era filter**: Era chips exist in UI but values are **not sent to API**. Wire up to `yearFrom` / `yearTo`:
+- [x] **Language filter**: Replace hardcoded language options with a call to `suggestValues({ field: 'language' })`. Allow true multi-select and send as comma-separated string.
+- [x] **MaterialType filter**: Replace hardcoded material type options with a call to `suggestValues({ field: 'materialType' })`. Converted from radio to checkbox multi-select; sent comma-separated. Filter values are the `en` names (backend filters on `metadata.*.en`), labels follow the locale.
+- [x] **Year/Era filter**: Era chips now set `yearFrom` / `yearTo` per the mapping below; a custom range arriving via router query (from advanced search) is honored without selecting a chip.
   - Pre-1800 → `yearTo=1799`
   - 19th century → `yearFrom=1800&yearTo=1899`
   - 1900–1950 → `yearFrom=1900&yearTo=1950`
   - 1950–2000 → `yearFrom=1950&yearTo=2000`
   - Post-2000 → `yearFrom=2001`
-- [ ] **Sorting**: `sortBy` options include `year-asc` and `year-desc` in UI — verify these map correctly to the backend `sort` param (currently backend only supports `relevance` | `newest`; if more sort options needed, that's a separate backend task)
-- [ ] **`fields` param**: Use `fields` to request only the fields needed for list display to reduce payload size
+- [x] **Sorting**: UI options reduced to `relevance` | `newest` (the only values the backend supports) and the `sort` param is now actually sent. Year/title sorting would be a separate backend task.
+- [x] **`fields` param**: List/grid requests now ask only for title, firstResponsibility, publicationDate1, materialType, language, publication.publisher and file attachment id/fileType.
+- Also: CatalogPage now reads `language`, `publisher`, `yearFrom`, `yearTo` router query params (used by AdvancedSearchPage).
 
 ### 3. `frontend/src/pages/IndexPage.vue` — Homepage
 
-- [ ] Replace hardcoded material type collection buttons with options from `suggestValues({ field: 'materialType' })`, or keep hardcoded if only specific collections should appear
-- [ ] Consider using `fields` for the "newest items" cards to reduce payload
+- [x] Collection buttons **kept hardcoded** — they are a curated set with icons/translations, not a 1:1 material-type list (e.g. posters/photographs have no materialType).
+- [x] "Newest items" request now uses `fields` to fetch only what the cards render.
 
 ### 4. `frontend/src/pages/AdvancedSearchPage.vue` — Advanced Search Form
 
-- [ ] **Year fields**: Form already has `yearFrom` and `yearTo` number inputs but they are **not sent to CatalogPage** via router query. Wire them up as `yearFrom` / `yearTo` query params.
-- [ ] Remove any reference to `series` if present.
-- [ ] Add publisher autocomplete using `suggestValues({ field: 'publisher', q: userInput })`
-- [ ] Add language/materialType dropdowns using `suggestValues` instead of hardcoded values
+- [x] **Year fields**: Now sent to CatalogPage as `yearFrom` / `yearTo` query params (padded to 4 digits, as the backend requires `YYYY`).
+- [x] No `series` reference was present.
+- [x] Publisher autocomplete via `suggestValues({ field: 'publisher', q })` (free text still allowed).
+- [x] Language and materialType dropdowns populated from `suggestValues` (with an "All" option).
 
 ### 5. `frontend/src/pages/admin/AdminItemEditPage.vue` — Item Create/Edit
 
-- [ ] Use `suggestValues({ field: 'author', q: userInput })` for author autocomplete on add/edit
-- [ ] Use `suggestValues({ field: 'publisher', q: userInput })` for publisher autocomplete
-- [ ] Use `suggestValues({ field: 'language' })` and `suggestValues({ field: 'materialType' })` to populate enum dropdowns instead of hardcoded values
-- [ ] Use `suggestValues({ field: 'country' })` for country dropdown if applicable
+- [x] Author autocomplete on the "Author / responsibility" field via `suggestValues({ field: 'author', q })` — suggestions rendered as "FirstName FamilyName", free text still allowed.
+- [x] Publisher autocomplete via `suggestValues({ field: 'publisher', q })`.
+- [x] New form fields added: materialType (single select), languages (multi select) — options from `suggestValues`.
+- [x] Country multi-select added, options from `suggestValues({ field: 'country' })`.
 
 ### 6. `frontend/src/pages/admin/AdminItemsPage.vue` — Admin Items List
 
-- [ ] No breaking changes expected (only uses `q`, `type`, `page`, `limit`). Consider using `fields` to lighten admin table payload.
+- [x] No breaking changes; `fields` param added so the table fetches only the columns it renders.
 
 ### 7. `frontend/src/pages/RecordDetailPage.vue` — Record Detail
 
-- [ ] Uses `getItem(id)` — no search param changes needed. Display logic unchanged.
+- [x] Uses `getItem(id)` — no search param changes needed. Display logic unchanged.
 
 ## Migration Notes
 

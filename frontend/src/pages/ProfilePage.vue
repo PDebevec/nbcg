@@ -94,7 +94,7 @@ function onLogout() {
   margin: 0 auto
 
 .content-card
-  background: $paper
+  background: $surface
   border: 1px solid $divider
   border-radius: 16px
   box-shadow: 0 4px 20px rgba($dark, 0.06)

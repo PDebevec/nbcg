@@ -13,10 +13,29 @@
           <q-input v-model="title" outlined dense :label="t('advanced.titleField')" class="col-12 col-md-6" />
           <q-input v-model="author" outlined dense :label="t('advanced.author')" class="col-12 col-md-6" />
           <q-select
+            :model-value="publisher"
+            :options="publisherOptions"
+            outlined dense use-input fill-input hide-selected clearable
+            input-debounce="300"
+            :label="t('advanced.publisher')"
+            class="col-12 col-md-6"
+            @filter="filterPublisher"
+            @input-value="publisher = $event"
+            @update:model-value="publisher = $event ?? ''"
+            @clear="publisher = ''"
+          />
+          <q-select
             v-model="materialType"
             :options="typeOptions"
             outlined dense emit-value map-options
             :label="t('advanced.materialType')"
+            class="col-12 col-md-6"
+          />
+          <q-select
+            v-model="language"
+            :options="languageOptions"
+            outlined dense emit-value map-options
+            :label="t('advanced.language')"
             class="col-12 col-md-6"
           />
           <q-input v-model="yearFrom" outlined dense :label="t('advanced.yearFrom')" type="number" class="col-6 col-md-3" />
@@ -25,7 +44,7 @@
 
         <div class="row justify-end q-gutter-sm q-mt-lg">
           <q-btn flat no-caps color="negative" :label="t('common.reset')" icon="restart_alt" @click="reset" />
-          <q-btn unelevated no-caps color="secondary" text-color="white" :label="t('common.search')" icon="search" @click="search" />
+          <q-btn unelevated no-caps color="primary" text-color="white" :label="t('common.search')" icon="search" @click="search" />
         </div>
       </div>
     </div>
@@ -33,44 +52,104 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { suggestValues, type ResolvedCode } from 'src/api/search';
+import { useCodeLabel } from 'src/composables/useCodeLabel';
 
 const router = useRouter();
 const { t } = useI18n();
+const { codeLabel } = useCodeLabel();
 
 const title = ref('');
 const author = ref('');
+const publisher = ref('');
 const materialType = ref('vse');
+const language = ref('vse');
 const yearFrom = ref('');
 const yearTo = ref('');
 
+// Option values are the `en` names — the backend filters match on metadata.*.en
+const materialTypeCodes = ref<ResolvedCode[]>([]);
+const languageCodes = ref<ResolvedCode[]>([]);
+
 const typeOptions = computed(() => [
-  { label: t('advanced.types.all'),         value: 'vse' },
-  { label: t('advanced.types.books'),       value: 'Monograph' },
-  { label: t('advanced.types.periodicals'), value: 'Serial publication' },
-  { label: t('advanced.types.manuscripts'), value: 'Manuscript' },
-  { label: t('advanced.types.maps'),        value: 'Map' },
-  { label: t('advanced.types.music'),       value: 'Sound recording' },
-  { label: t('advanced.types.visual'),      value: 'Visual material' },
+  { label: t('advanced.types.all'), value: 'vse' },
+  ...materialTypeCodes.value.map((c) => ({ label: codeLabel(c), value: c.en })),
 ]);
+
+const languageOptions = computed(() => [
+  { label: t('advanced.languages.all'), value: 'vse' },
+  ...languageCodes.value.map((c) => ({ label: codeLabel(c), value: c.en })),
+]);
+
+onMounted(async () => {
+  try {
+    const [types, langs] = await Promise.all([
+      suggestValues({ field: 'materialType', limit: 50, type: 'records' }),
+      suggestValues({ field: 'language', limit: 50, type: 'records' }),
+    ]);
+    materialTypeCodes.value = types.suggestions.map((s) => s.value);
+    languageCodes.value = langs.suggestions.map((s) => s.value);
+  } catch {
+    materialTypeCodes.value = [];
+    languageCodes.value = [];
+  }
+});
+
+const publisherOptions = ref<string[]>([]);
+
+function filterPublisher(input: string, doneFn: (cb: () => void) => void) {
+  void (async () => {
+    let options: string[] = [];
+    try {
+      const result = await suggestValues({
+        field: 'publisher',
+        ...(input.trim() ? { q: input.trim() } : {}),
+        limit: 10,
+        type: 'records',
+      });
+      options = result.suggestions.map((s) => s.value);
+    } catch {
+      options = [];
+    }
+    doneFn(() => {
+      publisherOptions.value = options;
+    });
+  })();
+}
+
+// Backend requires exactly 4 digits ("YYYY")
+function toYearParam(value: string): string | undefined {
+  const n = value.trim();
+  if (!/^\d{1,4}$/.test(n)) return undefined;
+  return n.padStart(4, '0');
+}
 
 function reset() {
   title.value = '';
   author.value = '';
+  publisher.value = '';
   materialType.value = 'vse';
+  language.value = 'vse';
   yearFrom.value = '';
   yearTo.value = '';
 }
 
 async function search() {
   const q = [title.value, author.value].filter((s) => s.trim()).join(' ').trim();
+  const from = toYearParam(yearFrom.value);
+  const to = toYearParam(yearTo.value);
   await router.push({
     path: '/catalog',
     query: {
       ...(q ? { q } : {}),
+      ...(publisher.value.trim() ? { publisher: publisher.value.trim() } : {}),
       ...(materialType.value !== 'vse' ? { materialType: materialType.value } : {}),
+      ...(language.value !== 'vse' ? { language: language.value } : {}),
+      ...(from ? { yearFrom: from } : {}),
+      ...(to ? { yearTo: to } : {}),
     },
   });
 }
@@ -94,7 +173,7 @@ async function search() {
   margin: 0 auto
 
 .content-card
-  background: $paper
+  background: $surface
   border: 1px solid $divider
   border-radius: 16px
   box-shadow: 0 4px 20px rgba($dark, 0.06)

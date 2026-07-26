@@ -52,7 +52,7 @@ const { t } = useI18n();
   font-weight: 700
 
 .content-card
-  background: linear-gradient(180deg, color.adjust($paper, $lightness: 2%), $paper)
+  background: linear-gradient(180deg, $surface, $paper)
   border: 1px solid $divider
   border-radius: 16px
   box-shadow: 0 4px 20px rgba($dark, 0.06)

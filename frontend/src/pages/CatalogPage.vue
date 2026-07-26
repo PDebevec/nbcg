@@ -42,13 +42,13 @@
               class="q-mb-md"
             >
               <template #prepend>
-                <q-icon name="search" size="18px" color="grey-6" />
+                <q-icon name="search" size="18px" color="library-muted" />
               </template>
               <template #append>
                 <q-btn
                   flat round dense
                   :icon="fullTextSearch ? 'manage_search' : 'text_fields'"
-                  :color="fullTextSearch ? 'primary' : 'grey-5'"
+                  :color="fullTextSearch ? 'primary' : 'library-muted'"
                   size="sm"
                   @click="fullTextSearch = !fullTextSearch"
                   >
@@ -59,20 +59,24 @@
 
             <!-- TYPE -->
             <div class="section-label text-library-muted q-mb-sm">{{ t('catalog.itemType') }}</div>
-            <q-option-group
-              v-model="selectedType"
-              :options="typeOptions"
-              color="primary" dense
-              class="q-mb-md"
-            />
+            <div class="column q-gutter-xs q-mb-md filter-scroll">
+              <q-checkbox
+                v-for="opt in typeOptions"
+                :key="opt.value"
+                v-model="selectedTypes"
+                :val="opt.value"
+                :label="opt.label"
+                color="primary" dense
+              />
+            </div>
 
-            <q-separator color="grey-3" class="q-my-md" />
+            <q-separator color="library-divider" class="q-my-md" />
 
             <!-- LANGUAGE -->
             <div class="section-label text-library-muted q-mb-sm">{{ t('catalog.language') }}</div>
-            <div class="column q-gutter-xs q-mb-md">
+            <div class="column q-gutter-xs q-mb-md filter-scroll">
               <q-checkbox
-                v-for="lang in languages"
+                v-for="lang in languageOptions"
                 :key="lang.value"
                 v-model="selectedLanguages"
                 :val="lang.value"
@@ -81,7 +85,7 @@
                 />
             </div>
 
-            <q-separator color="grey-3" class="q-my-md" />
+            <q-separator color="library-divider" class="q-my-md" />
 
             <!-- ERA -->
             <div class="section-label text-library-muted q-mb-sm">{{ t('catalog.period') }}</div>
@@ -90,15 +94,15 @@
                 v-for="era in eras"
                 :key="era.value"
                 :outline="selectedEra !== era.value"
-                :color="selectedEra === era.value ? 'primary' : 'grey-5'"
-                :text-color="selectedEra === era.value ? 'white' : 'grey-7'"
+                :color="selectedEra === era.value ? 'primary' : 'library-muted'"
+                :text-color="selectedEra === era.value ? 'white' : 'library-muted'"
                 clickable
                 size="sm"
-                @click="selectedEra = era.value"
+                @click="selectEra(era)"
               >{{ era.label }}</q-chip>
             </div>
 
-            <q-separator color="grey-3" class="q-my-md" />
+            <q-separator color="library-divider" class="q-my-md" />
 
             <q-btn
               flat no-caps dense
@@ -157,7 +161,7 @@
           </div>
 
           <!-- LIST VIEW -->
-          <q-list v-else bordered separator class="rounded-borders bg-white">
+          <q-list v-else bordered separator class="rounded-borders bg-library-surface">
             <q-item
               v-for="item in filteredItems"
               :key="item.id"
@@ -179,7 +183,7 @@
               <q-item-section side>
                 <div class="column items-end q-gutter-xs">
                   <q-badge outline :color="typeColor(item.source.metadata.materialType?.en ?? '')" :label="item.source.metadata.materialType?.en" />
-                  <q-badge outline color="grey-5" text-color="grey-7" :label="item.source.metadata.language?.[0]?.en" />
+                  <q-badge outline color="library-muted" :label="item.source.metadata.language?.[0]?.en" />
                   <q-btn flat dense no-caps color="primary" :label="t('catalog.details')" size="xs" class="q-mt-xs" @click.stop="openRecord(item)" />
                 </div>
               </q-item-section>
@@ -209,11 +213,13 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import imageStock from 'src/assets/image-stock.jpg';
-import { searchItems, type SearchHit } from 'src/api/search';
+import { searchItems, suggestValues, type ResolvedCode, type SearchHit } from 'src/api/search';
+import { useCodeLabel } from 'src/composables/useCodeLabel';
 
 const router = useRouter();
 const route = useRoute();
 const { t } = useI18n();
+const { codeLabel } = useCodeLabel();
 function openRecord(item: SearchHit) {
   void router.push(`/catalog/${item.id}`);
 }
@@ -229,55 +235,97 @@ function queryStr(key: string): string {
   return typeof v === 'string' ? v : '';
 }
 
+function queryList(key: string): string[] {
+  return queryStr(key).split(',').map((s) => s.trim()).filter(Boolean);
+}
+
 const viewMode = ref<'grid' | 'list'>('list');
 const filterSearch = ref(queryStr('q'));
 const fullTextSearch = ref(queryStr('fullText') === '1');
-const selectedType = ref(queryStr('materialType') || 'vse');
-const selectedLanguages = ref<string[]>([]);
-const selectedEra = ref('vse');
-const sortBy = ref('relevance');
+const selectedTypes = ref<string[]>(queryList('materialType'));
+const selectedLanguages = ref<string[]>(queryList('language'));
+const publisherFilter = ref(queryStr('publisher'));
+const yearFrom = ref(queryStr('yearFrom'));
+const yearTo = ref(queryStr('yearTo'));
+const sortBy = ref<'relevance' | 'newest'>(queryStr('sort') === 'newest' ? 'newest' : 'relevance');
 const page = ref(1);
 const loading = ref(false);
 
-const typeOptions = computed(() => [
-  { label: t('catalog.types.all'),        value: 'vse' },
-  { label: t('catalog.types.monograph'),  value: 'Monograph' },
-  { label: t('catalog.types.serial'),     value: 'Serial publication' },
-  { label: t('catalog.types.manuscript'), value: 'Manuscript' },
-  { label: t('catalog.types.map'),        value: 'Map' },
-  { label: t('catalog.types.music'),      value: 'Printed music' },
-  { label: t('catalog.types.sound'),      value: 'Sound recording' },
-  { label: t('catalog.types.visual'),     value: 'Visual material' },
-]);
+const languageCodes = ref<ResolvedCode[]>([]);
+const materialTypeCodes = ref<ResolvedCode[]>([]);
 
-const languages = computed(() => [
-  { label: t('catalog.languages.slovenian'), value: 'Slovenian' },
-  { label: t('catalog.languages.german'),    value: 'German' },
-  { label: t('catalog.languages.latin'),     value: 'Latin' },
-  { label: t('catalog.languages.italian'),   value: 'Italian' },
-  { label: t('catalog.languages.croatian'),  value: 'Croatian' },
-]);
+// Filter values are the `en` names — the backend filters match on metadata.*.en
+const languageOptions = computed(() =>
+  languageCodes.value.map((c) => ({ label: codeLabel(c), value: c.en })),
+);
+const typeOptions = computed(() =>
+  materialTypeCodes.value.map((c) => ({ label: codeLabel(c), value: c.en })),
+);
 
-const eras = computed(() => [
+async function loadFilterOptions() {
+  try {
+    const [langs, types] = await Promise.all([
+      suggestValues({ field: 'language', limit: 50, type: 'records' }),
+      suggestValues({ field: 'materialType', limit: 50, type: 'records' }),
+    ]);
+    languageCodes.value = langs.suggestions.map((s) => s.value);
+    materialTypeCodes.value = types.suggestions.map((s) => s.value);
+  } catch {
+    languageCodes.value = [];
+    materialTypeCodes.value = [];
+  }
+}
+
+interface Era {
+  label: string;
+  value: string;
+  from?: string;
+  to?: string;
+}
+
+const eras = computed<Era[]>(() => [
   { label: t('catalog.eras.all'),      value: 'vse' },
-  { label: t('catalog.eras.pre1800'),  value: 'do1800' },
-  { label: t('catalog.eras.c19'),      value: '19st' },
-  { label: t('catalog.eras.e1900'),    value: '1900-1950' },
-  { label: t('catalog.eras.e1950'),    value: '1950-2000' },
-  { label: t('catalog.eras.post2000'), value: 'po2000' },
+  { label: t('catalog.eras.pre1800'),  value: 'do1800',    to: '1799' },
+  { label: t('catalog.eras.c19'),      value: '19st',      from: '1800', to: '1899' },
+  { label: t('catalog.eras.e1900'),    value: '1900-1950', from: '1900', to: '1950' },
+  { label: t('catalog.eras.e1950'),    value: '1950-2000', from: '1950', to: '2000' },
+  { label: t('catalog.eras.post2000'), value: 'po2000',    from: '2001' },
 ]);
+
+// A custom year range (e.g. from the advanced search page) selects no chip
+const selectedEra = computed(() => {
+  if (!yearFrom.value && !yearTo.value) return 'vse';
+  const match = eras.value.find(
+    (e) => (e.from ?? '') === yearFrom.value && (e.to ?? '') === yearTo.value,
+  );
+  return match?.value ?? '';
+});
+
+function selectEra(era: Era) {
+  yearFrom.value = era.from ?? '';
+  yearTo.value = era.to ?? '';
+}
 
 const sortOptions = computed(() => [
   { label: t('catalog.sort.relevance'), value: 'relevance' },
-  { label: t('catalog.sort.titleAsc'),  value: 'title-asc' },
-  { label: t('catalog.sort.yearAsc'),   value: 'year-asc' },
-  { label: t('catalog.sort.yearDesc'),  value: 'year-desc' },
+  { label: t('catalog.sort.newest'),    value: 'newest' },
 ]);
 
 const items = ref<SearchHit[]>([]);
 const totalItems = ref(0);
 const totalPages = ref(1);
 const PAGE_SIZE = 20;
+
+const LIST_FIELDS = [
+  'metadata.title',
+  'metadata.firstResponsibility',
+  'metadata.publicationDate1',
+  'metadata.materialType',
+  'metadata.language',
+  'metadata.publication.publisher',
+  'file_attachments.id',
+  'file_attachments.fileType',
+].join(',');
 
 async function fetchItems() {
   loading.value = true;
@@ -287,11 +335,14 @@ async function fetchItems() {
       type: 'records',
       page: page.value,
       limit: PAGE_SIZE,
+      fields: LIST_FIELDS,
+      sort: sortBy.value,
       ...(q ? (fullTextSearch.value ? { q } : { title: q }) : {}),
-      ...(selectedType.value !== 'vse' ? { materialType: selectedType.value } : {}),
-      ...(selectedLanguages.value.length === 1 && selectedLanguages.value[0]
-        ? { language: selectedLanguages.value[0] }
-        : {}),
+      ...(selectedTypes.value.length ? { materialType: selectedTypes.value.join(',') } : {}),
+      ...(selectedLanguages.value.length ? { language: selectedLanguages.value.join(',') } : {}),
+      ...(publisherFilter.value ? { publisher: publisherFilter.value } : {}),
+      ...(yearFrom.value ? { yearFrom: yearFrom.value } : {}),
+      ...(yearTo.value ? { yearTo: yearTo.value } : {}),
     });
     items.value = result.hits;
     totalItems.value = result.total;
@@ -306,14 +357,21 @@ watch(filterSearch, () => {
   void fetchItems();
 });
 
-watch([selectedType, selectedLanguages, fullTextSearch], () => {
-  page.value = 1;
-  void fetchItems();
-}, { deep: true });
+watch(
+  [selectedTypes, selectedLanguages, fullTextSearch, yearFrom, yearTo, publisherFilter, sortBy],
+  () => {
+    page.value = 1;
+    void fetchItems();
+  },
+  { deep: true },
+);
 
 watch(page, () => { void fetchItems(); });
 
-onMounted(() => { void fetchItems(); });
+onMounted(() => {
+  void fetchItems();
+  void loadFilterOptions();
+});
 
 const typeColorMap: Record<string, string> = {
   'Monograph':          'primary',
@@ -321,12 +379,12 @@ const typeColorMap: Record<string, string> = {
   'Manuscript':         'accent',
   'Map':                'positive',
   'Printed music':      'info',
-  'Sound recording':    'purple',
+  'Sound recording':    'negative',
   'Visual material':    'warning',
 };
 
 function typeColor(type: string) {
-  return typeColorMap[type] ?? 'grey-6';
+  return typeColorMap[type] ?? 'library-muted';
 }
 
 const filteredItems = computed(() => {
@@ -334,9 +392,11 @@ const filteredItems = computed(() => {
 });
 
 function resetFilters() {
-  selectedType.value = 'vse';
+  selectedTypes.value = [];
   selectedLanguages.value = [];
-  selectedEra.value = 'vse';
+  publisherFilter.value = '';
+  yearFrom.value = '';
+  yearTo.value = '';
   filterSearch.value = '';
   page.value = 1;
 }
@@ -369,10 +429,14 @@ function resetFilters() {
   font-size: 0.72rem
   font-weight: 700
 
+.filter-scroll
+  max-height: 220px
+  overflow-y: auto
+
 
 .filter-card
   border-radius: 16px
-  background: $paper
+  background: $surface
   border: 1px solid $divider
   position: sticky
   top: 72px
@@ -381,7 +445,7 @@ function resetFilters() {
 .item-card
   border-radius: 12px
   overflow: hidden
-  background: $paper
+  background: $surface
   border: 1px solid $divider
   transition: box-shadow 0.2s, transform 0.15s
   &:hover

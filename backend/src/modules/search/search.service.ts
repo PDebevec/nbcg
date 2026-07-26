@@ -149,13 +149,13 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
   // ── language: exact multi-select ──
   const languages = parseMultiValue(dto.language);
   if (languages.length) {
-    filter.push({ terms: { 'metadata.language.en': languages } });
+    filter.push({ terms: { 'metadata.language.en.keyword': languages } });
   }
 
   // ── materialType: exact multi-select ──
   const materialTypes = parseMultiValue(dto.materialType);
   if (materialTypes.length) {
-    filter.push({ terms: { 'metadata.materialType.en': materialTypes } });
+    filter.push({ terms: { 'metadata.materialType.en.keyword': materialTypes } });
   }
 
   // ── year range ──

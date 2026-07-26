@@ -60,15 +60,29 @@
                 <q-input v-model="form.subtitle" outlined :label="t('admin.edit.fields.subtitle')" />
               </div>
               <div class="col-12 col-md-6">
-                <q-input
-                  v-model="form.firstResponsibility"
-                  outlined
+                <q-select
+                  :model-value="form.firstResponsibility"
+                  :options="authorOptions"
+                  outlined use-input fill-input hide-selected clearable
+                  input-debounce="300"
                   :label="t('admin.edit.fields.author')"
+                  @filter="filterAuthor"
+                  @input-value="form.firstResponsibility = $event"
+                  @update:model-value="form.firstResponsibility = $event ?? ''"
                 />
               </div>
 
               <div class="col-12 col-md-4">
-                <q-input v-model="form.publisher" outlined :label="t('admin.edit.fields.publisher')" />
+                <q-select
+                  :model-value="form.publisher"
+                  :options="publisherOptions"
+                  outlined use-input fill-input hide-selected clearable
+                  input-debounce="300"
+                  :label="t('admin.edit.fields.publisher')"
+                  @filter="filterPublisher"
+                  @input-value="form.publisher = $event"
+                  @update:model-value="form.publisher = $event ?? ''"
+                />
               </div>
               <div class="col-12 col-md-4">
                 <q-input v-model="form.place" outlined :label="t('admin.edit.fields.place')" />
@@ -82,6 +96,34 @@
               </div>
               <div class="col-12 col-md-6">
                 <q-input v-model="form.cobissId" outlined label="COBISS ID" :readonly="!isNew" />
+              </div>
+
+              <div class="col-12 col-md-4">
+                <q-select
+                  v-model="form.materialType"
+                  :options="materialTypeOptions"
+                  :option-label="codeLabel"
+                  outlined clearable
+                  :label="t('admin.edit.fields.materialType')"
+                />
+              </div>
+              <div class="col-12 col-md-4">
+                <q-select
+                  v-model="form.language"
+                  :options="languageOptions"
+                  :option-label="codeLabel"
+                  outlined multiple use-chips
+                  :label="t('admin.edit.fields.language')"
+                />
+              </div>
+              <div class="col-12 col-md-4">
+                <q-select
+                  v-model="form.country"
+                  :options="countryOptions"
+                  :option-label="codeLabel"
+                  outlined multiple use-chips
+                  :label="t('admin.edit.fields.country')"
+                />
               </div>
 
               <div class="col-12">
@@ -98,7 +140,7 @@
 
           <!-- RAW JSON -->
           <q-tab-panel name="json">
-            <div class="text-caption text-grey-7 q-mb-sm">{{ t('admin.edit.jsonHint') }}</div>
+            <div class="text-caption text-library-muted q-mb-sm">{{ t('admin.edit.jsonHint') }}</div>
             <q-input
               v-model="jsonText"
               outlined
@@ -172,7 +214,7 @@
                 </q-item-section>
               </q-item>
             </q-list>
-            <div v-else class="text-grey-7 q-pa-md text-center">{{ t('admin.edit.noFiles') }}</div>
+            <div v-else class="text-library-muted q-pa-md text-center">{{ t('admin.edit.noFiles') }}</div>
           </q-tab-panel>
         </q-tab-panels>
 
@@ -201,10 +243,13 @@ import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import {
   getItem,
+  suggestValues,
   type FileAttachment,
   type IndexedRecord,
   type RecordMetadata,
+  type ResolvedCode,
 } from 'src/api/search';
+import { useCodeLabel } from 'src/composables/useCodeLabel';
 import {
   conflictCurrentVersion,
   createItem,
@@ -257,7 +302,84 @@ const form = reactive({
   edition: '',
   cobissId: '',
   summaryNote: '',
+  materialType: null as ResolvedCode | null,
+  language: [] as ResolvedCode[],
+  country: [] as ResolvedCode[],
 });
+
+// ---------------------------------------------------------------------------
+// Suggest-driven dropdowns & autocomplete
+// ---------------------------------------------------------------------------
+
+const { codeLabel } = useCodeLabel();
+
+const materialTypeOptions = ref<ResolvedCode[]>([]);
+const languageOptions = ref<ResolvedCode[]>([]);
+const countryOptions = ref<ResolvedCode[]>([]);
+
+async function loadEnumOptions() {
+  try {
+    const [types, langs, countries] = await Promise.all([
+      suggestValues({ field: 'materialType', limit: 50 }),
+      suggestValues({ field: 'language', limit: 50 }),
+      suggestValues({ field: 'country', limit: 50 }),
+    ]);
+    materialTypeOptions.value = types.suggestions.map((s) => s.value);
+    languageOptions.value = langs.suggestions.map((s) => s.value);
+    countryOptions.value = countries.suggestions.map((s) => s.value);
+  } catch {
+    // dropdowns stay empty
+  }
+}
+
+const publisherOptions = ref<string[]>([]);
+const authorOptions = ref<string[]>([]);
+
+type QFilterDone = (cb: () => void) => void;
+
+function filterPublisher(input: string, doneFn: QFilterDone) {
+  void (async () => {
+    let options: string[] = [];
+    try {
+      const result = await suggestValues({
+        field: 'publisher',
+        ...(input.trim() ? { q: input.trim() } : {}),
+        limit: 10,
+      });
+      options = result.suggestions.map((s) => s.value);
+    } catch {
+      options = [];
+    }
+    doneFn(() => {
+      publisherOptions.value = options;
+    });
+  })();
+}
+
+function filterAuthor(input: string, doneFn: QFilterDone) {
+  void (async () => {
+    let options: string[] = [];
+    try {
+      const result = await suggestValues({
+        field: 'author',
+        ...(input.trim() ? { q: input.trim() } : {}),
+        limit: 10,
+      });
+      options = [
+        ...new Set(
+          result.suggestions
+            .map((s) => [s.value.firstName, s.value.familyName].filter(Boolean).join(' ').trim())
+            .filter(Boolean),
+        ),
+      ];
+    } catch {
+      options = [];
+    }
+    doneFn(() => {
+      authorOptions.value = options;
+    });
+  })();
+}
 
 const jsonText = ref('{}');
 const jsonError = ref('');
@@ -277,6 +399,9 @@ function metadataToForm(m: Record<string, unknown>) {
   form.edition = meta.edition ?? '';
   form.cobissId = meta.cobissId ?? '';
   form.summaryNote = meta.summaryNote ?? '';
+  form.materialType = meta.materialType ?? null;
+  form.language = meta.language ?? [];
+  form.country = meta.country ?? [];
 }
 
 function formToMetadata(): Record<string, unknown> {
@@ -295,6 +420,9 @@ function formToMetadata(): Record<string, unknown> {
     edition: form.edition || undefined,
     ...(isNew.value && form.cobissId ? { cobissId: form.cobissId } : {}),
     summaryNote: form.summaryNote || undefined,
+    materialType: form.materialType ?? undefined,
+    language: form.language.length ? [...form.language] : undefined,
+    country: form.country.length ? [...form.country] : undefined,
   };
 }
 
@@ -340,6 +468,7 @@ function applyServerState(source: IndexedRecord) {
 }
 
 onMounted(async () => {
+  void loadEnumOptions();
   if (isNew.value) return;
   try {
     const hit = await getItem(itemId.value!);
@@ -589,6 +718,6 @@ function formatSize(bytes: number): string {
   margin: 0 auto
 
 .edit-card
-  background: white
+  background: $surface
   border-radius: 12px
 </style>

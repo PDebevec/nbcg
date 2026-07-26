@@ -17,9 +17,9 @@ const color = computed(() => {
     case 'PRIVATE':
       return 'warning';
     case 'HIDDEN':
-      return 'grey-7';
+      return 'library-muted';
     default:
-      return 'grey';
+      return 'library-muted';
   }
 });
 </script>

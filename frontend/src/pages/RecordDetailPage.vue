@@ -88,7 +88,7 @@
             <q-card v-if="meta.summaryNote" flat bordered class="detail-card q-mb-md">
               <q-card-section>
                 <div class="section-label q-mb-sm">{{ t('record.abstract') }}</div>
-                <p class="text-body2 text-library-ink q-ma-none">{{ meta.summaryNote }}</p>
+                <p class="text-body2 text-library-muted q-ma-none">{{ meta.summaryNote }}</p>
               </q-card-section>
             </q-card>
 
@@ -140,7 +140,7 @@
               <q-card-section>
                 <div class="section-label q-mb-sm">{{ t('record.notes') }}</div>
                 <ul class="q-ma-none q-pl-md">
-                  <li v-for="(note, i) in meta.notes" :key="i" class="text-body2 text-library-ink">{{ note }}</li>
+                  <li v-for="(note, i) in meta.notes" :key="i" class="text-body2 text-library-muted">{{ note }}</li>
                 </ul>
               </q-card-section>
             </q-card>
@@ -179,7 +179,7 @@
                 <div v-if="meta.udc?.length" class="q-mt-sm">
                   <div class="field-label q-mb-xs">{{ t('record.udc') }}</div>
                   <div class="row q-gutter-xs">
-                    <q-chip v-for="u in meta.udc" :key="u" dense outline color="grey-6" size="sm">{{ u }}</q-chip>
+                    <q-chip v-for="u in meta.udc" :key="u" dense outline color="library-muted" size="sm">{{ u }}</q-chip>
                   </div>
                 </div>
 
@@ -215,7 +215,7 @@
                     <q-item-section avatar>
                       <q-icon
                         :name="file.fileType === 'PDF' ? 'picture_as_pdf' : file.fileType === 'IMAGE' ? 'image' : 'attach_file'"
-                        :color="file.fileType === 'PDF' ? 'negative' : 'grey-6'"
+                        :color="file.fileType === 'PDF' ? 'negative' : 'library-muted'"
                         size="sm"
                       />
                     </q-item-section>
@@ -307,7 +307,7 @@ onMounted(async () => {
 
 .detail-card
   border-radius: 12px
-  background: $paper
+  background: $surface
   border: 1px solid $divider
 
 .section-label

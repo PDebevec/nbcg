@@ -85,7 +85,7 @@ const { canManageRecords, canManageDrafts, canImport } = useAuthz();
   min-height: 100vh
 
 .admin-header
-  background: #ffffff
+  background: $surface
   color: $ink
   box-shadow: none
   // Same divider as the q-separator under the drawer's logo container
