@@ -369,7 +369,7 @@ async function bulkSetVisibility(status: VisibilityStatus) {
 
 .items-table
   background: $surface
-  border-radius: 12px
+  border-radius: $radius
 
 .title-link
   color: $primary

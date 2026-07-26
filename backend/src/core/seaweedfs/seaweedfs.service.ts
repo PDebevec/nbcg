@@ -13,8 +13,8 @@ const TRANSFER_TIMEOUT_MS = 60 * 60 * 1000; // 1 h
 @Injectable()
 export class SeaweedfsService {
   private readonly logger = new Logger(SeaweedfsService.name);
-  private readonly masterUrl = process.env.SEAWEEDFS_MASTER ?? 'http://seaweedfs-master:9333';
-  private readonly volumeUrl = process.env.SEAWEEDFS_VOLUME ?? 'http://seaweedfs-volume:8080';
+  private readonly masterUrl = (process.env.SEAWEEDFS_MASTER ?? 'http://seaweedfs-master:9333').replace(/\/+$/, '');
+  private readonly volumeUrl = (process.env.SEAWEEDFS_VOLUME ?? 'http://seaweedfs-volume:8080').replace(/\/+$/, '');
 
   async upload(stream: ReadStream, filename: string, mimeType: string, sizeBytes: number): Promise<string> {
     const assign = await fetch(`${this.masterUrl}/dir/assign`, {

@@ -9,6 +9,16 @@
 
         <q-space />
 
+        <q-btn
+          v-if="isCatalog && !searchOpen"
+          flat dense round
+          icon="search"
+          class="nav-user"
+          @click="searchOpen = true"
+        >
+          <q-tooltip>{{ t('catalog.showSearch') }}</q-tooltip>
+        </q-btn>
+
         <!-- NAVIGATION -->
         <nav class="header-nav row items-center no-wrap">
           <q-btn
@@ -116,6 +126,58 @@
           </q-menu>
         </q-btn>
       </q-toolbar>
+
+      <!-- CATALOG SEARCH ROW -->
+      <template v-if="isCatalog">
+        <q-slide-transition>
+          <div v-show="searchOpen">
+            <q-separator color="library-divider" />
+            <div class="search-row row items-center no-wrap q-px-md q-py-sm">
+              <q-btn
+                flat dense round
+                icon="expand_less"
+                color="library-muted"
+                @click="searchOpen = false"
+              >
+                <q-tooltip>{{ t('catalog.hideSearch') }}</q-tooltip>
+              </q-btn>
+
+              <q-input
+                v-model="searchText"
+                outlined dense
+                debounce="350"
+                :placeholder="t('catalog.searchWithin')"
+                class="col q-mx-md"
+              >
+                <template #prepend>
+                  <q-icon name="search" size="18px" color="library-muted" />
+                </template>
+                <template #append>
+                  <q-btn
+                    flat round dense
+                    :icon="fullText ? 'manage_search' : 'text_fields'"
+                    :color="fullText ? 'primary' : 'library-muted'"
+                    size="sm"
+                    @click="fullText = !fullText"
+                  >
+                    <q-tooltip>{{ fullText ? t('catalog.fullTextOn') : t('catalog.fullTextOff') }}</q-tooltip>
+                  </q-btn>
+                </template>
+              </q-input>
+
+              <q-btn
+                flat dense no-caps
+                :round="!$q.screen.gt.sm"
+                icon="backspace"
+                color="library-muted"
+                :label="$q.screen.gt.sm ? t('catalog.clearSearch') : undefined"
+                :disable="!searchText"
+                @click="searchText = ''"
+              />
+            </div>
+          </div>
+        </q-slide-transition>
+      </template>
     </q-header>
 
     <q-page-container>
@@ -194,16 +256,23 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
+import { useQuasar } from 'quasar';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import logo from 'src/assets/logoV2_trimmed_white.jpg';
 import LanguageSwitcher from 'components/LanguageSwitcher.vue';
 import { auth, login, logout } from 'src/services/keycloak';
 import { useAuthz } from 'src/composables/useAuthz';
+import { useCatalogSearch } from 'src/composables/useCatalogSearch';
 
 const { t } = useI18n();
+const $q = useQuasar();
 const { canAccessAdmin } = useAuthz();
 const route = useRoute();
+
+const { searchText, fullText, searchOpen } = useCatalogSearch();
+const isCatalog = computed(() => route.path === '/catalog');
 
 function isLinkActive(to: string, exact = false) {
   return exact ? route.path === to : route.path.startsWith(to);

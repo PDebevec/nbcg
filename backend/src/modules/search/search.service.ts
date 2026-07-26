@@ -74,48 +74,73 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
   // prefix_length 1 for typo tolerance without excessive expansion.
   if (dto.q?.trim()) {
     const words = dto.q.trim().split(/\s+/).filter(Boolean);
-    const perWord = words.map((word) => ({
+    const perWord = words.map((word, i) => {
+      const should: unknown[] = [
+        {
+          multi_match: {
+            query: word,
+            fields: GENERAL_SEARCH_FIELDS,
+            fuzziness: 'AUTO',
+            prefix_length: 1,
+          },
+        },
+        {
+          nested: {
+            path: 'file_attachments',
+            query: {
+              match: {
+                'file_attachments.filename': {
+                  query: word,
+                  fuzziness: 'AUTO',
+                  prefix_length: 1,
+                },
+              },
+            },
+          },
+        },
+      ];
+
+      if (i === words.length - 1) {
+        should.push({
+          multi_match: {
+            query: word,
+            type: 'bool_prefix',
+            fields: GENERAL_SEARCH_FIELDS,
+          },
+        });
+      }
+
+      return { bool: { should, minimum_should_match: 1 } };
+    });
+    must.push({ bool: { must: perWord } });
+  }
+
+  if (dto.title?.trim()) {
+    must.push({
       bool: {
         should: [
           {
-            multi_match: {
-              query: word,
-              fields: GENERAL_SEARCH_FIELDS,
-              fuzziness: 'AUTO',
-              prefix_length: 1,
+            match: {
+              'metadata.title': {
+                query: dto.title,
+                operator: 'and',
+                fuzziness: 'AUTO',
+                prefix_length: 1,
+              },
             },
           },
           {
-            nested: {
-              path: 'file_attachments',
-              query: {
-                match: {
-                  'file_attachments.filename': {
-                    query: word,
-                    fuzziness: 'AUTO',
-                    prefix_length: 1,
-                  },
-                },
+            match_bool_prefix: {
+              'metadata.title': {
+                query: dto.title,
+                operator: 'and',
+                fuzziness: 'AUTO',
+                prefix_length: 1,
               },
             },
           },
         ],
         minimum_should_match: 1,
-      },
-    }));
-    must.push({ bool: { must: perWord } });
-  }
-
-  // ── title: fuzzy per-word AND ──
-  if (dto.title?.trim()) {
-    must.push({
-      match: {
-        'metadata.title': {
-          query: dto.title,
-          operator: 'and',
-          fuzziness: 'AUTO',
-          prefix_length: 1,
-        },
       },
     });
   }

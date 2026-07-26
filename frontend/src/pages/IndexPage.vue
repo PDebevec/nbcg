@@ -368,7 +368,7 @@ async function doSearch() {
   z-index: 1
 
 .search-bar
-  border-radius: 14px
+  border-radius: $radius
   box-shadow: 0 12px 48px rgba($dark, 0.32)
   max-width: 1080px
   margin: 0 auto
@@ -395,7 +395,7 @@ async function doSearch() {
     margin-left: 0
 
 .collection-card
-  border-radius: 16px
+  border-radius: $radius
   border: 1px solid $divider
   transition: box-shadow 0.2s, border-color 0.2s, transform 0.15s
   &:hover
@@ -416,7 +416,7 @@ async function doSearch() {
   top: 50%
   left: 50%
   width: min(380px, 68vw)
-  border-radius: 14px
+  border-radius: $radius
   overflow: hidden
   border: 1px solid $divider
   cursor: pointer
@@ -459,7 +459,7 @@ async function doSearch() {
 
 .newest-card
   height: 164px
-  border-radius: 14px
+  border-radius: $radius
   overflow: hidden
   border: 1px solid $divider
   transition: box-shadow 0.25s ease, transform 0.2s ease, border-color 0.25s ease
@@ -484,7 +484,7 @@ async function doSearch() {
 .about-section
   background: linear-gradient(180deg, $surface, $paper)
   border: 1px solid $divider
-  border-radius: 16px
+  border-radius: $radius
   box-shadow: 0 4px 20px rgba($dark, 0.06)
 
 .about-text

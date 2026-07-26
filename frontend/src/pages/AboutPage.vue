@@ -54,7 +54,7 @@ const { t } = useI18n();
 .content-card
   background: linear-gradient(180deg, $surface, $paper)
   border: 1px solid $divider
-  border-radius: 16px
+  border-radius: $radius
   box-shadow: 0 4px 20px rgba($dark, 0.06)
   p
     font-size: 0.97rem

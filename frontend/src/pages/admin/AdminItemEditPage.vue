@@ -719,5 +719,5 @@ function formatSize(bytes: number): string {
 
 .edit-card
   background: $surface
-  border-radius: 12px
+  border-radius: $radius
 </style>

@@ -278,5 +278,5 @@ onUnmounted(stopPolling);
 
 .panel-card
   background: $surface
-  border-radius: 12px
+  border-radius: $radius
 </style>

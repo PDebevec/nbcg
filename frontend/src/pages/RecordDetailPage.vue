@@ -306,7 +306,7 @@ onMounted(async () => {
   margin: 0 auto
 
 .detail-card
-  border-radius: 12px
+  border-radius: $radius
   background: $surface
   border: 1px solid $divider
 

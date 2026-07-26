@@ -175,6 +175,6 @@ async function search() {
 .content-card
   background: $surface
   border: 1px solid $divider
-  border-radius: 16px
+  border-radius: $radius
   box-shadow: 0 4px 20px rgba($dark, 0.06)
 </style>

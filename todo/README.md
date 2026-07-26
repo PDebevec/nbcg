@@ -7,6 +7,7 @@
 
 ## Backend
 
+- [Cookie Auth for File Downloads](backend-file-download-cookie-auth.md) — browser-native `<img>`/`<a>` loads of PRIVATE items' files 404 (no Bearer header); accept token cookie on the download GET only
 - [Search API Refinement](backend-search-api-refinement.md) — configurable response shapes, sorting, filter params
 - [Search Autocomplete API](backend-search-autocomplete-api.md)
 

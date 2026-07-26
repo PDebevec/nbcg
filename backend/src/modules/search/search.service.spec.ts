@@ -54,7 +54,7 @@ describe('SearchService – query building', () => {
 
   // ── General search (q) ──
 
-  it('builds per-word AND with fuzzy for q', async () => {
+  it('builds per-word AND with fuzzy for q, last word also as prefix', async () => {
     const body = await searchWith({ q: 'hello world' });
     const userQuery = body.query.bool.must[0];
     // q wraps in bool.must[0].bool.must (the per-word array)
@@ -62,24 +62,32 @@ describe('SearchService – query building', () => {
     const perWord = qClause.bool.must;
     expect(perWord).toHaveLength(2);
     for (const wordClause of perWord) {
-      expect(wordClause.bool.should).toHaveLength(2);
       expect(wordClause.bool.should[0].multi_match.fuzziness).toBe('AUTO');
       expect(wordClause.bool.should[0].multi_match.prefix_length).toBe(1);
       expect(wordClause.bool.should[1].nested.path).toBe('file_attachments');
     }
+    // Only the word being typed (last) gets the extra bool_prefix clause
+    expect(perWord[0].bool.should).toHaveLength(2);
+    expect(perWord[1].bool.should).toHaveLength(3);
+    expect(perWord[1].bool.should[2].multi_match.type).toBe('bool_prefix');
   });
 
   // ── Title ──
 
-  it('builds fuzzy match with operator AND for title', async () => {
+  it('builds fuzzy match + bool_prefix should for title', async () => {
     const body = await searchWith({ title: 'test title' });
     const userQuery = body.query.bool.must[0];
     const titleClause = userQuery.bool.must[0];
-    expect(titleClause.match['metadata.title']).toMatchObject({
+    expect(titleClause.bool.minimum_should_match).toBe(1);
+    expect(titleClause.bool.should[0].match['metadata.title']).toMatchObject({
       query: 'test title',
       operator: 'and',
       fuzziness: 'AUTO',
       prefix_length: 1,
+    });
+    expect(titleClause.bool.should[1].match_bool_prefix['metadata.title']).toMatchObject({
+      query: 'test title',
+      operator: 'and',
     });
   });
 

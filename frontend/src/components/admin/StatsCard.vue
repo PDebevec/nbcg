@@ -45,6 +45,6 @@ const total = computed(() =>
 
 <style scoped lang="sass">
 .stats-card
-  border-radius: 12px
+  border-radius: $radius
   background: $surface
 </style>
