@@ -278,6 +278,12 @@ export default {
         updated: 'Izmijenjeno',
       },
     },
+    extraction: {
+      EXTRACTED: 'Tekst iz PDF-a izdvojen',
+      NOT_EXTRACTED: 'Izdvajanje teksta iz PDF-a nije obavljeno ili je u toku',
+      NO_TEXT: 'PDF ne sadrži tekst (samo slike?) — razmislite o ponovnom učitavanju sa OCR-om',
+      GARBAGE: 'Izdvojeni tekst iz PDF-a je nečitljiv — razmislite o ponovnom učitavanju sa OCR-om',
+    },
     edit: {
       title: 'Uređivanje zapisa',
       newTitle: 'Novi zapis',
@@ -306,7 +312,6 @@ export default {
       upload: 'Otpremi',
       uploaded: 'Datoteke su otpremljene.',
       noFiles: 'Nema priloženih datoteka.',
-      textExtracted: 'tekst izdvojen',
       deleteFileConfirm: 'Obrisati datoteku "{name}"?',
       fileDeleted: 'Datoteka je obrisana.',
       save: 'Sačuvaj',

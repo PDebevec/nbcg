@@ -1,6 +1,6 @@
 # Frontend: Text Extraction Status Indicator
 
-## Status: TODO (backend is done)
+## Status: DONE
 
 ## Summary
 
@@ -30,8 +30,8 @@ The status is returned in file attachment list responses (`GET /files/:itemId`).
 
 ## Tasks
 
-- [ ] Read `textExtractionStatus` from file attachment API responses
-- [ ] Add status icon component (warning / info / none)
-- [ ] Integrate icon into records/drafts table rows
-- [ ] Add tooltip with actionable message
-- [ ] Optionally: show per-file status in detail view
+- [x] Read `textExtractionStatus` from file attachment API responses — `FileAttachment` type updated (`textExtracted` boolean removed).
+- [x] Add status icon component — `src/components/admin/TextExtractionIndicator.vue` (warning for GARBAGE, grey info for NO_TEXT/NOT_EXTRACTED, optional green check for EXTRACTED via `show-ok`).
+- [x] Integrate icon into records/drafts table rows — aggregated worst-PDF status per row (GARBAGE > NO_TEXT > NOT_EXTRACTED), no icon when no PDFs or all extracted; `fields` param extended with attachment fileType/status.
+- [x] Add tooltip with actionable message — per-status messages under `admin.extraction.*` (en + me).
+- [x] Per-file status shown in the item edit page Files tab (with green check for EXTRACTED).

@@ -121,13 +121,15 @@ export type RecordMetadata = CobissMetadata;
 // OpenSearch document shape (what pgsync indexes)
 // ---------------------------------------------------------------------------
 
+export type TextExtractionStatus = 'NOT_EXTRACTED' | 'EXTRACTED' | 'GARBAGE' | 'NO_TEXT';
+
 export interface FileAttachment {
   id: string;
   fileType: 'IMAGE' | 'PDF' | 'UNKNOWN';
   filename: string;
   mimeType: string;
   sizeBytes: number;
-  textExtracted: boolean;
+  textExtractionStatus: TextExtractionStatus;
   createdAt: string;
 }
 

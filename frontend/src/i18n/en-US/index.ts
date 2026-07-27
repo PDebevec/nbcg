@@ -278,6 +278,12 @@ export default {
         updated: 'Updated',
       },
     },
+    extraction: {
+      EXTRACTED: 'PDF text extracted',
+      NOT_EXTRACTED: 'PDF text extraction pending or not attempted',
+      NO_TEXT: 'No text found in PDF (image-only?) — consider re-uploading with OCR',
+      GARBAGE: 'Extracted PDF text looks unreadable — consider re-uploading with OCR',
+    },
     edit: {
       title: 'Edit item',
       newTitle: 'New item',
@@ -306,7 +312,6 @@ export default {
       upload: 'Upload',
       uploaded: 'Files uploaded.',
       noFiles: 'No attached files.',
-      textExtracted: 'text extracted',
       deleteFileConfirm: 'Delete file "{name}"?',
       fileDeleted: 'File deleted.',
       save: 'Save',

@@ -100,6 +100,12 @@
           </q-td>
         </template>
 
+        <template #body-cell-extraction="cellProps">
+          <q-td :props="cellProps">
+            <TextExtractionIndicator v-if="cellProps.row.extraction" :status="cellProps.row.extraction" />
+          </q-td>
+        </template>
+
         <template #body-cell-visibilityStatus="cellProps">
           <q-td :props="cellProps">
             <VisibilityBadge :status="cellProps.value" />
@@ -156,7 +162,8 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useQuasar, type QTableColumn, type QTableProps } from 'quasar';
-import { searchItems, type IndexedRecord } from 'src/api/search';
+import { searchItems, type IndexedRecord, type TextExtractionStatus } from 'src/api/search';
+import TextExtractionIndicator from 'src/components/admin/TextExtractionIndicator.vue';
 import {
   conflictCurrentVersion,
   deleteItems,
@@ -184,6 +191,19 @@ interface Row {
   visibilityStatus: VisibilityStatus;
   updatedAt: string;
   version: number;
+  extraction: TextExtractionStatus | null;
+}
+
+// Worst PDF extraction status for the row indicator; null when there are no PDFs
+function aggregateExtraction(source: IndexedRecord): TextExtractionStatus | null {
+  const statuses = (source.file_attachments ?? [])
+    .filter((f) => f.fileType === 'PDF')
+    .map((f) => f.textExtractionStatus);
+  if (!statuses.length) return null;
+  for (const s of ['GARBAGE', 'NO_TEXT', 'NOT_EXTRACTED'] as const) {
+    if (statuses.includes(s)) return s;
+  }
+  return 'EXTRACTED';
 }
 
 const rows = ref<Row[]>([]);
@@ -201,6 +221,7 @@ const columns = computed<QTableColumn<Row>[]>(() => [
   { name: 'author', label: t('admin.items.columns.author'), field: 'author', align: 'left' },
   { name: 'year', label: t('admin.items.columns.year'), field: 'year', align: 'left' },
   { name: 'cobissId', label: 'COBISS ID', field: 'cobissId', align: 'left' },
+  { name: 'extraction', label: '', field: 'extraction', align: 'center' },
   {
     name: 'visibilityStatus',
     label: t('admin.items.columns.visibility'),
@@ -228,6 +249,7 @@ function toRow(source: IndexedRecord): Row {
     visibilityStatus: source.visibilityStatus,
     updatedAt: source.updatedAt,
     version: source.version ?? 0,
+    extraction: aggregateExtraction(source),
   };
 }
 
@@ -247,6 +269,8 @@ async function fetchPage(page: number, limit: number) {
         'visibilityStatus',
         'updatedAt',
         'version',
+        'file_attachments.fileType',
+        'file_attachments.textExtractionStatus',
       ].join(','),
       ...(searchText.value ? { q: searchText.value } : {}),
     });

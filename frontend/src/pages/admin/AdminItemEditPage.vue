@@ -191,10 +191,10 @@
                   <q-item-label>{{ file.filename }}</q-item-label>
                   <q-item-label caption>
                     {{ formatSize(file.sizeBytes) }} · {{ file.mimeType }}
-                    <q-badge
-                      v-if="file.textExtracted"
-                      color="positive"
-                      :label="t('admin.edit.textExtracted')"
+                    <TextExtractionIndicator
+                      v-if="file.fileType === 'PDF'"
+                      :status="file.textExtractionStatus"
+                      show-ok
                       class="q-ml-xs"
                     />
                   </q-item-label>
@@ -264,6 +264,7 @@ import {
   type VisibilityStatus,
 } from 'src/api/admin';
 import VisibilityBadge from 'src/components/admin/VisibilityBadge.vue';
+import TextExtractionIndicator from 'src/components/admin/TextExtractionIndicator.vue';
 
 const { t } = useI18n();
 const route = useRoute();
