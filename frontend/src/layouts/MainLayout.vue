@@ -1,6 +1,7 @@
 <template>
   <q-layout view="lHh Lpr lff" class="library-shell">
     <q-header reveal class="app-header" bordered>
+      <div class="toolbar-shadow">
       <q-toolbar class="header-toolbar q-px-md">
         <!-- LOGO -->
         <router-link to="/" class="logo-link">
@@ -126,6 +127,7 @@
           </q-menu>
         </q-btn>
       </q-toolbar>
+      </div>
 
       <!-- CATALOG SEARCH ROW -->
       <template v-if="isCatalog">
@@ -260,7 +262,7 @@ import { computed } from 'vue';
 import { useQuasar } from 'quasar';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import logo from 'src/assets/logoV2_trimmed_white.jpg';
+import logo from 'src/assets/logoV3_trimmed_white.jpg';
 import LanguageSwitcher from 'components/LanguageSwitcher.vue';
 import { auth, login, logout } from 'src/services/keycloak';
 import { useAuthz } from 'src/composables/useAuthz';
@@ -313,18 +315,25 @@ const headerLinks = navLinks.filter((l) => l.to !== '/napredna-pretraga');
   color: $ink
   box-shadow: 0 2px 12px rgba($dark, 0.10)
 
+// Full-width wrapper so the toolbar's shadow spans the header and falls
+// onto the catalog search row below it
+.toolbar-shadow
+  position: relative
+  z-index: 1
+  background: $surface
+  box-shadow: 0 1px 3px rgba($dark, 0.06)
+
+// Matches the catalog search row height (dense input + q-py-sm)
 .header-toolbar
-  min-height: 72px
-  max-width: 1280px
+  min-height: 56px
   width: 100%
-  margin: 0 auto
 
 .logo-link
   display: inline-flex
   align-items: center
 
 .header-logo
-  height: 56px
+  height: 40px
   width: auto
   display: block
 

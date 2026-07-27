@@ -158,6 +158,8 @@ export default {
     filters: 'Filters',
     itemType: 'Item type',
     language: 'Language',
+    allTypes: 'All types',
+    allLanguages: 'All languages',
     period: 'Period',
     resetFilters: 'Reset filters',
     showing: 'Showing',

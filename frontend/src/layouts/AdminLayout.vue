@@ -70,7 +70,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
-import logo from 'src/assets/logoV2_trimmed_white.jpg';
+import logo from 'src/assets/logoV3_trimmed_white.jpg';
 import LanguageSwitcher from 'components/LanguageSwitcher.vue';
 import { auth } from 'src/services/keycloak';
 import { useAuthz } from 'src/composables/useAuthz';

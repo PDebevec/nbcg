@@ -8,31 +8,23 @@
 
       <!-- TYPE -->
       <div class="section-label text-library-muted q-mb-sm">{{ t('catalog.itemType') }}</div>
-      <div class="column q-gutter-xs q-mb-md filter-scroll">
-        <q-checkbox
-          v-for="opt in typeOptions"
-          :key="opt.value"
-          v-model="selectedTypes"
-          :val="opt.value"
-          :label="opt.label"
-          color="primary" dense
-        />
-      </div>
+      <MultiSelectChipsFilter
+        v-model="selectedTypes"
+        :options="typeOptions"
+        :empty-label="t('catalog.allTypes')"
+        class="q-mb-md"
+      />
 
       <q-separator color="library-divider" class="q-my-md" />
 
       <!-- LANGUAGE -->
       <div class="section-label text-library-muted q-mb-sm">{{ t('catalog.language') }}</div>
-      <div class="column q-gutter-xs q-mb-md filter-scroll">
-        <q-checkbox
-          v-for="lang in languageOptions"
-          :key="lang.value"
-          v-model="selectedLanguages"
-          :val="lang.value"
-          :label="lang.label"
-          color="primary" dense
-          />
-      </div>
+      <MultiSelectFilter
+        v-model="selectedLanguages"
+        :options="languageOptions"
+        :empty-label="t('catalog.allLanguages')"
+        class="q-mb-md"
+      />
 
       <q-separator color="library-divider" class="q-my-md" />
 
@@ -135,6 +127,8 @@ import imageStock from 'src/assets/image-stock.jpg';
 import { searchItems, suggestValues, type ResolvedCode, type SearchHit } from 'src/api/search';
 import { useCodeLabel } from 'src/composables/useCodeLabel';
 import { useCatalogSearch } from 'src/composables/useCatalogSearch';
+import MultiSelectFilter from 'src/components/MultiSelectFilter.vue';
+import MultiSelectChipsFilter from 'src/components/MultiSelectChipsFilter.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -332,10 +326,6 @@ function resetFilters() {
   text-transform: uppercase
   font-size: 0.72rem
   font-weight: 700
-
-.filter-scroll
-  max-height: 220px
-  overflow-y: auto
 
 // In-flow left column: stretches to the page's full content height, so the
 // space under the filters stays a quiet $surface strip while scrolling

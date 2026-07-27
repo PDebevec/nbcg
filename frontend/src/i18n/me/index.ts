@@ -158,6 +158,8 @@ export default {
     filters: 'Filteri',
     itemType: 'Vrsta građe',
     language: 'Jezik',
+    allTypes: 'Sve vrste',
+    allLanguages: 'Svi jezici',
     period: 'Period',
     resetFilters: 'Poništi filtere',
     showing: 'Prikazano',
