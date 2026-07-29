@@ -31,14 +31,14 @@ function initialLocale(): MessageLanguages {
   return 'me';
 }
 
-export default defineBoot(({ app }) => {
-  const i18n = createI18n<{ message: MessageSchema }, MessageLanguages>({
-    locale: initialLocale(),
-    fallbackLocale: 'en-US',
-    legacy: false,
-    messages,
-  });
+// Module-level instance so plain services (e.g. keycloak) can translate too
+export const i18n = createI18n<{ message: MessageSchema }, MessageLanguages>({
+  locale: initialLocale(),
+  fallbackLocale: 'en-US',
+  legacy: false,
+  messages,
+});
 
-  // Set i18n instance on app
+export default defineBoot(({ app }) => {
   app.use(i18n);
 });

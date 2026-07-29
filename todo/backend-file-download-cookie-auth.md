@@ -1,6 +1,6 @@
 # Backend: Cookie Auth for File Downloads
 
-## Status: TODO
+## Status: DONE
 
 ## Why we need it
 
@@ -62,11 +62,26 @@ fixes it.
 3. Verify: PRIVATE record as admin — cover renders, attachment download
    streams; same URLs as anonymous still 404.
 
+## Implementation notes
+
+- Backend: implemented as an extractor chain in `keycloak.strategy.ts`
+  (`ExtractJwt.fromExtractors`) rather than a separate guard — Bearer header
+  first, then a `downloadCookieExtractor` that only fires for
+  `GET /api/files/:fileId/download` (path regex + method check) and parses the
+  `nbcg_at` cookie from the raw `Cookie` header (no cookie-parser dependency).
+  Validation is byte-for-byte the same JWKS/audience/issuer path as Bearer.
+- Frontend: `syncTokenCookie()` in `services/keycloak.ts`, called from
+  `syncState()` (runs on init, auth success, refresh success, logout); `Secure`
+  flag added automatically on https. `logout()` also clears the cookie
+  explicitly before the redirect.
+
 ## Acceptance criteria
 
-- [ ] Logged-in user with view rights sees covers and can download files of
+- [x] Logged-in user with view rights sees covers and can download files of
       PRIVATE/HIDDEN items via plain `<img>`/`<a>` links.
-- [ ] Anonymous requests to the same URLs still return 404.
-- [ ] Cookie is sent only under `/api/files`, and only the download GET
-      accepts it (mutating file endpoints reject cookie-only auth).
-- [ ] Cookie is cleared on logout.
+- [x] Anonymous requests to the same URLs still return 404.
+- [x] Cookie is sent only under `/api/files`, and only the download GET
+      accepts it (mutating file endpoints reject cookie-only auth — extractor
+      returns null for any other method/path, so they see an anonymous
+      principal exactly as before).
+- [x] Cookie is cleared on logout (in `logout()` and via `onAuthLogout`).

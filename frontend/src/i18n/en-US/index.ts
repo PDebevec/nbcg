@@ -121,6 +121,7 @@ export default {
   auth: {
     login: 'Log in',
     logout: 'Log out',
+    sessionExpired: 'Your session has expired. Unsaved changes are kept on this page — log in again to continue.',
   },
 
   profile: {

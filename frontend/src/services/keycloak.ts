@@ -1,5 +1,7 @@
 import Keycloak from 'keycloak-js';
 import { reactive, readonly } from 'vue';
+import { Notify } from 'quasar';
+import { i18n } from 'src/boot/i18n';
 
 // ---------------------------------------------------------------------------
 // Reactive auth state for the UI (keycloak's own props are not reactive)
@@ -24,6 +26,26 @@ const state = reactive<AuthState>({
 /** Read-only reactive snapshot of the current authentication state. */
 export const auth = readonly(state);
 
+// ---------------------------------------------------------------------------
+// Token cookie for browser-native file loads
+//
+// <img src> / <a href> requests to /api/files/:id/download are sent by the
+// browser itself, without the Authorization header. The backend accepts the
+// token from this cookie on that one endpoint only. Path=/api/files keeps the
+// cookie off every other API request.
+// ---------------------------------------------------------------------------
+
+const TOKEN_COOKIE = 'nbcg_at';
+
+function syncTokenCookie() {
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  if (keycloak.authenticated && keycloak.token) {
+    document.cookie = `${TOKEN_COOKIE}=${keycloak.token}; Path=/api/files; SameSite=Lax${secure}`;
+  } else {
+    document.cookie = `${TOKEN_COOKIE}=; Path=/api/files; SameSite=Lax; Max-Age=0${secure}`;
+  }
+}
+
 function syncState() {
   const profile = keycloak.tokenParsed as
     | { preferred_username?: string; email?: string; name?: string }
@@ -35,6 +57,50 @@ function syncState() {
   state.email = profile?.email;
   state.fullName = profile?.name;
   state.roles = keycloak.resourceAccess?.[apiClientId]?.roles ?? [];
+  syncTokenCookie();
+  if (state.authenticated) sessionExpiredNotified = false;
+}
+
+// ---------------------------------------------------------------------------
+// Session expiry
+//
+// When the refresh token dies we deliberately do NOT redirect to Keycloak from
+// inside an API call — that would blow away in-progress form state mid-request.
+// Instead the request is left to fail (401/404), the UI flips to the anonymous
+// state, and a persistent notification lets the user re-login when they choose.
+// ---------------------------------------------------------------------------
+
+let sessionExpiredNotified = false;
+
+function handleSessionExpired() {
+  if (sessionExpiredNotified) return;
+  sessionExpiredNotified = true;
+
+  // Drop the dead tokens — fires onAuthLogout → syncState, which updates the
+  // reactive state and clears the download cookie.
+  keycloak.clearToken();
+
+  const t = i18n.global.t;
+  Notify.create({
+    type: 'warning',
+    timeout: 0,
+    multiLine: true,
+    message: t('auth.sessionExpired'),
+    actions: [
+      {
+        label: t('auth.login'),
+        color: 'dark',
+        noCaps: true,
+        handler: () => {
+          const path = window.location.hash.startsWith('#/')
+            ? window.location.hash.slice(1)
+            : undefined;
+          void login(path);
+        },
+      },
+      { icon: 'close', color: 'dark', round: true, dense: true },
+    ],
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -103,20 +169,22 @@ export function login(redirectPath?: string): Promise<void> {
 
 /** Log out and return to the home page. */
 export function logout(): Promise<void> {
+  // Clear explicitly — the logout redirect may fire before onAuthLogout runs
+  document.cookie = `${TOKEN_COOKIE}=; Path=/api/files; SameSite=Lax; Max-Age=0`;
   return keycloak.logout({ redirectUri: window.location.origin + '/' });
 }
 
 /**
  * Return a valid access token, refreshing it first if it expires within the
- * next 30 seconds. Returns undefined when the user is not authenticated.
+ * next 30 seconds. Returns undefined when the user is not authenticated or
+ * the session has expired (the caller's request then fails as anonymous).
  */
 export async function getValidToken(): Promise<string | undefined> {
   if (!keycloak.authenticated) return undefined;
   try {
     await keycloak.updateToken(30);
   } catch {
-    // Refresh token expired / session ended — force a fresh login.
-    await login();
+    handleSessionExpired();
     return undefined;
   }
   return keycloak.token;

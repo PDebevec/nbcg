@@ -121,6 +121,7 @@ export default {
   auth: {
     login: 'Prijava',
     logout: 'Odjava',
+    sessionExpired: 'Vaša sesija je istekla. Nesačuvane izmjene ostaju na ovoj stranici — prijavite se ponovo da nastavite.',
   },
 
   profile: {
