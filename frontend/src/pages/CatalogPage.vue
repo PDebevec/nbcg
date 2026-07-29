@@ -330,8 +330,8 @@ function resetFilters() {
 // In-flow left column: stretches to the page's full content height, so the
 // space under the filters stays a quiet $surface strip while scrolling
 .filter-panel
-  width: 290px
-  flex: 0 0 290px
+  width: $page-gutter
+  flex: 0 0 $page-gutter
   background: $surface
   border-right: 1px solid $divider
 

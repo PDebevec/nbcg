@@ -19,6 +19,10 @@ body
 .q-body--layout-animate .q-layout__section--marginal
 	transition: transform 0.28s ease, left 0.12s, right 0.12s !important
 
+@media (min-width: 1024px)
+	.library-shell .page-body
+		max-width: calc(100% - #{$page-gutter * 2}) !important
+
 .text-library-primary
 	color: $primary !important
 
