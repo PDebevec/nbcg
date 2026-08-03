@@ -211,6 +211,8 @@ export default {
       main: 'Glavni metapodaci',
       all: 'Svi metapodaci',
     },
+    relatedCollections: 'Povezane zbirke',
+    noCollections: 'Ovaj zapis još nije dio nijedne zbirke.',
     fields: {
       title: 'Naslov',
       subtitle: 'Podnaslov',

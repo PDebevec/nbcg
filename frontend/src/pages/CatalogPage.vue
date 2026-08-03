@@ -56,7 +56,7 @@
     </aside>
 
     <!-- RESULTS -->
-    <div class="results-area col q-px-lg q-py-lg">
+    <div class="results-area col q-px-lg q-pt-md q-pb-md">
 
       <!-- RESULTS BAR -->
       <div class="row items-center justify-between q-mb-lg">
@@ -104,7 +104,7 @@
       </div>
 
       <!-- PAGINATION -->
-      <div class="row justify-center q-mt-lg">
+      <div class="row justify-center q-mt-xl">
         <q-pagination
           v-model="page"
           :max="totalPages"

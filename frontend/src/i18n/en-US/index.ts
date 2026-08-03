@@ -211,6 +211,8 @@ export default {
       main: 'Main metadata',
       all: 'All metadata',
     },
+    relatedCollections: 'Related collections',
+    noCollections: 'This record is not part of any collection yet.',
     fields: {
       title: 'Title',
       subtitle: 'Subtitle',

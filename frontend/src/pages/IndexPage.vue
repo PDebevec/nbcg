@@ -57,7 +57,7 @@
       </div>
     </section>
 
-    <div class="page-body q-px-md q-py-xl">
+    <div class="page-body page-body--wide q-px-md q-py-xl">
 
       <!-- COLLECTIONS -->
       <section class="q-mb-xl">
@@ -83,11 +83,7 @@
       <section class="q-mb-xl">
         <h2 class="text-h5 text-weight-bold text-primary text-center q-mt-none q-mb-sm">{{ t('index.thematicTitle') }}</h2>
         <q-separator color="secondary" size="3px" class="section-separator q-mb-md" />
-        <div
-          class="thematic-carousel"
-          @mouseenter="thematicPaused = true"
-          @mouseleave="thematicPaused = false"
-        >
+        <div class="thematic-carousel">
           <q-card
             v-for="(tc, i) in thematicCollections"
             :key="tc.key"
@@ -118,25 +114,23 @@
       <section v-if="newestItems.length" class="q-mb-xl">
         <h2 class="text-h5 text-weight-bold text-primary q-mt-none q-mb-sm">{{ t('index.newestTitle') }}</h2>
         <q-separator color="secondary" size="3px" class="section-separator section-separator--left q-mb-md" />
-        <div class="row q-col-gutter-md">
-          <div v-for="item in newestItems" :key="item.id" class="col-12 col-sm-6">
-            <q-card flat v-ripple class="newest-card bg-library-surface cursor-pointer" @click="openRecord(item)">
-              <div class="row no-wrap full-height">
-                <q-img :src="coverUrl(item)" fit="cover" class="newest-cover" />
-                <div class="col q-pa-md column justify-between">
-                  <div>
-                    <div
-                      v-if="item.source.metadata.materialType?.en"
-                      class="newest-type text-uppercase text-weight-bold"
-                      :class="`text-${typeColor(item.source.metadata.materialType.en)}`"
-                    >{{ item.source.metadata.materialType.en }}</div>
-                    <div class="text-weight-bold text-library-ink ellipsis-2-lines q-mt-xs">{{ item.source.metadata.title }}</div>
-                    <div class="text-caption text-library-muted ellipsis q-mt-xs">{{ item.source.metadata.firstResponsibility }}</div>
-                  </div>
-                  <div class="row items-center justify-between q-mt-sm">
-                    <span class="text-caption text-library-muted">{{ item.source.metadata.publicationDate1 }}</span>
-                    <q-icon name="arrow_forward" size="18px" color="primary" class="newest-arrow" />
-                  </div>
+        <div class="row q-col-gutter-lg">
+          <div v-for="item in newestItems" :key="item.id" class="col-12 col-sm-4 col-md-2">
+            <q-card flat v-ripple class="newest-card bg-library-surface cursor-pointer full-height column no-wrap" @click="openRecord(item)">
+              <q-img :src="coverUrl(item)" :ratio="1" fit="cover" class="newest-cover" />
+              <div class="col-grow q-pa-md column no-wrap justify-between">
+                <div>
+                  <div
+                    v-if="item.source.metadata.materialType?.en"
+                    class="newest-type text-uppercase text-weight-bold ellipsis"
+                    :class="`text-${typeColor(item.source.metadata.materialType.en)}`"
+                  >{{ item.source.metadata.materialType.en }}</div>
+                  <div class="text-weight-bold text-library-ink ellipsis-2-lines q-mt-xs">{{ item.source.metadata.title }}</div>
+                  <div class="text-caption text-library-muted ellipsis q-mt-xs">{{ item.source.metadata.firstResponsibility }}</div>
+                </div>
+                <div class="row no-wrap items-center justify-between q-mt-sm">
+                  <span class="text-caption text-library-muted ellipsis">{{ item.source.metadata.publicationDate1 }}</span>
+                  <q-icon name="arrow_forward" size="18px" color="primary" class="newest-arrow" />
                 </div>
               </div>
             </q-card>
@@ -172,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import imageStock from 'src/assets/image-stock.jpg';
@@ -255,12 +249,11 @@ function thematicStyle(i: number) {
     };
   }
   const shift = d * 54;
-  const scale = abs === 0 ? 1 : abs === 1 ? 0.85 : abs === 2 ? 0.71 : 0.58;
+  const scale = abs === 0 ? 1 : abs === 1 ? 0.92 : abs === 2 ? 0.85 : 0.78;
   const tilt = d === 0 ? 0 : d > 0 ? -9 : 9;
   return {
     transform: `translate(calc(-50% + ${shift}%), -50%) perspective(1200px) rotateY(${tilt}deg) scale(${scale})`,
-    opacity: abs === 0 ? '1' : abs === 1 ? '0.95' : abs === 2 ? '0.85' : '0.7',
-    filter: abs === 0 ? 'none' : 'saturate(0.6) brightness(0.94)',
+    opacity: '1',
     zIndex: String(10 - abs * 2),
   };
 }
@@ -268,22 +261,6 @@ function thematicStyle(i: number) {
 function goToThematic(i: number) {
   thematicIndex.value = i;
 }
-
-// Auto-advance, paused while the pointer is over the carousel
-const thematicPaused = ref(false);
-let thematicTimer: ReturnType<typeof setInterval> | undefined;
-
-onMounted(() => {
-  thematicTimer = setInterval(() => {
-    if (!thematicPaused.value) {
-      thematicIndex.value = (thematicIndex.value + 1) % thematicCollections.length;
-    }
-  }, 5000);
-});
-
-onBeforeUnmount(() => {
-  clearInterval(thematicTimer);
-});
 
 // Newest additions
 const newestItems = ref<SearchHit[]>([]);
@@ -293,7 +270,7 @@ onMounted(async () => {
     const result = await searchItems({
       type: 'records',
       sort: 'newest',
-      limit: 4,
+      limit: 6,
       fields: [
         'metadata.title',
         'metadata.firstResponsibility',
@@ -382,8 +359,8 @@ async function doSearch() {
   border-radius: 8px
   flex-shrink: 0
 
+// Desktop width comes from the global .page-body--wide rule in app.sass
 .page-body
-  max-width: 1280px
   margin: 0 auto
 
 .section-separator
@@ -407,9 +384,6 @@ async function doSearch() {
   position: relative
   height: 520px
   overflow: hidden
-  // Fade the far edges so half-hidden cards dissolve into the page
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%)
-  mask-image: linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%)
 
 .thematic-slide
   position: absolute
@@ -421,7 +395,7 @@ async function doSearch() {
   border: 1px solid $divider
   cursor: pointer
   will-change: transform, opacity
-  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease, filter 0.5s ease, box-shadow 0.3s ease, border-color 0.3s ease
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease, box-shadow 0.3s ease, border-color 0.3s ease
   &:not(.is-active):hover
     box-shadow: 0 6px 24px rgba($dark, 0.18)
   &.is-active
@@ -458,7 +432,6 @@ async function doSearch() {
     transform: translateY(0)
 
 .newest-card
-  height: 164px
   border-radius: $radius
   overflow: hidden
   border: 1px solid $divider
@@ -473,9 +446,7 @@ async function doSearch() {
       transform: translateX(4px)
 
 .newest-cover
-  width: 110px
-  min-width: 110px
-  height: 100%
+  width: 100%
 
 .newest-type
   font-size: 0.68rem

@@ -98,7 +98,7 @@
             v-model="metaTab"
             dense no-caps
             align="left"
-            class="text-library-muted"
+            class="meta-tabs text-library-muted"
             active-color="primary"
             indicator-color="primary"
           >
@@ -257,6 +257,15 @@
 
             </q-tab-panel>
           </q-tab-panels>
+
+          <!-- RELATED COLLECTIONS — placeholder until collections exist -->
+          <section class="q-mt-xl">
+            <div class="section-label q-mb-sm">{{ t('record.relatedCollections') }}</div>
+            <div class="collections-placeholder column items-center justify-center text-center q-pa-lg">
+              <q-icon name="collections_bookmark" size="32px" color="library-muted" class="q-mb-sm" />
+              <div class="text-body2 text-library-muted">{{ t('record.noCollections') }}</div>
+            </div>
+          </section>
         </template>
 
         <template v-else>
@@ -378,6 +387,12 @@ onMounted(async () => {
 .meta-list
   max-width: 760px
 
+// The sliding-indicator animation leaves a stale transform behind when the
+// layout shifts mid-transition (animated tab panels) — pin it in place instead
+.meta-tabs :deep(.q-tab__indicator)
+  transform: none !important
+  transition: none !important
+
 .section-label
   font-size: 0.72rem
   font-weight: 700
@@ -389,4 +404,10 @@ onMounted(async () => {
   font-size: 0.75rem
   color: $muted
   font-weight: 500
+
+.collections-placeholder
+  border: 1px dashed $divider
+  border-radius: $radius
+  background: $surface
+  min-height: 120px
 </style>
