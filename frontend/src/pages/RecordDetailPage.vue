@@ -1,123 +1,161 @@
 <template>
   <q-page>
-    <!-- HEADER -->
-    <div class="record-header q-px-md q-py-lg">
-      <div class="page-body">
-        <div class="q-px-md">
-          <q-btn
-            flat no-caps dense
-            icon="arrow_back"
-            :label="t('record.backToCatalog')"
-            color="white"
-            class="q-mb-md"
-            @click="$router.back()"
-          />
 
-          <div v-if="item" class="row q-col-gutter-lg items-start">
-            <!-- COVER -->
-            <div class="col-auto">
-              <q-img
-                :src="coverUrl"
-                style="width: 130px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.4)"
-                :ratio="2/3"
-              />
-            </div>
-            <!-- TITLE BLOCK -->
-            <div class="col">
-              <div class="header-kicker q-mb-xs">{{ item.source.metadata.materialType?.en }}</div>
-              <h1 class="text-h4 text-weight-bold text-white q-my-none q-mb-sm">
-                {{ item.source.metadata.title }}
-              </h1>
-              <div v-if="item.source.metadata.subtitle" class="text-subtitle1 text-white q-mb-xs" style="opacity:0.8">
-                {{ item.source.metadata.subtitle }}
-              </div>
-              <div v-if="item.source.metadata.firstResponsibility" class="text-body1 text-white q-mb-sm" style="opacity:0.75">
-                {{ item.source.metadata.firstResponsibility }}
-              </div>
-              <div class="row q-gutter-sm q-mt-sm">
-                <q-badge v-if="item.source.metadata.publicationDate1" outline color="white" text-color="white">
-                  {{ item.source.metadata.publicationDate1 }}
-                </q-badge>
-                <q-badge
-                  v-for="lang in item.source.metadata.language"
-                  :key="lang.code"
-                  outline color="white" text-color="white"
-                >
-                  {{ lang.en }}
-                </q-badge>
-                <q-badge v-if="item.source.metadata.publication?.country" outline color="white" text-color="white">
-                  {{ item.source.metadata.publication.country }}
-                </q-badge>
-              </div>
-            </div>
-          </div>
+    <!-- VIEWER — full-width band directly under the header -->
+    <FileViewer
+      v-if="loading || item"
+      v-model="selectedFileId"
+      :files="files"
+      :loading="loading"
+    >
+      <template #overlay>
+        <q-btn
+          flat no-caps dense
+          icon="arrow_back"
+          :label="t('record.backToCatalog')"
+          color="white"
+          class="stage-back"
+          @click="$router.back()"
+        />
+      </template>
+    </FileViewer>
 
-          <!-- SKELETON while loading -->
-          <div v-else-if="loading" class="row q-col-gutter-lg items-start">
-            <div class="col-auto">
-              <q-skeleton width="130px" height="195px" style="border-radius:8px" />
-            </div>
-            <div class="col">
-              <q-skeleton type="text" width="40%" class="q-mb-sm" />
-              <q-skeleton type="text" width="80%" height="2.5rem" class="q-mb-sm" />
-              <q-skeleton type="text" width="55%" />
-            </div>
-          </div>
-
-          <div v-else class="text-white text-body1">{{ t('record.notFound') }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- BODY -->
     <div class="page-body q-px-md q-py-lg">
       <div class="q-px-md">
 
-        <div v-if="loading" class="row q-col-gutter-lg">
-          <div class="col-12 col-md-8">
-            <q-skeleton height="300px" class="rounded-borders" />
+        <!-- SKELETON while loading -->
+        <template v-if="loading">
+          <q-skeleton type="text" width="40%" class="q-mb-sm" />
+          <q-skeleton type="text" width="80%" height="2.5rem" class="q-mb-sm" />
+          <q-skeleton type="text" width="55%" />
+        </template>
+
+        <template v-else-if="item">
+
+          <!-- ACTIONS -->
+          <div class="row items-center q-gutter-sm q-mb-xl">
+            <q-btn
+              v-if="selectedFile"
+              unelevated no-caps
+              color="primary"
+              icon="download"
+              :label="t('record.download')"
+              :href="downloadUrl(selectedFile)"
+            />
+            <q-btn
+              outline no-caps
+              color="primary"
+              icon="share"
+              :label="t('record.share')"
+              @click="share"
+            />
+            <q-btn
+              v-if="selectedFile && selectedFile.fileType !== 'UNKNOWN'"
+              flat no-caps
+              color="library-muted"
+              icon="open_in_new"
+              :label="t('record.openInNewTab')"
+              :href="inlineUrl(selectedFile)"
+              target="_blank"
+            />
+            <q-space />
+            <div v-if="selectedFile" class="text-caption text-library-muted">
+              {{ selectedFile.filename }} · {{ formatBytes(selectedFile.sizeBytes) }}
+            </div>
           </div>
-        </div>
 
-        <div v-else-if="item" class="row q-col-gutter-lg">
+          <!-- TITLE BLOCK -->
+          <div class="q-mb-lg">
+            <div class="header-kicker q-mb-xs">{{ meta.materialType?.en }}</div>
+            <h1 class="text-h4 text-weight-bold text-library-ink q-my-none q-mb-sm">
+              {{ meta.title }}
+            </h1>
+            <div v-if="meta.subtitle" class="text-subtitle1 text-library-muted q-mb-xs">
+              {{ meta.subtitle }}
+            </div>
+            <div v-if="meta.firstResponsibility" class="text-body1 text-library-muted q-mb-sm">
+              {{ meta.firstResponsibility }}
+            </div>
+            <div class="row q-gutter-sm q-mt-sm">
+              <q-badge v-if="meta.publicationDate1" outline color="primary">
+                {{ meta.publicationDate1 }}
+              </q-badge>
+              <q-badge
+                v-for="lang in meta.language"
+                :key="lang.code"
+                outline color="primary"
+              >
+                {{ lang.en }}
+              </q-badge>
+              <q-badge v-if="meta.publication?.country" outline color="primary">
+                {{ meta.publication.country }}
+              </q-badge>
+            </div>
+          </div>
 
-          <!-- MAIN DETAILS -->
-          <div class="col-12 col-md-8">
+          <!-- METADATA TABS -->
+          <q-tabs
+            v-model="metaTab"
+            dense no-caps
+            align="left"
+            class="text-library-muted"
+            active-color="primary"
+            indicator-color="primary"
+          >
+            <q-tab name="main" :label="t('record.tabs.main')" />
+            <q-tab name="all" :label="t('record.tabs.all')" />
+          </q-tabs>
+          <q-separator class="q-mb-md" />
 
-            <!-- Summary / Abstract -->
-            <q-card v-if="meta.summaryNote" flat bordered class="detail-card q-mb-md">
-              <q-card-section>
+          <q-tab-panels v-model="metaTab" animated class="bg-transparent">
+
+            <!-- MAIN METADATA -->
+            <q-tab-panel name="main" class="q-pa-none">
+              <p v-if="meta.summaryNote" class="text-body2 text-library-muted q-mb-md meta-list">
+                {{ meta.summaryNote }}
+              </p>
+              <q-list dense separator class="meta-list">
+                <detail-row v-if="meta.title" :label="t('record.fields.title')" :value="meta.title" />
+                <detail-row v-if="meta.subtitle" :label="t('record.fields.subtitle')" :value="meta.subtitle" />
+                <detail-row v-if="meta.firstResponsibility" :label="t('record.fields.responsibility')" :value="meta.firstResponsibility" />
+                <detail-row v-if="authorsLine" :label="t('record.authors')" :value="authorsLine" />
+                <detail-row v-if="meta.publicationDate1" :label="t('record.fields.year')" :value="meta.publicationDate1" />
+                <detail-row v-if="meta.publication?.publisher" :label="t('record.fields.publisher')" :value="meta.publication.publisher" />
+                <detail-row v-if="meta.publication?.place" :label="t('record.fields.place')" :value="meta.publication.place" />
+                <detail-row v-if="languagesLine" :label="t('record.fields.language')" :value="languagesLine" />
+                <detail-row v-if="meta.materialType?.en" :label="t('record.fields.materialType')" :value="meta.materialType.en" />
+                <detail-row v-if="meta.physicalDescription?.extent" :label="t('record.fields.extent')" :value="meta.physicalDescription.extent" />
+              </q-list>
+            </q-tab-panel>
+
+            <!-- ALL METADATA -->
+            <q-tab-panel name="all" class="q-pa-none">
+
+              <div v-if="meta.summaryNote" class="q-mb-lg meta-list">
                 <div class="section-label q-mb-sm">{{ t('record.abstract') }}</div>
                 <p class="text-body2 text-library-muted q-ma-none">{{ meta.summaryNote }}</p>
-              </q-card-section>
-            </q-card>
+              </div>
 
-            <!-- Bibliographic details -->
-            <q-card flat bordered class="detail-card q-mb-md">
-              <q-card-section>
-                <div class="section-label q-mb-sm">{{ t('record.bibliographic') }}</div>
-                <q-list dense separator>
-                  <detail-row v-if="meta.title" :label="t('record.fields.title')" :value="meta.title" />
-                  <detail-row v-if="meta.subtitle" :label="t('record.fields.subtitle')" :value="meta.subtitle" />
-                  <detail-row v-if="meta.parallelTitle" :label="t('record.fields.parallelTitle')" :value="meta.parallelTitle" />
-                  <detail-row v-if="meta.firstResponsibility" :label="t('record.fields.responsibility')" :value="meta.firstResponsibility" />
-                  <detail-row v-if="meta.subsequentResponsibility" :label="t('record.fields.addResponsibility')" :value="meta.subsequentResponsibility" />
-                  <detail-row v-if="meta.edition" :label="t('record.fields.edition')" :value="meta.edition" />
-                  <detail-row v-if="meta.publication?.publisher" :label="t('record.fields.publisher')" :value="meta.publication.publisher" />
-                  <detail-row v-if="meta.publication?.place" :label="t('record.fields.place')" :value="meta.publication.place" />
-                  <detail-row v-if="meta.publicationDate1" :label="t('record.fields.year')" :value="meta.publicationDate1" />
-                  <detail-row v-if="meta.physicalDescription?.extent" :label="t('record.fields.extent')" :value="meta.physicalDescription.extent" />
-                  <detail-row v-if="meta.physicalDescription?.dimensions" :label="t('record.fields.dimensions')" :value="meta.physicalDescription.dimensions" />
-                  <detail-row v-if="meta.isbn?.length" :label="t('record.fields.isbn')" :value="meta.isbn.join(', ')" />
-                  <detail-row v-if="meta.issn?.length" :label="t('record.fields.issn')" :value="meta.issn.join(', ')" />
-                  <detail-row v-if="meta.cobissId" :label="t('record.fields.cobissId')" :value="meta.cobissId" />
-                </q-list>
-              </q-card-section>
-            </q-card>
+              <div class="section-label q-mb-sm">{{ t('record.bibliographic') }}</div>
+              <q-list dense separator class="meta-list q-mb-lg">
+                <detail-row v-if="meta.title" :label="t('record.fields.title')" :value="meta.title" />
+                <detail-row v-if="meta.subtitle" :label="t('record.fields.subtitle')" :value="meta.subtitle" />
+                <detail-row v-if="meta.parallelTitle" :label="t('record.fields.parallelTitle')" :value="meta.parallelTitle" />
+                <detail-row v-if="meta.firstResponsibility" :label="t('record.fields.responsibility')" :value="meta.firstResponsibility" />
+                <detail-row v-if="meta.subsequentResponsibility" :label="t('record.fields.addResponsibility')" :value="meta.subsequentResponsibility" />
+                <detail-row v-if="meta.edition" :label="t('record.fields.edition')" :value="meta.edition" />
+                <detail-row v-if="meta.publication?.publisher" :label="t('record.fields.publisher')" :value="meta.publication.publisher" />
+                <detail-row v-if="meta.publication?.place" :label="t('record.fields.place')" :value="meta.publication.place" />
+                <detail-row v-if="meta.publicationDate1" :label="t('record.fields.year')" :value="meta.publicationDate1" />
+                <detail-row v-if="languagesLine" :label="t('record.fields.language')" :value="languagesLine" />
+                <detail-row v-if="meta.physicalDescription?.extent" :label="t('record.fields.extent')" :value="meta.physicalDescription.extent" />
+                <detail-row v-if="meta.physicalDescription?.dimensions" :label="t('record.fields.dimensions')" :value="meta.physicalDescription.dimensions" />
+                <detail-row v-if="meta.isbn?.length" :label="t('record.fields.isbn')" :value="meta.isbn.join(', ')" />
+                <detail-row v-if="meta.issn?.length" :label="t('record.fields.issn')" :value="meta.issn.join(', ')" />
+                <detail-row v-if="meta.cobissId" :label="t('record.fields.cobissId')" :value="meta.cobissId" />
+              </q-list>
 
-            <!-- Authors -->
-            <q-card v-if="meta.authors?.length" flat bordered class="detail-card q-mb-md">
-              <q-card-section>
+              <div v-if="meta.authors?.length" class="q-mb-lg">
                 <div class="section-label q-mb-sm">{{ t('record.authors') }}</div>
                 <div class="row q-gutter-sm">
                   <q-chip
@@ -132,45 +170,27 @@
                     <span v-if="author.role?.en" class="q-ml-xs" style="opacity:0.75">({{ author.role.en }})</span>
                   </q-chip>
                 </div>
-              </q-card-section>
-            </q-card>
+              </div>
 
-            <!-- Notes -->
-            <q-card v-if="meta.notes?.length" flat bordered class="detail-card q-mb-md">
-              <q-card-section>
+              <div v-if="meta.notes?.length" class="q-mb-lg meta-list">
                 <div class="section-label q-mb-sm">{{ t('record.notes') }}</div>
                 <ul class="q-ma-none q-pl-md">
                   <li v-for="(note, i) in meta.notes" :key="i" class="text-body2 text-library-muted">{{ note }}</li>
                 </ul>
-              </q-card-section>
-            </q-card>
+              </div>
 
-            <!-- Series -->
-            <q-card v-if="meta.seriesTitle" flat bordered class="detail-card q-mb-md">
-              <q-card-section>
+              <div v-if="meta.seriesTitle" class="q-mb-lg">
                 <div class="section-label q-mb-sm">{{ t('record.series') }}</div>
-                <q-list dense>
+                <q-list dense class="meta-list">
                   <detail-row :label="t('record.fields.seriesTitle')" :value="meta.seriesTitle" />
                   <detail-row v-if="meta.seriesIssn" :label="t('record.fields.seriesIssn')" :value="meta.seriesIssn" />
                   <detail-row v-if="meta.seriesVolume" :label="t('record.fields.volume')" :value="meta.seriesVolume" />
                 </q-list>
-              </q-card-section>
-            </q-card>
-          </div>
+              </div>
 
-          <!-- SIDEBAR -->
-          <div class="col-12 col-md-4">
-
-            <!-- Cover image preview (larger) -->
-            <q-card flat bordered class="detail-card q-mb-md">
-              <q-img :src="coverUrl" :ratio="2/3" />
-            </q-card>
-
-            <!-- Classification -->
-            <q-card flat bordered class="detail-card q-mb-md">
-              <q-card-section>
+              <div class="q-mb-lg">
                 <div class="section-label q-mb-sm">{{ t('record.classification') }}</div>
-                <q-list dense separator>
+                <q-list dense separator class="meta-list">
                   <detail-row v-if="meta.materialType?.en" :label="t('record.fields.materialType')" :value="meta.materialType.en" />
                   <detail-row v-if="meta.bibliographicLevel?.en" :label="t('record.fields.bibLevel')" :value="meta.bibliographicLevel.en" />
                   <detail-row v-if="meta.documentTypology" :label="t('record.fields.docTypology')" :value="meta.documentTypology" />
@@ -196,25 +216,23 @@
                     <q-chip v-for="k in meta.keywords" :key="k" dense outline color="secondary" size="sm">{{ k }}</q-chip>
                   </div>
                 </div>
-              </q-card-section>
-            </q-card>
+              </div>
 
-            <!-- Attachments -->
-            <q-card v-if="item.source.file_attachments?.length" flat bordered class="detail-card q-mb-md">
-              <q-card-section>
+              <div v-if="files.length" class="q-mb-lg">
                 <div class="section-label q-mb-sm">{{ t('record.attachments') }}</div>
-                <q-list dense separator>
+                <q-list dense separator class="meta-list">
                   <q-item
-                    v-for="file in item.source.file_attachments"
+                    v-for="file in files"
                     :key="file.id"
                     dense
                     clickable
-                    :href="`/api/files/${file.id}/download`"
-                    target="_blank"
+                    :active="file.id === selectedFile?.id"
+                    active-class="text-primary"
+                    @click="selectedFileId = file.id"
                   >
                     <q-item-section avatar>
                       <q-icon
-                        :name="file.fileType === 'PDF' ? 'picture_as_pdf' : file.fileType === 'IMAGE' ? 'image' : 'attach_file'"
+                        :name="fileIcon(file)"
                         :color="file.fileType === 'PDF' ? 'negative' : 'library-muted'"
                         size="sm"
                       />
@@ -223,15 +241,35 @@
                       <q-item-label class="text-caption">{{ file.filename }}</q-item-label>
                       <q-item-label caption>{{ formatBytes(file.sizeBytes) }}</q-item-label>
                     </q-item-section>
+                    <q-item-section side>
+                      <q-btn
+                        flat dense round
+                        icon="download"
+                        size="sm"
+                        color="library-muted"
+                        :href="downloadUrl(file)"
+                        @click.stop
+                      />
+                    </q-item-section>
                   </q-item>
                 </q-list>
-              </q-card-section>
-            </q-card>
+              </div>
 
-          </div>
-        </div>
+            </q-tab-panel>
+          </q-tab-panels>
+        </template>
 
-        <div v-else class="text-body1 text-library-muted">{{ t('record.notFound') }}</div>
+        <template v-else>
+          <q-btn
+            flat no-caps dense
+            icon="arrow_back"
+            :label="t('record.backToCatalog')"
+            color="primary"
+            class="q-mb-md"
+            @click="$router.back()"
+          />
+          <div class="text-body1 text-library-muted">{{ t('record.notFound') }}</div>
+        </template>
       </div>
     </div>
   </q-page>
@@ -241,10 +279,13 @@
 import { ref, computed, onMounted, defineComponent, h } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import imageStock from 'src/assets/image-stock.jpg';
-import { getItem, type SearchHit, type RecordMetadata } from 'src/api/search';
+import { useQuasar, copyToClipboard } from 'quasar';
+import { getItem, type SearchHit, type RecordMetadata, type FileAttachment } from 'src/api/search';
+import { inlineUrl, downloadUrl, fileIcon, formatBytes } from 'src/utils/fileAttachments';
+import FileViewer from 'src/components/FileViewer.vue';
 
 const { t } = useI18n();
+const $q = useQuasar();
 
 // ---------------------------------------------------------------------------
 // Inline helper component to keep template DRY
@@ -268,21 +309,45 @@ const loading = ref(true);
 
 const meta = computed<RecordMetadata>(() => item.value?.source.metadata as RecordMetadata ?? ({} as RecordMetadata));
 
-const coverUrl = computed(() => {
-  const img = item.value?.source.file_attachments?.find((f) => f.fileType === 'IMAGE');
-  return img ? `/api/files/${img.id}/download` : imageStock;
-});
+const metaTab = ref<'main' | 'all'>('main');
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+const authorsLine = computed(() =>
+  meta.value.authors
+    ?.map((a) => [a.familyName, a.firstName].filter(Boolean).join(', '))
+    .join('; ') ?? '',
+);
+
+const languagesLine = computed(() => meta.value.language?.map((l) => l.en).join(', ') ?? '');
+
+const files = computed<FileAttachment[]>(() => item.value?.source.file_attachments ?? []);
+
+const selectedFileId = ref<string | null>(null);
+const selectedFile = computed<FileAttachment | null>(
+  () => files.value.find((f) => f.id === selectedFileId.value) ?? null,
+);
+
+async function share() {
+  const url = window.location.href;
+  const title = meta.value.title ?? document.title;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, url });
+      return;
+    } catch {
+      // User dismissed the share sheet — fall through to clipboard
+    }
+  }
+  await copyToClipboard(url);
+  $q.notify({ message: t('record.linkCopied'), icon: 'link', color: 'primary' });
 }
 
 onMounted(async () => {
   const id = route.params.id as string;
   try {
     item.value = await getItem(id);
+    // Default to the first previewable file, else the first file
+    const previewable = files.value.find((f) => f.fileType === 'IMAGE' || f.fileType === 'PDF');
+    selectedFileId.value = (previewable ?? files.value[0])?.id ?? null;
   } finally {
     loading.value = false;
   }
@@ -290,25 +355,28 @@ onMounted(async () => {
 </script>
 
 <style scoped lang="sass">
-.record-header
-  background: $primary
-  min-height: 200px
+.page-body
+  max-width: 1280px
+  margin: 0 auto
+
+// Overlaid on the FileViewer stage via its #overlay slot
+.stage-back
+  position: absolute
+  top: 12px
+  left: 12px
+  z-index: 2
+  background: #000
+  border-radius: 6px
 
 .header-kicker
   font-size: 0.72rem
   font-weight: 700
   letter-spacing: 0.14em
   text-transform: uppercase
-  color: rgba($paper, 0.6)
+  color: $muted
 
-.page-body
-  max-width: 1280px
-  margin: 0 auto
-
-.detail-card
-  border-radius: $radius
-  background: $surface
-  border: 1px solid $divider
+.meta-list
+  max-width: 760px
 
 .section-label
   font-size: 0.72rem

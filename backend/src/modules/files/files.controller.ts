@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Res,
   UploadedFile,
   UploadedFiles,
@@ -104,11 +105,13 @@ export class FilesController {
     @GetPrincipal() principal: Principal,
     @Param('fileId') fileId: string,
     @Res() res: Response,
+    @Query('inline') inline?: string,
   ) {
     await this.access.assertCanViewFile(principal, fileId);
     const { stream, contentLength, mimeType, filename } = await this.filesService.download(fileId);
+    const disposition = inline === '1' ? 'inline' : 'attachment';
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(filename)}`);
     if (contentLength) res.setHeader('Content-Length', contentLength);
     stream.on('error', () => {
       // Storage stream broke mid-transfer — nothing to do but terminate the response.
