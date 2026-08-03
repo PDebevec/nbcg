@@ -204,7 +204,7 @@ onUnmounted(() => {
 .viewer-stage
   position: relative
   height: 520px
-  padding-top: 8px
+  padding-top: 0px
   display: flex
   align-items: center
   justify-content: center
@@ -249,7 +249,7 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.85)
 
 .file-strip
-  background: #000
+  background: #2b2b2b
   border-top: 1px solid rgba(255, 255, 255, 0.12)
 
 .file-chip-name
