@@ -139,11 +139,6 @@ export class ItemsService {
     const hasMetadataChanges =
       metadataUpdate !== undefined && Object.keys(metadataUpdate).length > 0;
 
-    // Nothing to update — return success without touching the DB.
-    if (!visibilityStatus && !hasMetadataChanges) {
-      return;
-    }
-
     const [draft, record] = await Promise.all([
       this.prisma.draft.findUnique({ where: { id } }),
       this.prisma.record.findUnique({ where: { id } }),
@@ -159,6 +154,13 @@ export class ItemsService {
       throw new ConflictException(
         `Version conflict: expected ${expectedVersion}, current ${existing.version}. Re-fetch the item and retry.`,
       );
+    }
+
+    // Nothing to write. Checked only after the existence and version guards
+    // above, so an empty payload is validated exactly as strictly as a real
+    // one. Returns the unchanged version to keep the response shape uniform.
+    if (!visibilityStatus && !hasMetadataChanges) {
+      return { version: existing.version };
     }
 
     const existingMetadata =
@@ -243,8 +245,12 @@ export class ItemsService {
     await Promise.all(attachments.map((a) => this.seaweedfs.delete(a.originalFid).catch(() => {})));
   }
 
-  async transition(ids: string[], targetState: ItemType, userId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+  async transition(
+    ids: string[],
+    targetState: ItemType,
+    userId: string,
+  ): Promise<Array<{ id: string; version: number }>> {
+    return this.prisma.$transaction(async (tx) => {
       const [allDrafts, allRecords] = await Promise.all([
         tx.draft.findMany({ where: { id: { in: ids } } }),
         tx.record.findMany({ where: { id: { in: ids } } }),
@@ -366,6 +372,13 @@ export class ItemsService {
       if (fromRecords.length > 0) {
         await tx.record.deleteMany({ where: { id: { in: fromRecords } } });
       }
+
+      // Read the versions back rather than returning the ones written above:
+      // a transitioned item that is itself a parent may have been bumped again
+      // by the children-count trigger when its children's childType changed.
+      return targetState === ItemType.RECORD
+        ? tx.record.findMany({ where: { id: { in: ids } }, select: { id: true, version: true } })
+        : tx.draft.findMany({ where: { id: { in: ids } }, select: { id: true, version: true } });
     });
   }
 

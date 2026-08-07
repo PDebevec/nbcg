@@ -1,6 +1,7 @@
 import { Controller, Get, Header, Query, Req, Res } from '@nestjs/common';
 import { createHash } from 'crypto';
 import type { Request, Response } from 'express';
+import { RecordSchemaQueryDto } from './dto/record-schema-query.dto';
 import { SchemaService } from './schema.service';
 
 @Controller('schema')
@@ -12,10 +13,13 @@ export class SchemaController {
   @Get('record')
   @Header('Cache-Control', 'public, max-age=86400')
   getRecordSchema(
-    @Query('level') level: 'main' | 'child' | undefined,
+    @Query() query: RecordSchemaQueryDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
+    // `level` is validated to `main` | `child` | undefined, so the cache
+    // is bounded to three keys no matter what a caller sends.
+    const { level } = query;
     const cacheKey = level ?? '__all__';
 
     if (!this.etagCache.has(cacheKey)) {

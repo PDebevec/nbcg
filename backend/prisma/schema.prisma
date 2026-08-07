@@ -55,8 +55,8 @@ model Draft {
   /// [RecordMetadata]
   metadata         Json?
   version          Int              @default(0)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
   createdByUserId  String
   updatedByUserId  String?
   fileAttachments  FileAttachment[]
@@ -70,8 +70,8 @@ model Record {
   /// [RecordMetadata]
   metadata         Json?
   version          Int              @default(0)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @db.Timestamptz(3)
   createdByUserId  String
   updatedByUserId  String?
   fileAttachments  FileAttachment[]
@@ -93,7 +93,7 @@ model FileAttachment {
   mimeType             String
   sizeBytes            Int
   textExtractionStatus TextExtractionStatus @default(NOT_EXTRACTED)
-  createdAt            DateTime             @default(now())
+  createdAt            DateTime             @default(now()) @db.Timestamptz(3)
 
   @@index([draft_id])
   @@index([record_id])
@@ -105,7 +105,7 @@ model ItemRelation {
   parentType ItemType
   childId    String
   childType  ItemType
-  createdAt  DateTime @default(now())
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
 
   @@id([parentId, childId])
   @@index([parentId, parentType])

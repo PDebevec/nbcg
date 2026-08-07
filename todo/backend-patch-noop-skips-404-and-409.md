@@ -1,6 +1,46 @@
 # Backend: an empty `PATCH` returns success without checking existence or version
 
-## Status: TODO — P2 (silent false success), plus a P3 semantics question
+## Status: DONE — implemented 2026-08-07
+
+### Correction to the report: the 404 half does not reproduce
+
+Behaviour 1 was flagged in the report as read-from-code and unconfirmed. Probed
+live: **`PATCH /api/items/<nonexistent>` with an empty payload already returned
+`404`.** The service's early return is genuinely before the 404 check, but the
+*controller* calls `access.assertCanManage(principal, id)` first, and that runs
+`resolveCollection()`, which throws `NotFoundException` for an unknown id
+(`backend/src/core/auth/resource-access.service.ts:24`). The 404 was never
+reachable through HTTP.
+
+**The 409 half was real and reproduced**: empty payload +
+`expectedVersion: 99` → `200`. Nothing upstream of the service checks the
+version, so that guard really was skipped.
+
+### What shipped
+
+The no-op early return now sits **after** both guards
+(`items.service.ts`), so an empty payload is checked exactly as strictly as a
+real one, and it returns `{ version: existing.version }` — the response shape is
+now uniform, and a caller can always trust the returned version.
+
+### Behaviour 2 (`version` bumps on an unchanged write): documented, not changed
+
+Confirmed live (identical `subtitle` re-patched → `v1` → `v2`), and
+**deliberately kept**. Change-detection was considered and rejected: deep
+semantic comparison of nested metadata (authors, arrays of objects) can wrongly
+report "unchanged", and a version that fails to bump on a real change silently
+leaves every mirror stale — a strictly worse failure than a spare bump. The
+trigger also bumps `version` outside any client-visible content change, so the
+"change counter" reading could never have been made true anyway.
+
+`version` is therefore **defined** as a write counter, and that is now stated in
+`backend/BACKEND_REFERENCE.md` ("What `version` means") along with the
+`updatedAt` caveat and the table of which endpoints return a version.
+
+All three acceptance criteria verified live and covered in
+`backend/test/api-test-suite.sh` § Optimistic Concurrency.
+
+## Original report — TODO, P2 (silent false success), plus a P3 semantics question
 
 Found during `nbcg-dc` Epic 10 / API round-trip verification, 2026-08-07.
 Behaviour 1 is **read from the code** (`items.service.ts:139-145`) — the live token

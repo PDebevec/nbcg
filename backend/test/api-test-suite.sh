@@ -451,6 +451,11 @@ assert_status "Cataloguer cannot transition (missing records:manage)" "403"
 http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"targetState\":\"RECORD\",\"ids\":[\"$TRANSITION_ID\"]}"
 assert_status "Editor transitions DRAFT -> RECORD" "201"
 
+# A transition bumps each item's version, so it reports the resulting
+# versions rather than an empty body.
+assert_json_field "Transition returns the transitioned id" "[0]['id']" "$TRANSITION_ID"
+assert_json_field "Transition returns bumped version" "[0]['version']" "1"
+
 # Verify item is now a record (searchable in records)
 sleep 1
 http GET "$API/search/$TRANSITION_ID" "$TOKEN_ADMIN"
@@ -492,6 +497,18 @@ assert_status "Reader cannot connect relations" "403"
 http POST "$API/relations/connect" "$TOKEN_CATALOGUER" "{\"parentId\":\"$PARENT_ID\",\"childIds\":[\"$CHILD1_ID\",\"$CHILD2_ID\"]}"
 assert_status "Cataloguer can connect relations" "201"
 
+# The edge rows fire a trigger that bumps the parent's version, so connect
+# reports the parent's resulting state instead of an empty body.
+assert_json_field "Connect returns parentId" "['parentId']" "$PARENT_ID"
+assert_json_field "Connect returns bumped version (2 children)" "['version']" "2"
+assert_json_field "Connect returns childrenInDrafts" "['childrenInDrafts']" "2"
+PARENT_VERSION=$(json_field "['version']")
+
+# Acceptance: a client that connects children can PATCH that parent
+# immediately, without a 409 and without a CDC-lagged re-read.
+http PATCH "$API/items/$PARENT_ID" "$TOKEN_CATALOGUER" "{\"expectedVersion\":$PARENT_VERSION,\"metadata\":{\"subtitle\":\"patched right after connect\"}}"
+assert_status "PATCH parent right after connect succeeds (no 409)" "200"
+
 # Verify children count via search (wait for PGSync → OpenSearch)
 sleep 5
 http GET "$API/search/$PARENT_ID/children" "$TOKEN_ADMIN"
@@ -514,16 +531,12 @@ assert_status "Self-reference rejected" "400"
 http POST "$API/relations/connect" "$TOKEN_CATALOGUER" "{\"parentId\":\"$CHILD1_ID\",\"childIds\":[\"$PARENT_ID\"]}"
 assert_status "Direct circular reference rejected" "400"
 
-# Disconnect
+# Disconnect — 200 with the parent's post-write state (was an empty 204;
+# a 204 must not carry a body).
 http POST "$API/relations/disconnect" "$TOKEN_CATALOGUER" "{\"parentId\":\"$PARENT_ID\",\"childIds\":[\"$CHILD1_ID\"]}"
-# disconnect returns 201 (known behavior per test report)
-if [ "$HTTP_STATUS" = "204" ] || [ "$HTTP_STATUS" = "201" ]; then
-  echo -e "  ${GREEN}PASS${NC} Cataloguer can disconnect relations (HTTP $HTTP_STATUS)"
-  ((PASSED++))
-else
-  echo -e "  ${RED}FAIL${NC} Disconnect failed (HTTP $HTTP_STATUS)"
-  ((FAILED++))
-fi
+assert_status "Cataloguer can disconnect relations" "200"
+assert_json_field "Disconnect returns parentId" "['parentId']" "$PARENT_ID"
+assert_json_field "Disconnect returns decremented childrenInDrafts" "['childrenInDrafts']" "1"
 
 # ============================================================================
 # 7b. RELATION INTEGRITY ON DELETE
@@ -1029,6 +1042,20 @@ http GET "$API/schema/record?level=child" "$TOKEN_ADMIN"
 assert_status "GET /schema/record?level=child returns 200" "200"
 assert_body_contains "Child-level has title" '"key":"title"'
 
+# An unrecognised level must be a 400, never a cacheable empty field list.
+http GET "$API/schema/record?level=bogus" "$TOKEN_ADMIN"
+assert_status "GET /schema/record?level=bogus returns 400" "400"
+
+# Case-sensitive: ?level=MAIN is an ordinary client typo and must not
+# silently answer 200 {fields: []}.
+http GET "$API/schema/record?level=MAIN" "$TOKEN_ADMIN"
+assert_status "GET /schema/record?level=MAIN returns 400" "400"
+
+# ?level= (empty value) has always meant "all fields" — unchanged.
+http GET "$API/schema/record?level=" "$TOKEN_ADMIN"
+assert_status "GET /schema/record?level= (empty) returns 200" "200"
+assert_body_contains "Empty level returns full field set" '"key":"collectionType"'
+
 # ETag support: second request with If-None-Match should get 304
 http GET "$API/schema/record" "$TOKEN_ADMIN"
 ETAG=$(echo "$HTTP_BODY" | grep -o '"ETag"' || true)
@@ -1087,6 +1114,75 @@ assert_status "Update without expectedVersion returns 400" "400"
 # Update with correct version after previous bump
 http PATCH "$API/items/$CONC_ID" "$TOKEN_EDITOR" '{"expectedVersion":1,"metadata":{"title":"TEST-SUITE-CONCURRENCY-V2"}}'
 assert_status "Update with correct version after bumps" "200"
+
+# --- Empty-payload PATCH is checked exactly as strictly as a real one -------
+# A payload with nothing to write used to short-circuit before the existence
+# and version guards, reporting success against a missing id or a stale version.
+
+# Empty payload against a nonexistent id must 404, not report success.
+http PATCH "$API/items/nonexistent-id-12345" "$TOKEN_ADMIN" '{"expectedVersion":0,"metadata":{}}'
+assert_status "Empty PATCH on nonexistent id returns 404" "404"
+
+# Empty payload with a stale expectedVersion must 409, not report success.
+http PATCH "$API/items/$CONC_ID" "$TOKEN_EDITOR" '{"expectedVersion":0,"metadata":{}}'
+assert_status "Empty PATCH with stale expectedVersion returns 409" "409"
+
+# Empty payload at the right version succeeds and carries the unchanged
+# version, so every PATCH response has the same shape.
+http PATCH "$API/items/$CONC_ID" "$TOKEN_EDITOR" '{"expectedVersion":2,"metadata":{}}'
+assert_status "Empty PATCH at correct version succeeds" "200"
+assert_json_field "Empty PATCH returns unchanged version" "['version']" "2"
+
+# ============================================================================
+# INDEXED TIMESTAMP FORMAT
+# ============================================================================
+section "Indexed Timestamp Format"
+
+# The DB columns are timestamptz, so the CDC copy carries an offset. Without
+# one, JS parses an indexed timestamp as LOCAL time and every client reading
+# hit.source.createdAt is skewed by its own UTC offset.
+
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-TIMESTAMP","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+assert_status "Create item for timestamp test" "201"
+TS_ID=$(json_field "['id']")
+CLEANUP_IDS+=("$TS_ID")
+TS_REST=$(json_field "['createdAt']")
+
+# Wait for CDC to carry the row into the index
+sleep 5
+http GET "$API/search/$TS_ID" "$TOKEN_ADMIN"
+TS_INDEXED=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['source']['createdAt'])" 2>/dev/null || echo "")
+
+if [ -z "$TS_INDEXED" ]; then
+  echo -e "  ${YELLOW}SKIP${NC} Indexed timestamp not available yet (PGSync lag)"
+  ((SKIPPED++))
+else
+  # Unambiguous: must end in Z or carry an explicit ±HH:MM offset
+  if echo "$TS_INDEXED" | grep -qE 'Z$|[+-][0-9]{2}:?[0-9]{2}$'; then
+    echo -e "  ${GREEN}PASS${NC} Indexed timestamp carries a timezone ($TS_INDEXED)"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} Indexed timestamp has no timezone: $TS_INDEXED"
+    ((FAILED++))
+    ERRORS+=("Indexed createdAt has no timezone: $TS_INDEXED")
+  fi
+
+  # Same instant as the REST representation
+  if python3 -c "
+import sys
+from datetime import datetime
+def p(s):
+    return datetime.fromisoformat(s.replace('Z', '+00:00'))
+sys.exit(0 if p('$TS_REST') == p('$TS_INDEXED') else 1)
+" 2>/dev/null; then
+    echo -e "  ${GREEN}PASS${NC} REST and indexed createdAt are the same instant"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} REST ($TS_REST) != indexed ($TS_INDEXED)"
+    ((FAILED++))
+    ERRORS+=("REST createdAt $TS_REST != indexed $TS_INDEXED")
+  fi
+fi
 
 # ============================================================================
 # CLEANUP

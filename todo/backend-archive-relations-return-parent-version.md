@@ -1,6 +1,40 @@
 # Backend: return the parent's new `version` from relation writes
 
-## Status: TODO — P3, nice-to-have (the archive can work around it)
+## Status: DONE — implemented 2026-08-07
+
+**Decision: implement it**, despite being filed P3. The reasoning was cost:
+returning the parent's post-write state costs **one indexed primary-key lookup**
+(`readParentState`, ~0.1 ms) on `connect`/`disconnect`, and for `transition` the
+versions come from a `findMany` inside the transaction that already exists — so
+the "if it slows us down, let the desktop app handle it" branch never applied.
+Returning the new version/ETag from a write is also the ordinary pattern for an
+optimistic-concurrency API; returning nothing from a write that silently bumps
+`version` was the anomaly.
+
+**What shipped** (`backend/src/modules/relations/`, `items.service.ts`):
+
+- `POST /api/relations/connect` → `201 { parentId, version, childrenInDrafts, childrenInRecords }`
+- `POST /api/relations/disconnect` → **`200`** (was `204`) with the same shape.
+  The status had to change: a `204` must not carry a body.
+- `POST /api/items/transition` → `201 { id, version }[]`. The versions are
+  **read back** after the trigger rather than computed as `version + 1`, because
+  a transitioned item that is itself a parent gets bumped a second time when its
+  children's `childType` changes.
+
+Contract change was safe to make: the frontend calls only `/items/transition`
+and ignores the body ([frontend/src/api/admin.ts:65](../frontend/src/api/admin.ts)),
+and nothing consumed `connect`/`disconnect` bodies.
+
+Verified live: connecting 2 children returned `version: 2`, and a `PATCH` on the
+parent at that version succeeded with no `409` and no CDC-lagged re-read.
+Covered in `backend/test/api-test-suite.sh` §7 and §6.
+
+The two aggravating details below still stand and are now documented in
+`BACKEND_REFERENCE.md` rather than fixed: the trigger's raw SQL still leaves the
+parent's `updatedAt` unmoved, and `GET /api/search/:id` is still CDC-lagged.
+Returning the version from the write is what makes both survivable.
+
+## Original report — TODO, P3, nice-to-have (the archive can work around it)
 
 Found during `nbcg-dc` Epic 09 (API contract verification), 2026-08-07.
 **Not blocking** — the archive is fixing its own side regardless. File this only

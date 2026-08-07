@@ -1,6 +1,38 @@
 # Backend: `GET /api/schema/record` does not validate `?level`
 
-## Status: TODO — P2 (silent wrong answer; small, contained fix)
+## Status: DONE — implemented 2026-08-07
+
+Reproduced exactly as reported (`?level=bogus` and `?level=MAIN` → `200
+{"fields": []}`; `main`/`child`/none → 41/31/41).
+
+**Decision: `400`, case-sensitive** — the report's preferred option. `?level=Main`
+failing stays strict, but it now fails *loudly* instead of silently.
+
+**What shipped:** a `RecordSchemaQueryDto` with `@IsIn(['main','child'])` behind
+the global `ValidationPipe`, consumed via `@Query()`
+(`backend/src/modules/schema/`). `?level=` (empty value) is transformed to
+`undefined` so its long-standing "all fields" meaning is preserved rather than
+becoming a new `400`.
+
+**Second-order ETag cache is closed too**: `level` can now only be
+`main`/`child`/`undefined`, so the `Map` is bounded to three keys by
+construction — the caller-controlled key space is gone.
+
+Verified live, all acceptance criteria met:
+
+| Request | Result |
+| --- | --- |
+| `?level=bogus` | `400` |
+| `?level=MAIN` | `400` |
+| `?level=main` | `200`, 41 fields, ETag `"53aad73e…"` (unchanged) |
+| `?level=child` | `200`, 31 fields |
+| *(no param)* | `200`, 41 fields |
+| `?level=` (empty) | `200`, 41 fields (unchanged) |
+
+`If-None-Match` still yields `304` and `Cache-Control: public, max-age=86400` is
+unchanged. Covered in `backend/test/api-test-suite.sh` § Schema Endpoint.
+
+## Original report — TODO, P2 (silent wrong answer; small, contained fix)
 
 Found during `nbcg-dc` Epic 10 (Settings → "Refresh metadata schema"), 2026-08-07.
 Live-verified against the dev backend on `http://localhost:3000`.

@@ -1,6 +1,49 @@
 # Backend: indexed timestamps carry no timezone, so clients read them as local time
 
-## Status: TODO — P2 (wrong values in every client that parses them)
+## Status: DONE — implemented 2026-08-07
+
+Reproduced exactly: REST `2026-08-07T15:22:40.559Z` vs indexed
+`2026-08-07T15:22:40.559`.
+
+**Decision: option 2 — `timestamptz`**, the root fix, rather than patching the
+`_source` string on read. It also fixes anyone querying OpenSearch directly
+(Dashboards), which a backend-side normalisation would not.
+
+**What shipped:**
+
+- `@db.Timestamptz(3)` on every timestamp column — `Draft`, `Record`,
+  `FileAttachment`, `ItemRelation` (`backend/prisma/schema.prisma`).
+- Migration `20260807160000_timestamps_with_timezone`, converting with
+  `USING "createdAt" AT TIME ZONE 'UTC'`. Prisma had always written UTC into
+  these naive columns, so the conversion reinterprets each value as the instant
+  it already was — **lossless, no row shifts**.
+- Full reindex (delete `records,drafts` → delete the pgsync Redis checkpoints →
+  `--force-recreate pgsync`), so the corpus is not half-and-half. 14/14 docs
+  re-synced.
+
+No pgsync config change was needed: with a `timestamptz` column it emits the
+offset on its own.
+
+**Verified live**, both acceptance criteria:
+
+```
+REST  createdAt: '2026-08-07T15:47:27.504Z'
+INDEX createdAt: '2026-08-07T15:47:27.504+00:00'
+Date.parse → 1786117647504 === 1786117647504   PASS: identical instant
+```
+
+Pre-existing documents were confirmed converted in place (e.g.
+`2026-05-07T16:36:16.252+00:00`). Covered in `backend/test/api-test-suite.sh`
+§ Indexed Timestamp Format, which asserts the indexed value carries an offset
+*and* parses to the same instant as the REST value.
+
+**Still worth doing on the frontend:** the report's closing note stands —
+anything rendering "added on …" / "updated …" from a search hit was previously
+off by the UTC offset. Those values are correct now without a frontend change,
+but any client-side code that *compensated* by appending `Z` itself would now
+double-correct and should be checked.
+
+## Original report — TODO, P2 (wrong values in every client that parses them)
 
 Found during `nbcg-dc` Epic 10 / API round-trip verification, 2026-08-07.
 **Measured live** against the dev backend + OpenSearch.

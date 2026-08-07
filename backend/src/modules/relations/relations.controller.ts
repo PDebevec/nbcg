@@ -18,8 +18,10 @@ export class RelationsController {
     return this.relationsService.connect(dto.parentId, dto.childIds);
   }
 
+  // 200, not the previous 204 — the response now carries the parent's
+  // post-write version, and a 204 must not have a body.
   @Post('disconnect')
-  @HttpCode(204)
+  @HttpCode(200)
   async disconnect(@GetPrincipal() principal: Principal, @Body() dto: ModifyRelationsDto) {
     await this.access.assertCanManage(principal, dto.parentId);
     return this.relationsService.disconnect(dto.parentId, dto.childIds);

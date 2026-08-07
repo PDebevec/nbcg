@@ -1,12 +1,25 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ItemType } from '../../../generated/prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
+
+/**
+ * The parent's state after a relation write. Every edge row fires
+ * `trg_item_relations_children_count`, which bumps the parent's `version` and
+ * rewrites its children counts, so the caller is told the resulting version
+ * rather than having to re-read it through the CDC-lagged search index.
+ */
+export interface RelationWriteResult {
+  parentId: string;
+  version: number;
+  childrenInDrafts: number;
+  childrenInRecords: number;
+}
 
 @Injectable()
 export class RelationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async connect(parentId: string, childIds: string[]): Promise<void> {
+  async connect(parentId: string, childIds: string[]): Promise<RelationWriteResult> {
     if (childIds.includes(parentId)) {
       throw new BadRequestException('An item cannot be its own child');
     }
@@ -39,15 +52,54 @@ export class RelationsService {
       })),
       skipDuplicates: true,
     });
+
+    return this.readParentState(parentId, parentType);
   }
 
-  async disconnect(parentId: string, childIds: string[]): Promise<void> {
+  async disconnect(parentId: string, childIds: string[]): Promise<RelationWriteResult> {
     await this.prisma.itemRelation.deleteMany({
       where: {
         parentId,
         childId: { in: childIds },
       },
     });
+
+    return this.readParentState(parentId);
+  }
+
+  /**
+   * Read the parent's version and children counts after the trigger has run.
+   * A single primary-key lookup when the caller already knows the parent's
+   * table, two in parallel otherwise.
+   */
+  private async readParentState(
+    parentId: string,
+    parentType?: ItemType,
+  ): Promise<RelationWriteResult> {
+    const select = { version: true, metadata: true } as const;
+
+    let parent: { version: number; metadata: unknown } | null;
+    if (parentType === ItemType.DRAFT) {
+      parent = await this.prisma.draft.findUnique({ where: { id: parentId }, select });
+    } else if (parentType === ItemType.RECORD) {
+      parent = await this.prisma.record.findUnique({ where: { id: parentId }, select });
+    } else {
+      const [draft, record] = await Promise.all([
+        this.prisma.draft.findUnique({ where: { id: parentId }, select }),
+        this.prisma.record.findUnique({ where: { id: parentId }, select }),
+      ]);
+      parent = draft ?? record;
+    }
+
+    if (!parent) throw new NotFoundException(`Parent not found: ${parentId}`);
+
+    const metadata = (parent.metadata as Record<string, unknown> | null) ?? {};
+    return {
+      parentId,
+      version: parent.version,
+      childrenInDrafts: Number(metadata.childrenInDrafts ?? 0),
+      childrenInRecords: Number(metadata.childrenInRecords ?? 0),
+    };
   }
 
   /** All transitive ancestors of an item (parents, grandparents, ...). */
