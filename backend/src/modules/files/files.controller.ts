@@ -23,6 +23,25 @@ import type { Principal } from '../../core/auth/principal.type';
 import { FilesService } from './files.service';
 import { ReextractDto, ReplaceFileDto, SetTextDto, UploadFilesDto } from './dto/upload-files.dto';
 
+/**
+ * Build an RFC 6266 Content-Disposition value.
+ *
+ * `encodeURIComponent` alone is not enough: it leaves `!'()*` raw, and `'` is
+ * the delimiter inside an RFC 5987 ext-value, so a filename like `Don't.pdf`
+ * would produce a header the client parses wrongly. Those are escaped here.
+ * A plain ASCII `filename=` is emitted first as a fallback for old clients.
+ */
+function contentDisposition(disposition: 'inline' | 'attachment', filename: string): string {
+  const encoded = encodeURIComponent(filename).replace(
+    /['()!*]/g,
+    (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase(),
+  );
+  // Non-ASCII stripped rather than transliterated — this value is only ever the
+  // fallback, and `filename*` carries the real name for anything modern.
+  const ascii = filename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_');
+  return `${disposition}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
 @Controller('files')
 export class FilesController {
   constructor(
@@ -34,6 +53,10 @@ export class FilesController {
   @UseInterceptors(FilesInterceptor('files', 10, {
     storage: diskStorage({ destination: os.tmpdir() }),
     limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB hard cap
+    // Multer defaults this to latin1, which turns a Cyrillic filename into
+    // mojibake. That also breaks the extractedTexts lookup below, since it is
+    // keyed by filename — the text would be dropped on an otherwise-201 upload.
+    defParamCharset: 'utf8',
   }))
   async upload(
     @GetPrincipal() principal: Principal,
@@ -55,6 +78,7 @@ export class FilesController {
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({ destination: os.tmpdir() }),
     limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB hard cap
+    defParamCharset: 'utf8', // see the note on the upload endpoint above
   }))
   async replace(
     @GetPrincipal() principal: Principal,
@@ -111,7 +135,7 @@ export class FilesController {
     const { stream, contentLength, mimeType, filename } = await this.filesService.download(fileId);
     const disposition = inline === '1' ? 'inline' : 'attachment';
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader('Content-Disposition', contentDisposition(disposition, filename));
     if (contentLength) res.setHeader('Content-Length', contentLength);
     stream.on('error', () => {
       // Storage stream broke mid-transfer — nothing to do but terminate the response.

@@ -771,6 +771,97 @@ fi
 
 rm -f "$TMPPDF"
 
+# --- 8c2: Non-ASCII (UTF-8) multipart filenames ---
+# Multer decodes multipart params as latin1 by default, which mangled Cyrillic
+# filenames and — because extractedTexts is keyed by filename — silently dropped
+# the supplied text on an otherwise-successful 201.
+echo -e "\n  ${YELLOW}Non-ASCII multipart filenames...${NC}"
+
+UTF8_DIR=$(mktemp -d /tmp/test-suite-utf8-XXXX)
+UTF8_NAME='ОКТОИХ петогласник 2.pdf'
+UTF8_PATH="$UTF8_DIR/$UTF8_NAME"
+echo "%PDF-1.0 cyrillic test" > "$UTF8_PATH"
+
+UTF8_RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/upload/$DRAFT_PUBLIC_ID" \
+  -H "Authorization: Bearer $TOKEN_CATALOGUER" \
+  -F "files=@$UTF8_PATH;type=application/pdf" \
+  -F "extractedTexts={\"$UTF8_NAME\":\"Црногорски текст\"}" 2>/dev/null)
+HTTP_STATUS=$(echo "$UTF8_RESP" | tail -1)
+HTTP_BODY=$(echo "$UTF8_RESP" | sed '$d')
+assert_status "Upload with Cyrillic filename" "201"
+
+UTF8_RETURNED=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['filename'])" 2>/dev/null || echo "")
+if [ "$UTF8_RETURNED" = "$UTF8_NAME" ]; then
+  echo -e "  ${GREEN}PASS${NC} Cyrillic filename round-trips unchanged"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} Filename mangled: expected '$UTF8_NAME', got '$UTF8_RETURNED'"
+  ((FAILED++))
+fi
+
+UTF8_STATUS=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['textExtractionStatus'])" 2>/dev/null || echo "")
+if [ "$UTF8_STATUS" = "EXTRACTED" ]; then
+  echo -e "  ${GREEN}PASS${NC} extractedTexts keyed by Cyrillic filename matched"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} Expected EXTRACTED for Cyrillic key, got $UTF8_STATUS"
+  ((FAILED++))
+fi
+
+UTF8_FILE_ID=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])" 2>/dev/null || echo "")
+
+# An extractedTexts key matching no uploaded part is a client bug — reject it
+# rather than storing the file and dropping the text.
+UNMATCHED_RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/upload/$DRAFT_PUBLIC_ID" \
+  -H "Authorization: Bearer $TOKEN_CATALOGUER" \
+  -F "files=@$UTF8_PATH;type=application/pdf" \
+  -F "extractedTexts={\"no-such-file.pdf\":\"orphan text\"}" 2>/dev/null)
+HTTP_STATUS=$(echo "$UNMATCHED_RESP" | tail -1)
+HTTP_BODY=$(echo "$UNMATCHED_RESP" | sed '$d')
+assert_status "extractedTexts key matching no file is rejected" "400"
+assert_body_contains "Rejection names the unmatched key" "no-such-file.pdf"
+
+if [ -n "$UTF8_FILE_ID" ]; then
+  # RFC 6266: non-ASCII names must travel in filename*, percent-encoded as UTF-8.
+  UTF8_CD=$(curl -s -D - -o /dev/null "$API/files/$UTF8_FILE_ID/download" \
+    -H "Authorization: Bearer $TOKEN_CATALOGUER" 2>/dev/null | grep -i '^content-disposition:' | tr -d '\r')
+  UTF8_EXPECTED=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$UTF8_NAME")
+  if echo "$UTF8_CD" | grep -qF "filename*=UTF-8''$UTF8_EXPECTED"; then
+    echo -e "  ${GREEN}PASS${NC} Download offers the original filename via filename*"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} Content-Disposition missing correct filename*: $UTF8_CD"
+    ((FAILED++))
+  fi
+
+  # Replace uses a separate interceptor — same decoding must apply there.
+  UTF8_NAME2='Требник замена.pdf'
+  echo "%PDF-1.0 replaced" > "$UTF8_DIR/$UTF8_NAME2"
+  REPLACE_RESP=$(curl -s -w "\n%{http_code}" -X PUT "$API/files/$UTF8_FILE_ID" \
+    -H "Authorization: Bearer $TOKEN_CATALOGUER" \
+    -F "file=@$UTF8_DIR/$UTF8_NAME2;type=application/pdf" \
+    -F "extractedText=Замењени текст" 2>/dev/null)
+  HTTP_STATUS=$(echo "$REPLACE_RESP" | tail -1)
+  HTTP_BODY=$(echo "$REPLACE_RESP" | sed '$d')
+  assert_status "Replace with Cyrillic filename" "200"
+
+  REPLACED_NAME=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['filename'])" 2>/dev/null || echo "")
+  if [ "$REPLACED_NAME" = "$UTF8_NAME2" ]; then
+    echo -e "  ${GREEN}PASS${NC} Replace preserves the Cyrillic filename"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} Replace mangled filename: expected '$UTF8_NAME2', got '$REPLACED_NAME'"
+    ((FAILED++))
+  fi
+
+  http DELETE "$API/files/$UTF8_FILE_ID" "$TOKEN_ADMIN"
+else
+  echo -e "  ${YELLOW}SKIP${NC} Cyrillic download/replace — upload didn't return file ID"
+  ((SKIPPED+=4))
+fi
+
+rm -rf "$UTF8_DIR"
+
 # --- 8d: Upload with role ---
 echo -e "\n  ${YELLOW}Upload with role (FileRole)...${NC}"
 

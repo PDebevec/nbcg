@@ -47,6 +47,20 @@ export class FilesService {
       } catch {
         throw new BadRequestException('extractedTexts must be a JSON object mapping filenames to text strings');
       }
+
+      // A key that matches no uploaded part is almost always a client bug (a
+      // stale name, or a filename mangled in transit). Silently dropping the
+      // text and still answering 201 hides real data loss, so reject up front —
+      // before anything is written to storage, so there is nothing to roll back.
+      const uploaded = new Set(files.map((f) => f.originalname));
+      const unmatched = Object.keys(extractedTexts).filter((name) => !uploaded.has(name));
+      if (unmatched.length > 0) {
+        await this.cleanupTempFiles(files);
+        throw new BadRequestException(
+          `extractedTexts contains keys matching no uploaded file: ${unmatched.join(', ')}. ` +
+            `Uploaded filenames: ${[...uploaded].join(', ')}`,
+        );
+      }
     }
 
     let itemType: 'draft' | 'record';
