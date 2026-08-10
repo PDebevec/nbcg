@@ -428,13 +428,17 @@ function formToMetadata(): Record<string, unknown> {
 }
 
 // Keep JSON tab and form in sync: entering the JSON tab renders the current
-// state; leaving it (or saving from it) parses the text back.
+// state; leaving it (or saving from it) parses the text back. Only apply the
+// JSON when actually coming FROM the json tab — applying it on any other tab
+// switch (e.g. form → files) would overwrite the form with a stale snapshot.
+let previousTab: string | number = 'form';
 function onTabChange(next: string | number) {
   if (next === 'json') {
     jsonText.value = JSON.stringify(formToMetadata(), null, 2);
-  } else if (jsonText.value) {
+  } else if (previousTab === 'json') {
     applyJson(false);
   }
+  previousTab = next;
 }
 
 function applyJson(showError = true): boolean {
