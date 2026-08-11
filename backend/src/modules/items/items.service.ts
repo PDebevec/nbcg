@@ -4,11 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ItemType, VisibilityStatus } from '../../../generated/prisma/enums';
+import { ChangeAction, ItemType, VisibilityStatus } from '../../../generated/prisma/enums';
 import { EDITABLE_BASE_METADATA_SHAPE } from '../../core/types/metadata.types';
+import type { FieldChange } from '../../core/types/revision.types';
 import { DOMAIN_RECORD_SHAPE, FieldValidator } from '../import/cobiss/cobiss-util/cobiss.types';
 import { PrismaService } from '../../core/prisma/prisma.service';
+import { RevisionsService } from '../../core/revisions/revisions.service';
 import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
+import { diffMetadata } from '../../shared/util/diff-metadata';
 import { generateDeterministicId } from '../../shared/util/generateUuidFromCobissId';
 
 // Derived at module load from the type shapes — automatically stays in sync
@@ -38,6 +41,7 @@ export class ItemsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly seaweedfs: SeaweedfsService,
+    private readonly revisions: RevisionsService,
   ) {}
 
   async stats(): Promise<{
@@ -112,10 +116,42 @@ export class ItemsService {
       updatedByUserId: userId,
     };
 
-    if (targetState === ItemType.RECORD) {
-      return this.prisma.record.create({ data: data as any });
-    }
-    return this.prisma.draft.create({ data: data as any });
+    // The item and its opening revision are written together: a timeline that
+    // can disagree with the item it describes is worse than no timeline.
+    return this.prisma.$transaction(async (tx) => {
+      const item =
+        targetState === ItemType.RECORD
+          ? await tx.record.create({ data: data as any })
+          : await tx.draft.create({ data: data as any });
+
+      // No `changes` on CREATE — the diff against nothing is just the item's
+      // own metadata, which is already readable from the item.
+      await this.revisions.record(
+        { itemId: item.id, version: item.version, action: ChangeAction.CREATE, userId },
+        tx,
+      );
+
+      return item;
+    });
+  }
+
+  /**
+   * Revision timeline for one item, newest first. `itemId` survives a
+   * DRAFT <-> RECORD transition, so this covers drafting and post-publication
+   * edits as one continuous history.
+   */
+  async history(itemId: string, limit: number, offset: number) {
+    const [total, revisions] = await Promise.all([
+      this.prisma.itemRevision.count({ where: { itemId } }),
+      this.prisma.itemRevision.findMany({
+        where: { itemId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+    ]);
+
+    return { itemId, total, limit, offset, revisions };
   }
 
   async update(
@@ -175,34 +211,47 @@ export class ItemsService {
       data.metadata = { ...existingMetadata, ...metadataUpdate };
     }
 
-    // Use a WHERE clause that includes version to guard against races
-    // between the read above and this write.
-    if (draft) {
-      const result = await this.prisma.draft.updateMany({
-        where: { id, version: existing.version },
-        data,
+    const changes: FieldChange[] = hasMetadataChanges
+      ? diffMetadata(existingMetadata, data.metadata as Record<string, unknown>)
+      : [];
+    if (visibilityStatus && visibilityStatus !== existing.visibilityStatus) {
+      changes.push({
+        path: 'visibilityStatus',
+        before: existing.visibilityStatus,
+        after: visibilityStatus,
       });
-      if (result.count === 0) {
-        throw new ConflictException(
-          'Version conflict: the item was modified by another request. Re-fetch and retry.',
-        );
-      }
-    } else {
-      const result = await this.prisma.record.updateMany({
-        where: { id, version: existing.version },
-        data,
-      });
-      if (result.count === 0) {
-        throw new ConflictException(
-          'Version conflict: the item was modified by another request. Re-fetch and retry.',
-        );
-      }
     }
+
+    // A PATCH that only moves PUBLIC -> HIDDEN reads better on a timeline as
+    // its own action than as a generic edit.
+    const action =
+      changes.length > 0 && changes.every((c) => c.path === 'visibilityStatus')
+        ? ChangeAction.VISIBILITY_CHANGE
+        : ChangeAction.UPDATE;
+
+    await this.prisma.$transaction(async (tx) => {
+      // Use a WHERE clause that includes version to guard against races
+      // between the read above and this write.
+      const result = draft
+        ? await tx.draft.updateMany({ where: { id, version: existing.version }, data })
+        : await tx.record.updateMany({ where: { id, version: existing.version }, data });
+
+      if (result.count === 0) {
+        throw new ConflictException(
+          'Version conflict: the item was modified by another request. Re-fetch and retry.',
+        );
+      }
+
+      await this.revisions.record(
+        { itemId: id, version: existing.version + 1, action, changes, userId },
+        tx,
+      );
+    });
 
     return { version: existing.version + 1 };
   }
 
-  async delete(ids: string[]): Promise<void> {
+  async delete(ids: string[], userId: string): Promise<void> {
     const attachments = await this.prisma.fileAttachment.findMany({
       where: { OR: [{ draft_id: { in: ids } }, { record_id: { in: ids } }] },
       select: { originalFid: true },
@@ -231,6 +280,19 @@ export class ItemsService {
 
       const fromDrafts = ids.filter((id) => draftIds.has(id));
       const fromRecords = ids.filter((id) => recordIds.has(id));
+
+      // Written before the rows go away, but still inside the transaction, so
+      // a failed delete leaves no phantom DELETE on the timeline. Revisions
+      // have no FK to drafts/records precisely so they can outlive the item.
+      await this.revisions.record(
+        [...allDrafts, ...allRecords].map((item) => ({
+          itemId: item.id,
+          version: item.version,
+          action: ChangeAction.DELETE,
+          userId,
+        })),
+        tx,
+      );
 
       if (fromDrafts.length > 0) {
         await tx.draft.deleteMany({ where: { id: { in: fromDrafts } } });
@@ -376,9 +438,37 @@ export class ItemsService {
       // Read the versions back rather than returning the ones written above:
       // a transitioned item that is itself a parent may have been bumped again
       // by the children-count trigger when its children's childType changed.
-      return targetState === ItemType.RECORD
-        ? tx.record.findMany({ where: { id: { in: ids } }, select: { id: true, version: true } })
-        : tx.draft.findMany({ where: { id: { in: ids } }, select: { id: true, version: true } });
+      const result =
+        targetState === ItemType.RECORD
+          ? await tx.record.findMany({
+              where: { id: { in: ids } },
+              select: { id: true, version: true },
+            })
+          : await tx.draft.findMany({
+              where: { id: { in: ids } },
+              select: { id: true, version: true },
+            });
+
+      // The id is preserved across the move, so these land on the same timeline
+      // as the item's draft-era edits.
+      await this.revisions.record(
+        result.map(({ id, version }) => ({
+          itemId: id,
+          version,
+          action: targetState === ItemType.RECORD ? ChangeAction.PUBLISH : ChangeAction.UNPUBLISH,
+          changes: [
+            {
+              path: 'itemType',
+              before: targetState === ItemType.RECORD ? ItemType.DRAFT : ItemType.RECORD,
+              after: targetState,
+            },
+          ],
+          userId,
+        })),
+        tx,
+      );
+
+      return result;
     });
   }
 

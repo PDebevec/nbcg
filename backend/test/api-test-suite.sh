@@ -1276,6 +1276,399 @@ sys.exit(0 if p('$TS_REST') == p('$TS_INDEXED') else 1)
 fi
 
 # ============================================================================
+# 13. CHANGE HISTORY
+# ============================================================================
+section "13. Change History"
+
+# --- Local helpers ---------------------------------------------------------
+
+# Postgres directly. Two claims in this file cannot be checked over HTTP: that a
+# view leaves the item row untouched (the search index is CDC-lagged, so reading
+# it back proves nothing about the row), and what the counters actually hold.
+psql_query() {
+  docker exec nbcg-db-1 psql -U nbcg -d nbcg -tAc "$1" 2>/dev/null | tr -d '[:space:]'
+}
+
+PSQL_OK=0
+if [ "$(psql_query 'SELECT 1')" = "1" ]; then PSQL_OK=1; fi
+if [ "$PSQL_OK" = "0" ]; then
+  echo -e "  ${YELLOW}NOTE${NC} psql unavailable — counter assertions will be skipped"
+fi
+
+# The plain `http` helper sends curl's default user-agent, which the counter's
+# bot filter drops. That is deliberate and asserted below, so anything that is
+# supposed to be counted has to go through this helper instead.
+BROWSER_UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+http_ua() {
+  local method=$1 url=$2 token=${3:-""}
+  local -a args=(-s -w "\n%{http_code}" -X "$method" -A "$BROWSER_UA")
+  if [ -n "$token" ]; then
+    args+=(-H "Authorization: Bearer $token")
+  fi
+  local response
+  response=$(curl "${args[@]}" "$url" 2>/dev/null)
+  HTTP_STATUS=$(echo "$response" | tail -1)
+  HTTP_BODY=$(echo "$response" | sed '$d')
+}
+
+# Assert the last /history response carries a revision with this action,
+# optionally one whose `changes` touch a given path.
+assert_revision() {
+  local test_name=$1 action=$2 path=${3:-""}
+  local found
+  found=$(echo "$HTTP_BODY" | python3 -c "
+import sys, json
+path = '$path'
+revs = json.load(sys.stdin)['revisions']
+hits = [r for r in revs if r['action'] == '$action']
+if path:
+    hits = [r for r in hits if any(c['path'] == path for c in (r['changes'] or []))]
+print('yes' if hits else 'no')
+" 2>/dev/null) || found="no"
+
+  if [ "$found" = "yes" ]; then
+    echo -e "  ${GREEN}PASS${NC} $test_name"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} $test_name (no $action revision${path:+ touching $path})"
+    ((FAILED++))
+    ERRORS+=("$test_name: no $action revision${path:+ touching $path}")
+  fi
+}
+
+# Sum of a metric for one item, straight from the counter table.
+metric_count() {
+  local item_id=$1 metric=$2
+  psql_query "SELECT COALESCE(SUM(count), 0) FROM item_metrics_daily WHERE \"itemId\" = '$item_id' AND metric = '$metric'"
+}
+
+assert_metric() {
+  local test_name=$1 actual=$2 expected=$3
+  if [ "$PSQL_OK" = "0" ]; then
+    echo -e "  ${YELLOW}SKIP${NC} $test_name (no psql)"
+    ((SKIPPED++))
+  elif [ "$actual" = "$expected" ]; then
+    echo -e "  ${GREEN}PASS${NC} $test_name"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} $test_name (expected $expected, got $actual)"
+    ((FAILED++))
+    ERRORS+=("$test_name: expected $expected, got $actual")
+  fi
+}
+
+# Counters are buffered in memory and flushed on a timer — give it a window.
+FLUSH_WAIT=4
+
+# --- 13a: an item opens its timeline at creation ---------------------------
+echo -e "\n  ${YELLOW}Item timeline...${NC}"
+
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-HISTORY","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+assert_status "Create item for history test" "201"
+HIST_ID=$(json_field "['id']")
+CLEANUP_IDS+=("$HIST_ID")
+
+http GET "$API/items/$HIST_ID/history" "$TOKEN_ADMIN"
+assert_status "GET /items/:id/history returns 200" "200"
+assert_json_field "New item has exactly one revision" "['total']" "1"
+assert_revision "Creation is recorded as CREATE" "CREATE"
+
+# --- 13b: history is admin-only, same guard as /items/stats ----------------
+echo -e "\n  ${YELLOW}History auth...${NC}"
+
+http GET "$API/items/$HIST_ID/history"
+assert_status "Anonymous cannot read history" "401"
+
+http GET "$API/items/$HIST_ID/history" "$TOKEN_READER"
+assert_status "Reader cannot read history" "403"
+
+http GET "$API/items/$HIST_ID/history" "$TOKEN_CATALOGUER"
+assert_status "Cataloguer can read history" "200"
+
+# --- 13c: a metadata edit is stored as a field-level diff ------------------
+echo -e "\n  ${YELLOW}Field-level diffs...${NC}"
+
+http PATCH "$API/items/$HIST_ID" "$TOKEN_EDITOR" '{"expectedVersion":0,"metadata":{"title":"TEST-SUITE-HISTORY-EDITED"}}'
+assert_status "Edit item title" "200"
+
+http GET "$API/items/$HIST_ID/history" "$TOKEN_ADMIN"
+assert_revision "Edit recorded as UPDATE on the changed field" "UPDATE" "title"
+
+DIFF=$(echo "$HTTP_BODY" | python3 -c "
+import sys, json
+for r in json.load(sys.stdin)['revisions']:
+    for c in (r['changes'] or []):
+        if c['path'] == 'title':
+            print(f\"{c['before']}->{c['after']}\"); raise SystemExit
+" 2>/dev/null)
+if [ "$DIFF" = "TEST-SUITE-HISTORY->TEST-SUITE-HISTORY-EDITED" ]; then
+  echo -e "  ${GREEN}PASS${NC} Diff carries before and after values"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} Diff values wrong: $DIFF"
+  ((FAILED++))
+  ERRORS+=("title diff was '$DIFF'")
+fi
+
+# A visibility-only change reads better on a timeline as its own action.
+http PATCH "$API/items/$HIST_ID" "$TOKEN_EDITOR" '{"expectedVersion":1,"visibilityStatus":"HIDDEN"}'
+assert_status "Change visibility only" "200"
+http GET "$API/items/$HIST_ID/history" "$TOKEN_ADMIN"
+assert_revision "Visibility-only edit is VISIBILITY_CHANGE" "VISIBILITY_CHANGE" "visibilityStatus"
+
+# --- 13d: publish/unpublish stay on the same timeline ----------------------
+# transition() preserves the id, so drafting and post-publication edits are one
+# continuous history rather than two.
+echo -e "\n  ${YELLOW}Publish / unpublish...${NC}"
+
+http POST "$API/items/transition" "$TOKEN_ADMIN" "{\"ids\":[\"$HIST_ID\"],\"targetState\":\"RECORD\"}"
+assert_status "Publish item" "201"
+http GET "$API/items/$HIST_ID/history" "$TOKEN_ADMIN"
+assert_revision "Publish recorded as PUBLISH" "PUBLISH" "itemType"
+assert_revision "Draft-era CREATE still on the same timeline" "CREATE"
+
+http POST "$API/items/transition" "$TOKEN_ADMIN" "{\"ids\":[\"$HIST_ID\"],\"targetState\":\"DRAFT\"}"
+assert_status "Unpublish item" "201"
+http GET "$API/items/$HIST_ID/history" "$TOKEN_ADMIN"
+assert_revision "Unpublish recorded as UNPUBLISH" "UNPUBLISH" "itemType"
+
+# --- 13e: file and relation writes appear too -------------------------------
+echo -e "\n  ${YELLOW}File and relation writes...${NC}"
+
+HIST_FILE=$(mktemp /tmp/nbcg-history-XXXXXX.txt)
+echo "history test attachment" > "$HIST_FILE"
+http_upload "$API/files/upload/$HIST_ID" "$TOKEN_EDITOR" "$HIST_FILE"
+assert_status "Upload file to history item" "201"
+HIST_FILE_ID=$(json_field "[0]['id']")
+
+http GET "$API/items/$HIST_ID/history" "$TOKEN_ADMIN"
+assert_revision "Upload recorded as FILE_ADDED" "FILE_ADDED"
+
+http DELETE "$API/files/$HIST_FILE_ID" "$TOKEN_EDITOR"
+assert_status "Delete file from history item" "200"
+http GET "$API/items/$HIST_ID/history" "$TOKEN_ADMIN"
+assert_revision "Delete recorded as FILE_REMOVED" "FILE_REMOVED"
+rm -f "$HIST_FILE"
+
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-HISTORY-CHILD","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+assert_status "Create child for relation history" "201"
+HIST_CHILD_ID=$(json_field "['id']")
+CLEANUP_IDS+=("$HIST_CHILD_ID")
+
+http POST "$API/relations/connect" "$TOKEN_EDITOR" "{\"parentId\":\"$HIST_ID\",\"childIds\":[\"$HIST_CHILD_ID\"]}"
+assert_status "Connect child to history item" "201"
+http GET "$API/items/$HIST_ID/history" "$TOKEN_ADMIN"
+assert_revision "Connect recorded as RELATION_ADDED" "RELATION_ADDED"
+
+http POST "$API/relations/disconnect" "$TOKEN_EDITOR" "{\"parentId\":\"$HIST_ID\",\"childIds\":[\"$HIST_CHILD_ID\"]}"
+assert_status "Disconnect child from history item" "200"
+http GET "$API/items/$HIST_ID/history" "$TOKEN_ADMIN"
+assert_revision "Disconnect recorded as RELATION_REMOVED" "RELATION_REMOVED"
+
+# --- 13f: paging and unknown ids -------------------------------------------
+echo -e "\n  ${YELLOW}History paging...${NC}"
+
+http GET "$API/items/$HIST_ID/history?limit=1" "$TOKEN_ADMIN"
+assert_status "History accepts limit" "200"
+HIST_RETURNED=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['revisions']))" 2>/dev/null)
+if [ "$HIST_RETURNED" = "1" ]; then
+  echo -e "  ${GREEN}PASS${NC} limit=1 returns a single revision out of many"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} limit=1 returned $HIST_RETURNED revisions"
+  ((FAILED++))
+  ERRORS+=("history limit=1 returned $HIST_RETURNED")
+fi
+
+http GET "$API/items/$HIST_ID/history?limit=0" "$TOKEN_ADMIN"
+assert_status "History rejects limit=0" "400"
+
+http GET "$API/items/does-not-exist-12345/history" "$TOKEN_ADMIN"
+assert_status "History of unknown id returns 200" "200"
+assert_json_field "History of unknown id is empty" "['total']" "0"
+
+# --- 13g: the backfill covers pre-existing items ----------------------------
+if [ "$PSQL_OK" = "1" ]; then
+  ORPHANS=$(psql_query "SELECT COUNT(*) FROM (SELECT id FROM drafts UNION ALL SELECT id FROM records) i WHERE NOT EXISTS (SELECT 1 FROM item_revisions r WHERE r.\"itemId\" = i.id)")
+  if [ "$ORPHANS" = "0" ]; then
+    echo -e "  ${GREEN}PASS${NC} Every existing item has at least one revision (backfill)"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} $ORPHANS items have no revision — backfill missed them"
+    ((FAILED++))
+    ERRORS+=("$ORPHANS items without any revision")
+  fi
+else
+  echo -e "  ${YELLOW}SKIP${NC} Backfill check (no psql)"
+  ((SKIPPED++))
+fi
+
+# ============================================================================
+# 14. USAGE STATISTICS
+# ============================================================================
+section "14. Usage Statistics"
+
+# --- 14a: auth and shape ----------------------------------------------------
+echo -e "\n  ${YELLOW}Stats endpoints auth...${NC}"
+
+for stats_path in "overview" "users" "items/top"; do
+  http GET "$API/stats/$stats_path"
+  assert_status "Anonymous cannot read /stats/$stats_path" "401"
+  http GET "$API/stats/$stats_path" "$TOKEN_READER"
+  assert_status "Reader cannot read /stats/$stats_path" "403"
+  http GET "$API/stats/$stats_path" "$TOKEN_ADMIN"
+  assert_status "Admin can read /stats/$stats_path" "200"
+done
+
+http GET "$API/stats/overview" "$TOKEN_ADMIN"
+assert_body_contains "Overview carries snapshot totals" '"totals"'
+assert_body_contains "Overview carries the activity series" '"activity"'
+assert_body_contains "Overview carries the usage series" '"usage"'
+
+# --- 14b: range guards ------------------------------------------------------
+echo -e "\n  ${YELLOW}Range validation...${NC}"
+
+http GET "$API/stats/overview?from=2026-01-02&to=2026-01-01" "$TOKEN_ADMIN"
+assert_status "Inverted range returns 400" "400"
+
+# Uncapped, this is a full scan of the metrics table on an admin's dashboard refresh.
+http GET "$API/stats/overview?from=2000-01-01&to=2026-01-01" "$TOKEN_ADMIN"
+assert_status "Range wider than a year returns 400" "400"
+
+http GET "$API/stats/overview?from=yesterday" "$TOKEN_ADMIN"
+assert_status "Non-date from value returns 400" "400"
+
+http GET "$API/stats/items/top?limit=9999" "$TOKEN_ADMIN"
+assert_status "Top items rejects an unbounded limit" "400"
+
+# --- 14c: views are counted, bots are not -----------------------------------
+echo -e "\n  ${YELLOW}View counting...${NC}"
+
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"RECORD","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-METRICS","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+assert_status "Create item for metrics test" "201"
+MET_ID=$(json_field "['id']")
+CLEANUP_IDS+=("$MET_ID")
+
+# GET /search/:id reads OpenSearch, so the item has to be indexed first.
+sleep 5
+
+# Row state before any view — used below to prove a view doesn't touch it.
+MET_ROW_BEFORE=$(psql_query "SELECT version || '|' || \"updatedAt\" FROM records WHERE id = '$MET_ID'")
+
+http_ua GET "$API/search/$MET_ID" "$TOKEN_ADMIN"
+assert_status "Item detail read succeeds" "200"
+http_ua GET "$API/search/$MET_ID" "$TOKEN_ADMIN" >/dev/null
+http_ua GET "$API/search/$MET_ID" "" >/dev/null   # anonymous traffic counts too
+sleep "$FLUSH_WAIT"
+
+assert_metric "Three detail opens count as three views" "$(metric_count "$MET_ID" VIEW)" "3"
+
+# curl's own user-agent is on the bot deny-list — unfiltered numbers on a public
+# library site are dominated by crawlers.
+http GET "$API/search/$MET_ID" "$TOKEN_ADMIN" >/dev/null
+http GET "$API/search/$MET_ID" "$TOKEN_ADMIN" >/dev/null
+sleep "$FLUSH_WAIT"
+assert_metric "Bot user-agents are not counted" "$(metric_count "$MET_ID" VIEW)" "3"
+
+# A 404 probe must not be able to inflate a counter.
+http_ua GET "$API/search/does-not-exist-12345" "$TOKEN_ADMIN"
+assert_status "Detail read of unknown id returns 404" "404"
+
+# --- 14d: a view must not touch the item ------------------------------------
+# The whole reason counters live in their own table: a counter on records/drafts
+# would be CDC-visible and re-index the document (metadata plus megabytes of
+# nested extractedText) on every single page view.
+echo -e "\n  ${YELLOW}Views do not write to the item...${NC}"
+
+MET_ROW_AFTER=$(psql_query "SELECT version || '|' || \"updatedAt\" FROM records WHERE id = '$MET_ID'")
+if [ "$PSQL_OK" = "0" ]; then
+  echo -e "  ${YELLOW}SKIP${NC} View leaves version and updatedAt untouched (no psql)"
+  ((SKIPPED++))
+elif [ "$MET_ROW_BEFORE" = "$MET_ROW_AFTER" ] && [ -n "$MET_ROW_BEFORE" ]; then
+  echo -e "  ${GREEN}PASS${NC} Views leave version and updatedAt untouched"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} Item row changed across views: $MET_ROW_BEFORE -> $MET_ROW_AFTER"
+  ((FAILED++))
+  ERRORS+=("view mutated the item row: $MET_ROW_BEFORE -> $MET_ROW_AFTER")
+fi
+
+http GET "$API/items/$MET_ID/history" "$TOKEN_ADMIN"
+assert_json_field "Views add no revisions" "['total']" "1"
+
+# --- 14e: downloads ---------------------------------------------------------
+echo -e "\n  ${YELLOW}Download counting...${NC}"
+
+MET_FILE=$(mktemp /tmp/nbcg-metrics-XXXXXX.txt)
+echo "download counter test" > "$MET_FILE"
+http_upload "$API/files/upload/$MET_ID" "$TOKEN_EDITOR" "$MET_FILE"
+assert_status "Upload file for download test" "201"
+MET_FILE_ID=$(json_field "[0]['id']")
+
+http_ua GET "$API/files/$MET_FILE_ID/download" "$TOKEN_ADMIN"
+assert_status "Download file" "200"
+sleep "$FLUSH_WAIT"
+assert_metric "Download counts on the parent item" "$(metric_count "$MET_ID" DOWNLOAD)" "1"
+assert_metric "Download counts on the file itself" \
+  "$(psql_query "SELECT COALESCE(SUM(count), 0) FROM file_metrics_daily WHERE \"fileId\" = '$MET_FILE_ID'")" "1"
+
+# ?inline=1 is how the viewer renders a scan in the page. Counting it would make
+# every record with a cover image look heavily downloaded.
+http_ua GET "$API/files/$MET_FILE_ID/download?inline=1" "$TOKEN_ADMIN"
+assert_status "Inline preview of file" "200"
+sleep "$FLUSH_WAIT"
+assert_metric "Inline preview is not a download" "$(metric_count "$MET_ID" DOWNLOAD)" "1"
+
+rm -f "$MET_FILE"
+
+# --- 14f: the aggregates report what was recorded ---------------------------
+echo -e "\n  ${YELLOW}Aggregates...${NC}"
+
+http GET "$API/stats/items/top" "$TOKEN_ADMIN"
+assert_status "Top items returns 200" "200"
+assert_body_contains "Viewed item appears in top items" "$MET_ID"
+
+http GET "$API/stats/items/top?metric=DOWNLOAD" "$TOKEN_ADMIN"
+assert_status "Top items filters by metric" "200"
+assert_body_contains "Downloaded file appears in top files" "$MET_FILE_ID"
+
+http GET "$API/stats/overview" "$TOKEN_ADMIN"
+OVERVIEW_CREATED=$(json_field "['activity']['totals']['created']")
+if [ -n "$OVERVIEW_CREATED" ] && [ "$OVERVIEW_CREATED" -ge 1 ]; then
+  echo -e "  ${GREEN}PASS${NC} Overview counts items created in the period ($OVERVIEW_CREATED)"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} Overview reported created=$OVERVIEW_CREATED"
+  ((FAILED++))
+  ERRORS+=("overview created was '$OVERVIEW_CREATED'")
+fi
+
+http GET "$API/stats/users" "$TOKEN_ADMIN"
+USER_ROWS=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['users']))" 2>/dev/null)
+if [ -n "$USER_ROWS" ] && [ "$USER_ROWS" -ge 1 ]; then
+  echo -e "  ${GREEN}PASS${NC} Per-user breakdown lists $USER_ROWS user(s)"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} Per-user breakdown was empty"
+  ((FAILED++))
+  ERRORS+=("stats/users returned no rows")
+fi
+
+# --- 14g: counters stay out of CDC ------------------------------------------
+PGSYNC_SCHEMA="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/infrastructure/docker/pgsync/schema.json"
+if [ ! -f "$PGSYNC_SCHEMA" ]; then
+  echo -e "  ${YELLOW}SKIP${NC} pgsync schema not found at $PGSYNC_SCHEMA"
+  ((SKIPPED++))
+elif grep -qE 'item_revisions|item_metrics_daily|file_metrics_daily' "$PGSYNC_SCHEMA"; then
+  echo -e "  ${RED}FAIL${NC} History/metrics tables are in the pgsync schema — every counter bump would re-index"
+  ((FAILED++))
+  ERRORS+=("new tables must not be tracked by pgsync")
+else
+  echo -e "  ${GREEN}PASS${NC} History and metrics tables are excluded from pgsync CDC"
+  ((PASSED++))
+fi
+
+# ============================================================================
 # CLEANUP
 # ============================================================================
 section "Cleanup"

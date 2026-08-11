@@ -49,6 +49,24 @@ enum FileRole {
   THUMBNAIL
 }
 
+enum ChangeAction {
+  CREATE
+  UPDATE
+  PUBLISH // draft -> record
+  UNPUBLISH // record -> draft
+  VISIBILITY_CHANGE
+  FILE_ADDED
+  FILE_REMOVED
+  RELATION_ADDED
+  RELATION_REMOVED
+  DELETE
+}
+
+enum MetricKind {
+  VIEW
+  DOWNLOAD
+}
+
 model Draft {
   id               String           @id @default(cuid())
   visibilityStatus VisibilityStatus
@@ -111,4 +129,58 @@ model ItemRelation {
   @@index([parentId, parentType])
   @@index([childId, childType])
   @@map("item_relations")
+}
+
+/// One row per change to an item. `itemId` is stable across a DRAFT <-> RECORD
+/// transition (transition() preserves the id), so a single timeline covers an
+/// item's whole life. Deliberately no relation to drafts/records: revisions
+/// outlive the item they describe, and no FK may block a delete.
+model ItemRevision {
+  id     String       @id @default(cuid())
+  itemId String
+  /// The item's version *after* this change. Not a change counter — see
+  /// "What `version` means" in BACKEND_REFERENCE.md.
+  version Int
+  action ChangeAction
+  /// [FieldChangeList]
+  changes Json?
+  /// Keycloak sub, or "system" for imports.
+  userId    String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([itemId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@map("item_revisions")
+}
+
+/// Per-day usage counters. Kept out of drafts/records on purpose: pgsync CDC
+/// watches those tables, so a counter column there would re-index the whole
+/// document (metadata + nested extractedText) on every page view.
+model ItemMetricDaily {
+  itemId String
+  metric MetricKind
+  day    DateTime   @db.Date
+  count  Int        @default(0)
+
+  @@id([itemId, metric, day])
+  @@index([day])
+  @@index([itemId, metric])
+  @@map("item_metrics_daily")
+}
+
+/// Per-file download counters. A file download increments both this table and
+/// the parent item's DOWNLOAD counter, so "which record is popular" and "which
+/// scan is popular" are both answerable.
+model FileMetricDaily {
+  fileId String
+  itemId String
+  metric MetricKind
+  day    DateTime   @db.Date
+  count  Int        @default(0)
+
+  @@id([fileId, metric, day])
+  @@index([day])
+  @@index([itemId, metric])
+  @@map("file_metrics_daily")
 }

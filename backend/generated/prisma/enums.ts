@@ -53,3 +53,27 @@ export const FileRole = {
 } as const
 
 export type FileRole = (typeof FileRole)[keyof typeof FileRole]
+
+
+export const ChangeAction = {
+  CREATE: 'CREATE',
+  UPDATE: 'UPDATE',
+  PUBLISH: 'PUBLISH',
+  UNPUBLISH: 'UNPUBLISH',
+  VISIBILITY_CHANGE: 'VISIBILITY_CHANGE',
+  FILE_ADDED: 'FILE_ADDED',
+  FILE_REMOVED: 'FILE_REMOVED',
+  RELATION_ADDED: 'RELATION_ADDED',
+  RELATION_REMOVED: 'RELATION_REMOVED',
+  DELETE: 'DELETE'
+} as const
+
+export type ChangeAction = (typeof ChangeAction)[keyof typeof ChangeAction]
+
+
+export const MetricKind = {
+  VIEW: 'VIEW',
+  DOWNLOAD: 'DOWNLOAD'
+} as const
+
+export type MetricKind = (typeof MetricKind)[keyof typeof MetricKind]

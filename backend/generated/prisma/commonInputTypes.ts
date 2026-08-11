@@ -273,6 +273,40 @@ export type EnumItemTypeWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedEnumItemTypeFilter<$PrismaModel>
 }
 
+export type EnumChangeActionFilter<$PrismaModel = never> = {
+  equals?: $Enums.ChangeAction | Prisma.EnumChangeActionFieldRefInput<$PrismaModel>
+  in?: $Enums.ChangeAction[] | Prisma.ListEnumChangeActionFieldRefInput<$PrismaModel>
+  notIn?: $Enums.ChangeAction[] | Prisma.ListEnumChangeActionFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumChangeActionFilter<$PrismaModel> | $Enums.ChangeAction
+}
+
+export type EnumChangeActionWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.ChangeAction | Prisma.EnumChangeActionFieldRefInput<$PrismaModel>
+  in?: $Enums.ChangeAction[] | Prisma.ListEnumChangeActionFieldRefInput<$PrismaModel>
+  notIn?: $Enums.ChangeAction[] | Prisma.ListEnumChangeActionFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumChangeActionWithAggregatesFilter<$PrismaModel> | $Enums.ChangeAction
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumChangeActionFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumChangeActionFilter<$PrismaModel>
+}
+
+export type EnumMetricKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.MetricKind | Prisma.EnumMetricKindFieldRefInput<$PrismaModel>
+  in?: $Enums.MetricKind[] | Prisma.ListEnumMetricKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.MetricKind[] | Prisma.ListEnumMetricKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumMetricKindFilter<$PrismaModel> | $Enums.MetricKind
+}
+
+export type EnumMetricKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.MetricKind | Prisma.EnumMetricKindFieldRefInput<$PrismaModel>
+  in?: $Enums.MetricKind[] | Prisma.ListEnumMetricKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.MetricKind[] | Prisma.ListEnumMetricKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumMetricKindWithAggregatesFilter<$PrismaModel> | $Enums.MetricKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumMetricKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumMetricKindFilter<$PrismaModel>
+}
+
 export type NestedStringFilter<$PrismaModel = never> = {
   equals?: string | Prisma.StringFieldRefInput<$PrismaModel>
   in?: string[] | Prisma.ListStringFieldRefInput<$PrismaModel>
@@ -516,6 +550,40 @@ export type NestedEnumItemTypeWithAggregatesFilter<$PrismaModel = never> = {
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedEnumItemTypeFilter<$PrismaModel>
   _max?: Prisma.NestedEnumItemTypeFilter<$PrismaModel>
+}
+
+export type NestedEnumChangeActionFilter<$PrismaModel = never> = {
+  equals?: $Enums.ChangeAction | Prisma.EnumChangeActionFieldRefInput<$PrismaModel>
+  in?: $Enums.ChangeAction[] | Prisma.ListEnumChangeActionFieldRefInput<$PrismaModel>
+  notIn?: $Enums.ChangeAction[] | Prisma.ListEnumChangeActionFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumChangeActionFilter<$PrismaModel> | $Enums.ChangeAction
+}
+
+export type NestedEnumChangeActionWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.ChangeAction | Prisma.EnumChangeActionFieldRefInput<$PrismaModel>
+  in?: $Enums.ChangeAction[] | Prisma.ListEnumChangeActionFieldRefInput<$PrismaModel>
+  notIn?: $Enums.ChangeAction[] | Prisma.ListEnumChangeActionFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumChangeActionWithAggregatesFilter<$PrismaModel> | $Enums.ChangeAction
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumChangeActionFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumChangeActionFilter<$PrismaModel>
+}
+
+export type NestedEnumMetricKindFilter<$PrismaModel = never> = {
+  equals?: $Enums.MetricKind | Prisma.EnumMetricKindFieldRefInput<$PrismaModel>
+  in?: $Enums.MetricKind[] | Prisma.ListEnumMetricKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.MetricKind[] | Prisma.ListEnumMetricKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumMetricKindFilter<$PrismaModel> | $Enums.MetricKind
+}
+
+export type NestedEnumMetricKindWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.MetricKind | Prisma.EnumMetricKindFieldRefInput<$PrismaModel>
+  in?: $Enums.MetricKind[] | Prisma.ListEnumMetricKindFieldRefInput<$PrismaModel>
+  notIn?: $Enums.MetricKind[] | Prisma.ListEnumMetricKindFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumMetricKindWithAggregatesFilter<$PrismaModel> | $Enums.MetricKind
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumMetricKindFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumMetricKindFilter<$PrismaModel>
 }
 
 

@@ -7,5 +7,6 @@ import { ItemsService } from './items.service';
   imports: [SeaweedfsModule],
   controllers: [ItemsController],
   providers: [ItemsService],
+  exports: [ItemsService], // StatsModule extends stats() rather than duplicating it
 })
 export class ItemsModule {}

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ItemType } from '../../../generated/prisma/client';
+import { ChangeAction, ItemType } from '../../../generated/prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
+import { RevisionsService } from '../../core/revisions/revisions.service';
 
 /**
  * The parent's state after a relation write. Every edge row fires
@@ -17,9 +18,16 @@ export interface RelationWriteResult {
 
 @Injectable()
 export class RelationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly revisions: RevisionsService,
+  ) {}
 
-  async connect(parentId: string, childIds: string[]): Promise<RelationWriteResult> {
+  async connect(
+    parentId: string,
+    childIds: string[],
+    userId: string,
+  ): Promise<RelationWriteResult> {
     if (childIds.includes(parentId)) {
       throw new BadRequestException('An item cannot be its own child');
     }
@@ -53,10 +61,16 @@ export class RelationsService {
       skipDuplicates: true,
     });
 
-    return this.readParentState(parentId, parentType);
+    const state = await this.readParentState(parentId, parentType);
+    await this.recordRelationChange(ChangeAction.RELATION_ADDED, parentId, childIds, state, userId);
+    return state;
   }
 
-  async disconnect(parentId: string, childIds: string[]): Promise<RelationWriteResult> {
+  async disconnect(
+    parentId: string,
+    childIds: string[],
+    userId: string,
+  ): Promise<RelationWriteResult> {
     await this.prisma.itemRelation.deleteMany({
       where: {
         parentId,
@@ -64,7 +78,41 @@ export class RelationsService {
       },
     });
 
-    return this.readParentState(parentId);
+    const state = await this.readParentState(parentId);
+    await this.recordRelationChange(
+      ChangeAction.RELATION_REMOVED,
+      parentId,
+      childIds,
+      state,
+      userId,
+    );
+    return state;
+  }
+
+  /**
+   * Timeline entry on the parent only — the edge belongs to the parent, and the
+   * post-trigger version read back above is exactly the version this change
+   * produced. Not transactional, because the edge rows are already committed.
+   */
+  private async recordRelationChange(
+    action: ChangeAction,
+    parentId: string,
+    childIds: string[],
+    state: RelationWriteResult,
+    userId: string,
+  ): Promise<void> {
+    const added = action === ChangeAction.RELATION_ADDED;
+    await this.revisions.recordDetached({
+      itemId: parentId,
+      version: state.version,
+      action,
+      changes: childIds.map((childId) => ({
+        path: `children[${childId}]`,
+        before: added ? null : childId,
+        after: added ? childId : null,
+      })),
+      userId,
+    });
   }
 
   /**

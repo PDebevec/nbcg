@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { GetPrincipal } from '../../core/auth/get-principal.decorator';
 import { RequireScopes } from '../../core/auth/scopes.decorator';
 import { ResourceAccessService } from '../../core/auth/resource-access.service';
@@ -6,6 +6,7 @@ import type { Principal } from '../../core/auth/principal.type';
 import { ItemType } from '../../../generated/prisma/enums';
 import { CreateItemDto } from './dto/create-item.dto';
 import { DeleteItemsDto } from './dto/delete-items.dto';
+import { HistoryQueryDto } from './dto/history-query.dto';
 import { TransitionItemsDto } from './dto/transition-items.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { ItemsService } from './items.service';
@@ -21,6 +22,15 @@ export class ItemsController {
   @RequireScopes('records:view:hidden', 'drafts:view:hidden')
   stats() {
     return this.itemsService.stats();
+  }
+
+  // Same guard as /items/stats: a timeline names who edited what and when, so
+  // it is admin-only regardless of whether the item itself is public.
+  // Two segments, so it can never be captured by the 'stats' route above.
+  @Get(':id/history')
+  @RequireScopes('records:view:hidden', 'drafts:view:hidden')
+  history(@Param('id') id: string, @Query() dto: HistoryQueryDto) {
+    return this.itemsService.history(id, dto.limit ?? 50, dto.offset ?? 0);
   }
 
   @Post()
@@ -60,6 +70,6 @@ export class ItemsController {
   @Delete()
   async delete(@GetPrincipal() principal: Principal, @Body() dto: DeleteItemsDto) {
     await this.access.assertCanManageBatch(principal, dto.ids);
-    return this.itemsService.delete(dto.ids);
+    return this.itemsService.delete(dto.ids, principal.sub);
   }
 }

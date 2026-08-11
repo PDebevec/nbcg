@@ -37,3 +37,25 @@ export type FileAttachment = Prisma.FileAttachmentModel
  * 
  */
 export type ItemRelation = Prisma.ItemRelationModel
+/**
+ * Model ItemRevision
+ * One row per change to an item. `itemId` is stable across a DRAFT <-> RECORD
+ * transition (transition() preserves the id), so a single timeline covers an
+ * item's whole life. Deliberately no relation to drafts/records: revisions
+ * outlive the item they describe, and no FK may block a delete.
+ */
+export type ItemRevision = Prisma.ItemRevisionModel
+/**
+ * Model ItemMetricDaily
+ * Per-day usage counters. Kept out of drafts/records on purpose: pgsync CDC
+ * watches those tables, so a counter column there would re-index the whole
+ * document (metadata + nested extractedText) on every page view.
+ */
+export type ItemMetricDaily = Prisma.ItemMetricDailyModel
+/**
+ * Model FileMetricDaily
+ * Per-file download counters. A file download increments both this table and
+ * the parent item's DOWNLOAD counter, so "which record is popular" and "which
+ * scan is popular" are both answerable.
+ */
+export type FileMetricDaily = Prisma.FileMetricDailyModel

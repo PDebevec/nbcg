@@ -4,9 +4,10 @@ import { Job } from 'bullmq';
 import { ImportJobData, ImportJobProgress } from './import-job.types';
 import { fetchCobissRecord } from '../cobiss/cobiss-util/cobiss-fetch';
 import { PrismaService } from '../../../core/prisma/prisma.service';
+import { RevisionsService } from '../../../core/revisions/revisions.service';
 import { generateDeterministicId } from '../../../shared/util/generateUuidFromCobissId';
 import type { CobissMetadata } from '../../../core/types/metadata.types';
-import { ItemType, VisibilityStatus } from '../../../../generated/prisma/enums';
+import { ChangeAction, ItemType, VisibilityStatus } from '../../../../generated/prisma/enums';
 
 const BATCH_SIZE = 5;
 
@@ -14,7 +15,10 @@ const BATCH_SIZE = 5;
 export class ImportQueueProcessor extends WorkerHost {
   private readonly logger = new Logger(ImportQueueProcessor.name);
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly revisions: RevisionsService,
+  ) {
     super();
   }
 
@@ -96,15 +100,25 @@ export class ImportQueueProcessor extends WorkerHost {
       updatedByUserId: 'system',
     };
 
-    if (target === ItemType.RECORD) {
-      const existing = await this.prisma.record.findUnique({ where: { id: recordId }, select: { id: true } });
-      if (existing) throw new Error(`Record ${recordId} (COBISS:${id}) already exists. Skipping.`);
-      await this.prisma.record.create({ data });
-    } else {
-      const existing = await this.prisma.draft.findUnique({ where: { id: recordId }, select: { id: true } });
-      if (existing) throw new Error(`Draft ${recordId} (COBISS:${id}) already exists. Skipping.`);
-      await this.prisma.draft.create({ data });
-    }
+    // Imported items open their timeline the same way hand-created ones do,
+    // attributed to "system" — otherwise everything catalogued via COBISS looks
+    // like it appeared from nowhere.
+    await this.prisma.$transaction(async (tx) => {
+      if (target === ItemType.RECORD) {
+        const existing = await tx.record.findUnique({ where: { id: recordId }, select: { id: true } });
+        if (existing) throw new Error(`Record ${recordId} (COBISS:${id}) already exists. Skipping.`);
+        await tx.record.create({ data });
+      } else {
+        const existing = await tx.draft.findUnique({ where: { id: recordId }, select: { id: true } });
+        if (existing) throw new Error(`Draft ${recordId} (COBISS:${id}) already exists. Skipping.`);
+        await tx.draft.create({ data });
+      }
+
+      await this.revisions.record(
+        { itemId: recordId, version: 0, action: ChangeAction.CREATE, userId: 'system' },
+        tx,
+      );
+    });
   }
 
   /**

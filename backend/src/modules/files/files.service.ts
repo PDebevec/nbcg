@@ -1,8 +1,14 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createReadStream } from 'fs';
 import { unlink } from 'fs/promises';
-import { FileRole, FileType, TextExtractionStatus } from '../../../generated/prisma/enums';
+import {
+  ChangeAction,
+  FileRole,
+  FileType,
+  TextExtractionStatus,
+} from '../../../generated/prisma/enums';
 import { PrismaService } from '../../core/prisma/prisma.service';
+import { RevisionsService } from '../../core/revisions/revisions.service';
 import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
 import { TikaService } from '../../core/tika/tika.service';
 import { PdfExtractionQueueService } from './queue/pdf-extraction-queue.service';
@@ -22,6 +28,7 @@ export class FilesService {
     private readonly seaweedfs: SeaweedfsService,
     private readonly pdfQueue: PdfExtractionQueueService,
     private readonly tika: TikaService,
+    private readonly revisions: RevisionsService,
   ) {}
 
   /** Best-effort removal of Multer temp files (e.g. when the request is rejected before upload). */
@@ -31,7 +38,7 @@ export class FilesService {
     );
   }
 
-  async upload(itemId: string, files: Express.Multer.File[], doOcr = false, extractedTextsJson?: string, role?: FileRole) {
+  async upload(itemId: string, files: Express.Multer.File[], userId: string, doOcr = false, extractedTextsJson?: string, role?: FileRole) {
     if (!files?.length) {
       throw new BadRequestException('No files provided — send multipart form data with a "files" field');
     }
@@ -112,6 +119,21 @@ export class FilesService {
       }),
     );
 
+    // File writes don't bump the item's version, so the revision records the
+    // version the item already has. Not transactional: the blobs are stored and
+    // the rows committed by now, so a history failure is logged and swallowed
+    // rather than turning a successful upload into a 500.
+    const version = await this.revisions.currentVersion(itemId);
+    await this.revisions.recordDetached(
+      created.map((f) => ({
+        itemId,
+        version,
+        action: ChangeAction.FILE_ADDED,
+        changes: [{ path: `files[${f.id}]`, before: null, after: f.filename }],
+        userId,
+      })),
+    );
+
     // Enqueue Tika extraction only for PDFs that did NOT have text pre-supplied.
     // Best-effort: files are already stored at this point, so a queue failure
     // (e.g. Redis down) must not fail the request — extraction can be
@@ -146,7 +168,7 @@ export class FilesService {
    * Replace an existing attachment's blob (and optionally its text) in place.
    * The attachment id stays stable — only the underlying file content changes.
    */
-  async replace(fileId: string, file: Express.Multer.File, doOcr = false, extractedText?: string) {
+  async replace(fileId: string, file: Express.Multer.File, userId: string, doOcr = false, extractedText?: string) {
     const existing = await this.prisma.fileAttachment.findUnique({ where: { id: fileId } });
     if (!existing) {
       await unlink(file.path).catch(() => undefined);
@@ -194,6 +216,19 @@ export class FilesService {
 
     // DB row updated — now safe to delete the old blob (orphan-safe ordering)
     await this.seaweedfs.delete(oldFid).catch(() => {});
+
+    // Content swapped under a stable attachment id — an UPDATE on the item, not
+    // an add or a remove.
+    const parentId = existing.draft_id ?? existing.record_id;
+    if (parentId) {
+      await this.revisions.recordDetached({
+        itemId: parentId,
+        version: await this.revisions.currentVersion(parentId),
+        action: ChangeAction.UPDATE,
+        changes: [{ path: `files[${fileId}]`, before: existing.filename, after: file.originalname }],
+        userId,
+      });
+    }
 
     // Enqueue Tika extraction for PDFs without pre-supplied text
     if (file.mimetype === 'application/pdf' && !hasSuppliedText) {
@@ -252,20 +287,42 @@ export class FilesService {
     });
   }
 
-  /** Returns a stream so multi-GB files are never buffered in server memory. */
+  /**
+   * Returns a stream so multi-GB files are never buffered in server memory.
+   * `itemId` comes back too so the caller can attribute the download to the
+   * parent record without a second lookup.
+   */
   async download(fileId: string) {
     const file = await this.prisma.fileAttachment.findUnique({ where: { id: fileId } });
     if (!file) throw new NotFoundException(`File not found: ${fileId}`);
 
     const { stream, contentLength } = await this.seaweedfs.downloadStream(file.originalFid);
-    return { stream, contentLength, mimeType: file.mimeType, filename: file.filename };
+    return {
+      stream,
+      contentLength,
+      mimeType: file.mimeType,
+      filename: file.filename,
+      itemId: file.draft_id ?? file.record_id,
+    };
   }
 
-  async delete(fileId: string): Promise<void> {
+  async delete(fileId: string, userId: string): Promise<void> {
     const file = await this.prisma.fileAttachment.findUnique({ where: { id: fileId } });
     if (!file) throw new NotFoundException(`File not found: ${fileId}`);
 
     await this.prisma.fileAttachment.delete({ where: { id: fileId } });
+
+    const parentId = file.draft_id ?? file.record_id;
+    if (parentId) {
+      await this.revisions.recordDetached({
+        itemId: parentId,
+        version: await this.revisions.currentVersion(parentId),
+        action: ChangeAction.FILE_REMOVED,
+        changes: [{ path: `files[${fileId}]`, before: file.filename, after: null }],
+        userId,
+      });
+    }
+
     // Delete from storage after DB commit — orphaned blob is harmless, missing DB row is not.
     // OpenSearch cleanup happens automatically via PGSync when the row is deleted.
     await this.seaweedfs.delete(file.originalFid).catch(() => {});

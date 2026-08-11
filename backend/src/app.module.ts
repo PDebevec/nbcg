@@ -13,7 +13,10 @@ import { ItemsModule } from './modules/items/items.module';
 import { FilesModule } from './modules/files/files.module';
 import { SearchModule } from './modules/search/search.module';
 import { SchemaModule } from './modules/schema/schema.module';
+import { StatsModule } from './modules/stats/stats.module';
 import { PrismaModule } from './core/prisma/prisma.module';
+import { MetricsModule } from './core/metrics/metrics.module';
+import { RevisionsModule } from './core/revisions/revisions.module';
 import { SeaweedfsModule } from './core/seaweedfs/seaweedfs.module';
 
 @Module({
@@ -25,6 +28,8 @@ import { SeaweedfsModule } from './core/seaweedfs/seaweedfs.module';
       },
     }),
     PrismaModule,
+    RevisionsModule,
+    MetricsModule,
     SeaweedfsModule,
     AuthModule,
     HealthModule,
@@ -34,6 +39,7 @@ import { SeaweedfsModule } from './core/seaweedfs/seaweedfs.module';
     FilesModule,
     SearchModule,
     SchemaModule,
+    StatsModule,
   ],
   controllers: [AppController],
   providers: [

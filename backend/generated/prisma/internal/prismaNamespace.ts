@@ -387,7 +387,10 @@ export const ModelName = {
   Draft: 'Draft',
   Record: 'Record',
   FileAttachment: 'FileAttachment',
-  ItemRelation: 'ItemRelation'
+  ItemRelation: 'ItemRelation',
+  ItemRevision: 'ItemRevision',
+  ItemMetricDaily: 'ItemMetricDaily',
+  FileMetricDaily: 'FileMetricDaily'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -403,7 +406,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "draft" | "record" | "fileAttachment" | "itemRelation"
+    modelProps: "draft" | "record" | "fileAttachment" | "itemRelation" | "itemRevision" | "itemMetricDaily" | "fileMetricDaily"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -703,6 +706,228 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ItemRevision: {
+      payload: Prisma.$ItemRevisionPayload<ExtArgs>
+      fields: Prisma.ItemRevisionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ItemRevisionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemRevisionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ItemRevisionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemRevisionPayload>
+        }
+        findFirst: {
+          args: Prisma.ItemRevisionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemRevisionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ItemRevisionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemRevisionPayload>
+        }
+        findMany: {
+          args: Prisma.ItemRevisionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemRevisionPayload>[]
+        }
+        create: {
+          args: Prisma.ItemRevisionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemRevisionPayload>
+        }
+        createMany: {
+          args: Prisma.ItemRevisionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ItemRevisionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemRevisionPayload>[]
+        }
+        delete: {
+          args: Prisma.ItemRevisionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemRevisionPayload>
+        }
+        update: {
+          args: Prisma.ItemRevisionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemRevisionPayload>
+        }
+        deleteMany: {
+          args: Prisma.ItemRevisionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ItemRevisionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ItemRevisionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemRevisionPayload>[]
+        }
+        upsert: {
+          args: Prisma.ItemRevisionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemRevisionPayload>
+        }
+        aggregate: {
+          args: Prisma.ItemRevisionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateItemRevision>
+        }
+        groupBy: {
+          args: Prisma.ItemRevisionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ItemRevisionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ItemRevisionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ItemRevisionCountAggregateOutputType> | number
+        }
+      }
+    }
+    ItemMetricDaily: {
+      payload: Prisma.$ItemMetricDailyPayload<ExtArgs>
+      fields: Prisma.ItemMetricDailyFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ItemMetricDailyFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemMetricDailyPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ItemMetricDailyFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemMetricDailyPayload>
+        }
+        findFirst: {
+          args: Prisma.ItemMetricDailyFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemMetricDailyPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ItemMetricDailyFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemMetricDailyPayload>
+        }
+        findMany: {
+          args: Prisma.ItemMetricDailyFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemMetricDailyPayload>[]
+        }
+        create: {
+          args: Prisma.ItemMetricDailyCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemMetricDailyPayload>
+        }
+        createMany: {
+          args: Prisma.ItemMetricDailyCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ItemMetricDailyCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemMetricDailyPayload>[]
+        }
+        delete: {
+          args: Prisma.ItemMetricDailyDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemMetricDailyPayload>
+        }
+        update: {
+          args: Prisma.ItemMetricDailyUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemMetricDailyPayload>
+        }
+        deleteMany: {
+          args: Prisma.ItemMetricDailyDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ItemMetricDailyUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ItemMetricDailyUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemMetricDailyPayload>[]
+        }
+        upsert: {
+          args: Prisma.ItemMetricDailyUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ItemMetricDailyPayload>
+        }
+        aggregate: {
+          args: Prisma.ItemMetricDailyAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateItemMetricDaily>
+        }
+        groupBy: {
+          args: Prisma.ItemMetricDailyGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ItemMetricDailyGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ItemMetricDailyCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ItemMetricDailyCountAggregateOutputType> | number
+        }
+      }
+    }
+    FileMetricDaily: {
+      payload: Prisma.$FileMetricDailyPayload<ExtArgs>
+      fields: Prisma.FileMetricDailyFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.FileMetricDailyFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileMetricDailyPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.FileMetricDailyFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileMetricDailyPayload>
+        }
+        findFirst: {
+          args: Prisma.FileMetricDailyFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileMetricDailyPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.FileMetricDailyFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileMetricDailyPayload>
+        }
+        findMany: {
+          args: Prisma.FileMetricDailyFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileMetricDailyPayload>[]
+        }
+        create: {
+          args: Prisma.FileMetricDailyCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileMetricDailyPayload>
+        }
+        createMany: {
+          args: Prisma.FileMetricDailyCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.FileMetricDailyCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileMetricDailyPayload>[]
+        }
+        delete: {
+          args: Prisma.FileMetricDailyDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileMetricDailyPayload>
+        }
+        update: {
+          args: Prisma.FileMetricDailyUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileMetricDailyPayload>
+        }
+        deleteMany: {
+          args: Prisma.FileMetricDailyDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.FileMetricDailyUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.FileMetricDailyUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileMetricDailyPayload>[]
+        }
+        upsert: {
+          args: Prisma.FileMetricDailyUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$FileMetricDailyPayload>
+        }
+        aggregate: {
+          args: Prisma.FileMetricDailyAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateFileMetricDaily>
+        }
+        groupBy: {
+          args: Prisma.FileMetricDailyGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.FileMetricDailyGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.FileMetricDailyCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.FileMetricDailyCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -797,6 +1022,40 @@ export const ItemRelationScalarFieldEnum = {
 } as const
 
 export type ItemRelationScalarFieldEnum = (typeof ItemRelationScalarFieldEnum)[keyof typeof ItemRelationScalarFieldEnum]
+
+
+export const ItemRevisionScalarFieldEnum = {
+  id: 'id',
+  itemId: 'itemId',
+  version: 'version',
+  action: 'action',
+  changes: 'changes',
+  userId: 'userId',
+  createdAt: 'createdAt'
+} as const
+
+export type ItemRevisionScalarFieldEnum = (typeof ItemRevisionScalarFieldEnum)[keyof typeof ItemRevisionScalarFieldEnum]
+
+
+export const ItemMetricDailyScalarFieldEnum = {
+  itemId: 'itemId',
+  metric: 'metric',
+  day: 'day',
+  count: 'count'
+} as const
+
+export type ItemMetricDailyScalarFieldEnum = (typeof ItemMetricDailyScalarFieldEnum)[keyof typeof ItemMetricDailyScalarFieldEnum]
+
+
+export const FileMetricDailyScalarFieldEnum = {
+  fileId: 'fileId',
+  itemId: 'itemId',
+  metric: 'metric',
+  day: 'day',
+  count: 'count'
+} as const
+
+export type FileMetricDailyScalarFieldEnum = (typeof FileMetricDailyScalarFieldEnum)[keyof typeof FileMetricDailyScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -973,6 +1232,34 @@ export type ListEnumItemTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$Pri
 
 
 /**
+ * Reference to a field of type 'ChangeAction'
+ */
+export type EnumChangeActionFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ChangeAction'>
+    
+
+
+/**
+ * Reference to a field of type 'ChangeAction[]'
+ */
+export type ListEnumChangeActionFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ChangeAction[]'>
+    
+
+
+/**
+ * Reference to a field of type 'MetricKind'
+ */
+export type EnumMetricKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MetricKind'>
+    
+
+
+/**
+ * Reference to a field of type 'MetricKind[]'
+ */
+export type ListEnumMetricKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MetricKind[]'>
+    
+
+
+/**
  * Reference to a field of type 'Float'
  */
 export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
@@ -1084,6 +1371,9 @@ export type GlobalOmitConfig = {
   record?: Prisma.RecordOmit
   fileAttachment?: Prisma.FileAttachmentOmit
   itemRelation?: Prisma.ItemRelationOmit
+  itemRevision?: Prisma.ItemRevisionOmit
+  itemMetricDaily?: Prisma.ItemMetricDailyOmit
+  fileMetricDaily?: Prisma.FileMetricDailyOmit
 }
 
 /* Types for Logging */

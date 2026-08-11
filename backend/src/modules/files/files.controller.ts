@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Post,
   Put,
@@ -20,6 +21,7 @@ import type { Response } from 'express';
 import { GetPrincipal } from '../../core/auth/get-principal.decorator';
 import { ResourceAccessService } from '../../core/auth/resource-access.service';
 import type { Principal } from '../../core/auth/principal.type';
+import { MetricsService } from '../../core/metrics/metrics.service';
 import { FilesService } from './files.service';
 import { ReextractDto, ReplaceFileDto, SetTextDto, UploadFilesDto } from './dto/upload-files.dto';
 
@@ -47,6 +49,7 @@ export class FilesController {
   constructor(
     private readonly filesService: FilesService,
     private readonly access: ResourceAccessService,
+    private readonly metrics: MetricsService,
   ) {}
 
   @Post('upload/:itemId')
@@ -71,7 +74,7 @@ export class FilesController {
       await this.filesService.cleanupTempFiles(files);
       throw err;
     }
-    return this.filesService.upload(itemId, files, body.doOCR ?? false, body.extractedTexts, body.role);
+    return this.filesService.upload(itemId, files, principal.sub, body.doOCR ?? false, body.extractedTexts, body.role);
   }
 
   @Put(':fileId')
@@ -95,7 +98,7 @@ export class FilesController {
     if (!file) {
       throw new BadRequestException('No file provided — send multipart form data with a "file" field');
     }
-    return this.filesService.replace(fileId, file, body.doOCR ?? false, body.extractedText);
+    return this.filesService.replace(fileId, file, principal.sub, body.doOCR ?? false, body.extractedText);
   }
 
   @Put(':fileId/text')
@@ -129,11 +132,22 @@ export class FilesController {
     @GetPrincipal() principal: Principal,
     @Param('fileId') fileId: string,
     @Res() res: Response,
+    @Headers('user-agent') userAgent?: string,
     @Query('inline') inline?: string,
   ) {
     await this.access.assertCanViewFile(principal, fileId);
-    const { stream, contentLength, mimeType, filename } = await this.filesService.download(fileId);
+    const { stream, contentLength, mimeType, filename, itemId } =
+      await this.filesService.download(fileId);
     const disposition = inline === '1' ? 'inline' : 'attachment';
+
+    // `?inline=1` is how the viewer renders a scan or a thumbnail in the page —
+    // that is reading, not downloading, and counting it would make every record
+    // with a cover image look heavily downloaded. Counted once the blob is
+    // known to exist but before the transfer, since a client that aborts
+    // mid-stream still asked for the file.
+    if (disposition === 'attachment' && itemId) {
+      this.metrics.recordDownload(itemId, fileId, userAgent);
+    }
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', contentDisposition(disposition, filename));
     if (contentLength) res.setHeader('Content-Length', contentLength);
@@ -149,6 +163,6 @@ export class FilesController {
   @Delete(':fileId')
   async delete(@GetPrincipal() principal: Principal, @Param('fileId') fileId: string) {
     await this.access.assertCanManageFile(principal, fileId);
-    return this.filesService.delete(fileId);
+    return this.filesService.delete(fileId, principal.sub);
   }
 }

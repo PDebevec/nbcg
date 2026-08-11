@@ -54,7 +54,10 @@ export const ModelName = {
   Draft: 'Draft',
   Record: 'Record',
   FileAttachment: 'FileAttachment',
-  ItemRelation: 'ItemRelation'
+  ItemRelation: 'ItemRelation',
+  ItemRevision: 'ItemRevision',
+  ItemMetricDaily: 'ItemMetricDaily',
+  FileMetricDaily: 'FileMetricDaily'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -128,6 +131,40 @@ export const ItemRelationScalarFieldEnum = {
 } as const
 
 export type ItemRelationScalarFieldEnum = (typeof ItemRelationScalarFieldEnum)[keyof typeof ItemRelationScalarFieldEnum]
+
+
+export const ItemRevisionScalarFieldEnum = {
+  id: 'id',
+  itemId: 'itemId',
+  version: 'version',
+  action: 'action',
+  changes: 'changes',
+  userId: 'userId',
+  createdAt: 'createdAt'
+} as const
+
+export type ItemRevisionScalarFieldEnum = (typeof ItemRevisionScalarFieldEnum)[keyof typeof ItemRevisionScalarFieldEnum]
+
+
+export const ItemMetricDailyScalarFieldEnum = {
+  itemId: 'itemId',
+  metric: 'metric',
+  day: 'day',
+  count: 'count'
+} as const
+
+export type ItemMetricDailyScalarFieldEnum = (typeof ItemMetricDailyScalarFieldEnum)[keyof typeof ItemMetricDailyScalarFieldEnum]
+
+
+export const FileMetricDailyScalarFieldEnum = {
+  fileId: 'fileId',
+  itemId: 'itemId',
+  metric: 'metric',
+  day: 'day',
+  count: 'count'
+} as const
+
+export type FileMetricDailyScalarFieldEnum = (typeof FileMetricDailyScalarFieldEnum)[keyof typeof FileMetricDailyScalarFieldEnum]
 
 
 export const SortOrder = {

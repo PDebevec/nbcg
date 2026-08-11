@@ -15,7 +15,7 @@ export class RelationsController {
   @Post('connect')
   async connect(@GetPrincipal() principal: Principal, @Body() dto: ModifyRelationsDto) {
     await this.access.assertCanManage(principal, dto.parentId);
-    return this.relationsService.connect(dto.parentId, dto.childIds);
+    return this.relationsService.connect(dto.parentId, dto.childIds, principal.sub);
   }
 
   // 200, not the previous 204 — the response now carries the parent's
@@ -24,6 +24,6 @@ export class RelationsController {
   @HttpCode(200)
   async disconnect(@GetPrincipal() principal: Principal, @Body() dto: ModifyRelationsDto) {
     await this.access.assertCanManage(principal, dto.parentId);
-    return this.relationsService.disconnect(dto.parentId, dto.childIds);
+    return this.relationsService.disconnect(dto.parentId, dto.childIds, principal.sub);
   }
 }

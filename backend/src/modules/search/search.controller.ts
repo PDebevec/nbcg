@@ -1,13 +1,17 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Headers, Param, Query } from '@nestjs/common';
 import { GetPrincipal } from '../../core/auth/get-principal.decorator';
 import type { Principal } from '../../core/auth/principal.type';
+import { MetricsService } from '../../core/metrics/metrics.service';
 import { SearchService } from './search.service';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { SuggestQueryDto } from './dto/suggest-query.dto';
 
 @Controller('search')
 export class SearchController {
-  constructor(private readonly searchService: SearchService) {}
+  constructor(
+    private readonly searchService: SearchService,
+    private readonly metrics: MetricsService,
+  ) {}
 
   @Get()
   search(@GetPrincipal() principal: Principal, @Query() dto: SearchQueryDto) {
@@ -30,7 +34,19 @@ export class SearchController {
   }
 
   @Get(':id')
-  getById(@GetPrincipal() principal: Principal, @Param('id') id: string) {
-    return this.searchService.getById(id, principal);
+  async getById(
+    @GetPrincipal() principal: Principal,
+    @Param('id') id: string,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    const hit = await this.searchService.getById(id, principal);
+
+    // Counted only after the item resolved and passed the visibility check, so
+    // a 404 probe can't inflate a counter. Synchronous and in-memory — this
+    // must never delay or fail the read, and it deliberately ignores the
+    // principal so anonymous traffic (most of it) is counted too.
+    this.metrics.recordItemView(id, userAgent);
+
+    return hit;
   }
 }
