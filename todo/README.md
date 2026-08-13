@@ -7,7 +7,8 @@
 
 ## Backend
 
-- [Task Delegation](backend-task-delegation.md) — assign review/publish work between users; new `WorkTask`/`TaskComment` tables plus a `user_profiles` cache so the frontend can list who may be assigned (TODO)
+- [User Directory + Attribution Snapshots](backend-user-directory-sync.md) — `createdByName`/`updatedByName` snapshot columns for instant display, plus a `user_profiles` shadow of the Keycloak realm (daily + manual Admin API sync) for pickers, filters and delegation (TODO)
+- [Task Delegation](backend-task-delegation.md) — assign review/publish work between users; new `WorkTask`/`TaskComment` tables, consuming the user directory above (TODO)
 - [Material-Type-Based Field Visibility](backend-archive-material-type-field-visibility.md) — annotate schema fields with `relevantForTypes` + pre-computed `typeProfiles` per material type (TODO)
 
 ## Backend — Archive (desktop app) integration

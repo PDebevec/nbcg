@@ -108,6 +108,15 @@
           "attributes": {}
         },
         {
+          "id": "9f2a4c61-5d3b-4e88-9a72-1c0f6b8e4d15",
+          "name": "users:manage",
+          "description": "Administer the local user directory: trigger a Keycloak sync and read sync status. Admins only.",
+          "composite": false,
+          "clientRole": true,
+          "containerId": "4210e19b-ada8-4ca6-aa63-410d7776913f",
+          "attributes": {}
+        },
+        {
           "id": "6de5effa-6ee5-46fa-87bb-d5ecc42cdd32",
           "name": "drafts:view:private",
           "description": "See PRIVATE drafts (implies drafts:view:public).",
@@ -549,7 +558,8 @@
             "nbcg-api": [
               "import:execute",
               "drafts:manage",
-              "records:manage"
+              "records:manage",
+              "users:manage"
             ],
             "realm-management": [
               "realm-admin"
@@ -676,6 +686,9 @@
           "import:execute",
           "drafts:manage",
           "records:manage"
+        ],
+        "realm-management": [
+          "view-users"
         ]
       },
       "notBefore": 0,

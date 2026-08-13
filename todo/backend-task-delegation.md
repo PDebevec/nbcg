@@ -122,6 +122,16 @@ parsed as local time.
 
 ### User directory cache
 
+> **Superseded — see [User Directory + Attribution Snapshots](backend-user-directory-sync.md).**
+> The sketch below was the starting point. The split-out plan separates two
+> concerns this section conflated: **attribution** (`createdByName` snapshot
+> columns written from the JWT, for display) and the **directory**
+> (`user_profiles`, synced from the Keycloak Admin API, for pickers and
+> delegation). It also drops `groups`, replaces `isActive` with
+> `enabled` + `deletedAt`, and moves `assignable-users` to
+> `GET /api/users?capability=publish` in its own module. Build that first; this
+> section is kept for context only.
+
 Assignment needs names, and every list response needs to turn a `sub` into
 something human. Hitting the Keycloak Admin API on every request is too slow and
 makes Keycloak a hard dependency of an ordinary read.
@@ -194,9 +204,11 @@ Guard rails worth enforcing server-side, not just in the UI:
 - [ ] New `KeycloakAdminService` in `src/core/keycloak/` — client-credentials
       token, user enumeration **via groups**, composite role resolution,
       service-account filtering.
-- [ ] **Grant the `nbcg-worker` service account `view-users` + `query-groups`
-      from the `realm-management` client.** It currently holds *none* of them, so
-      user enumeration returns 403 until this is done. Realm change, not code.
+- [x] **~~Grant the `nbcg-worker` service account `view-users` + `query-groups`~~**
+      Done — `view-users` alone is sufficient (it is composite over `query-users`
+      + `query-groups`). Applied to the live realm *and*
+      `nbcg-realm.conf.json`. See
+      [User Directory Sync](backend-user-directory-sync.md).
 - [ ] User sync job (startup + interval, plus a manual
       `POST /api/admin/users/sync`) populating `user_profiles` and computing
       `canPublish`.
