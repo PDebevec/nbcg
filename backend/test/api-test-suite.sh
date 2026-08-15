@@ -1260,12 +1260,20 @@ else
 
   # Same instant as the REST representation
   if python3 -c "
-import sys
+import re, sys
 from datetime import datetime
+
 def p(s):
-    return datetime.fromisoformat(s.replace('Z', '+00:00'))
+    s = s.replace('Z', '+00:00')
+    # JSON drops a trailing zero from the fraction, so the indexed copy can read
+    # '.38' where REST says '.380'. Same instant; pad it, because
+    # datetime.fromisoformat before 3.11 only accepts exactly 3 or 6 digits.
+    return datetime.fromisoformat(
+        re.sub(r'\.(\d{1,6})', lambda m: '.' + m.group(1).ljust(6, '0'), s)
+    )
+
 sys.exit(0 if p('$TS_REST') == p('$TS_INDEXED') else 1)
-" 2>/dev/null; then
+"; then
     echo -e "  ${GREEN}PASS${NC} REST and indexed createdAt are the same instant"
     ((PASSED++))
   else
@@ -1628,7 +1636,12 @@ http GET "$API/stats/items/top" "$TOKEN_ADMIN"
 assert_status "Top items returns 200" "200"
 assert_body_contains "Viewed item appears in top items" "$MET_ID"
 
-http GET "$API/stats/items/top?metric=DOWNLOAD" "$TOKEN_ADMIN"
+# limit=100 rather than the default 10: every run of this suite leaves another
+# file on 1 download, ties are ordered arbitrarily, and once more than `limit`
+# files are tied the freshly-downloaded one drops off the list. The claim under
+# test is that the download is counted and attributed to the file, not that it
+# outranks history.
+http GET "$API/stats/items/top?metric=DOWNLOAD&limit=100" "$TOKEN_ADMIN"
 assert_status "Top items filters by metric" "200"
 assert_body_contains "Downloaded file appears in top files" "$MET_FILE_ID"
 
@@ -1666,6 +1679,598 @@ elif grep -qE 'item_revisions|item_metrics_daily|file_metrics_daily' "$PGSYNC_SC
 else
   echo -e "  ${GREEN}PASS${NC} History and metrics tables are excluded from pgsync CDC"
   ((PASSED++))
+fi
+
+# ============================================================================
+# 15. ATTRIBUTION SNAPSHOTS
+# ============================================================================
+section "15. Attribution Snapshots"
+
+# The display name on a row is captured from the JWT at write time and never
+# updated afterwards. Two properties are asserted here: that it is written at
+# every write site (including imports, which have no principal), and that it
+# does not reach a principal below the staff bar.
+
+# psql_query squeezes all whitespace, which would fuse "editor editor" into a
+# single token — a name needs a variant that only takes the first line.
+psql_text() {
+  docker exec nbcg-db-1 psql -U nbcg -d nbcg -tAc "$1" 2>/dev/null | head -1
+}
+
+assert_psql_text() {
+  local test_name=$1 query=$2 expected=$3
+  if [ "$PSQL_OK" = "0" ]; then
+    echo -e "  ${YELLOW}SKIP${NC} $test_name (psql unavailable)"
+    ((SKIPPED++))
+    return
+  fi
+  local actual
+  actual=$(psql_text "$query")
+  if [ "$actual" = "$expected" ]; then
+    echo -e "  ${GREEN}PASS${NC} $test_name"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} $test_name (expected '$expected', got '$actual')"
+    ((FAILED++))
+    ERRORS+=("$test_name: expected '$expected', got '$actual'")
+  fi
+}
+
+# Does the last search response carry an attribution name in any hit's source?
+# Reports "empty" for a response with no hits at all, so an absence assertion
+# cannot pass just because nothing matched.
+attribution_in_search() {
+  echo "$HTTP_BODY" | python3 -c "
+import sys, json
+hits = json.load(sys.stdin)['hits']
+if not hits:
+    print('empty')
+else:
+    leaked = [f for h in hits for f in ('createdByName', 'updatedByName') if f in h['source']]
+    print('yes' if leaked else 'no')
+" 2>/dev/null || echo "error"
+}
+
+assert_no_attribution() {
+  local test_name=$1
+  local found
+  found=$(attribution_in_search)
+  if [ "$found" = "no" ]; then
+    echo -e "  ${GREEN}PASS${NC} $test_name"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} $test_name (attribution_in_search=$found)"
+    ((FAILED++))
+    ERRORS+=("$test_name: attribution_in_search=$found")
+  fi
+}
+
+# --- 15a: the name is snapshotted from the JWT at write time -----------------
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-ATTRIBUTION","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+assert_status "Create item for attribution test" "201"
+ATTRIB_ID=$(json_field "['id']")
+CLEANUP_IDS+=("$ATTRIB_ID")
+
+http GET "$API/items/$ATTRIB_ID/history" "$TOKEN_ADMIN"
+assert_json_field "CREATE revision names the creator" "['revisions'][0]['userName']" "editor editor"
+
+assert_psql_text "Draft row carries the creator's name" \
+  "SELECT \"createdByName\" FROM drafts WHERE id='$ATTRIB_ID'" "editor editor"
+
+# --- 15b: a later edit attributes itself, and does not rewrite the creator ---
+http PATCH "$API/items/$ATTRIB_ID" "$TOKEN_CATALOGUER" '{"metadata":{"title":"TEST-SUITE-ATTRIBUTION-EDITED"},"expectedVersion":0}'
+assert_status "Cataloguer edits the attribution test item" "200"
+
+http GET "$API/items/$ATTRIB_ID/history" "$TOKEN_ADMIN"
+assert_json_field "UPDATE revision names the editor, not the creator" "['revisions'][0]['userName']" "cataloguer cataloguer"
+
+assert_psql_text "Creator name is frozen across an edit by someone else" \
+  "SELECT \"createdByName\" FROM drafts WHERE id='$ATTRIB_ID'" "editor editor"
+assert_psql_text "Edit records its own author" \
+  "SELECT \"updatedByName\" FROM drafts WHERE id='$ATTRIB_ID'" "cataloguer cataloguer"
+
+# --- 15c: the creator snapshot travels across a DRAFT -> RECORD transition ---
+http POST "$API/items/transition" "$TOKEN_ADMIN" "{\"ids\":[\"$ATTRIB_ID\"],\"targetState\":\"RECORD\"}"
+assert_status "Transition attribution test item to RECORD" "201"
+
+assert_psql_text "Record keeps the original creator after publication" \
+  "SELECT \"createdByName\" FROM records WHERE id='$ATTRIB_ID'" "editor editor"
+assert_psql_text "Publication is attributed to whoever published" \
+  "SELECT \"updatedByName\" FROM records WHERE id='$ATTRIB_ID'" "admin admin"
+
+# --- 15d: imports have no principal, but must not have a blank byline -------
+if [ "$PSQL_OK" = "1" ]; then
+  BAD_SYSTEM=$(psql_query "SELECT count(*) FROM (
+    SELECT \"createdByUserId\" AS uid, \"createdByName\" AS name FROM records
+    UNION ALL SELECT \"createdByUserId\", \"createdByName\" FROM drafts
+  ) t WHERE uid = 'system' AND name <> 'System (import)'")
+  if [ "$BAD_SYSTEM" = "0" ]; then
+    echo -e "  ${GREEN}PASS${NC} Import-created rows render as 'System (import)'"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} $BAD_SYSTEM import rows have a name other than 'System (import)'"
+    ((FAILED++))
+    ERRORS+=("import rows with wrong createdByName: $BAD_SYSTEM")
+  fi
+
+  BLANK=$(psql_query "SELECT count(*) FROM (
+    SELECT \"createdByName\" AS name FROM records
+    UNION ALL SELECT \"createdByName\" FROM drafts
+    UNION ALL SELECT \"userName\" FROM item_revisions
+  ) t WHERE name IS NULL OR btrim(name) = ''")
+  if [ "$BLANK" = "0" ]; then
+    echo -e "  ${GREEN}PASS${NC} No row anywhere has a blank attribution name"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} $BLANK rows have a blank attribution name"
+    ((FAILED++))
+    ERRORS+=("blank attribution names: $BLANK")
+  fi
+else
+  echo -e "  ${YELLOW}SKIP${NC} Import and blank-name attribution checks (psql unavailable)"
+  ((SKIPPED++))
+fi
+
+# --- 15e: attribution never reaches a principal below the staff bar ---------
+# reader holds records:view:* only and anonymous holds nothing, so neither has
+# drafts:manage or records:manage. cataloguer does (via drafts:manage) — which
+# is the inverse of how the roles are named out loud, and is asserted below.
+#
+# Two vectors, and closing one is not enough: the default path returns the whole
+# _source, and `?fields=` is a client-supplied projection that could otherwise
+# name the withheld field directly.
+sleep 5 # let CDC carry the transitioned record into the index
+
+http GET "$API/search?q=TEST-SUITE-&limit=100" "$TOKEN_READER"
+assert_no_attribution "Reader sees no attribution names in search"
+
+http GET "$API/search?q=TEST-SUITE-&limit=100&fields=createdByName,updatedByName" "$TOKEN_READER"
+assert_no_attribution "Reader cannot re-request attribution through ?fields="
+
+http GET "$API/search?q=TEST-SUITE-&limit=100"
+assert_no_attribution "Anonymous sees no attribution names in search"
+
+http GET "$API/search?q=TEST-SUITE-&limit=100&fields=createdByName"
+assert_no_attribution "Anonymous cannot re-request attribution through ?fields="
+
+http GET "$API/search/$ATTRIB_ID" "$TOKEN_READER"
+if echo "$HTTP_BODY" | grep -q "createdByName"; then
+  echo -e "  ${RED}FAIL${NC} Reader sees attribution on a single-item read"
+  ((FAILED++))
+  ERRORS+=("GET /search/:id leaks createdByName to reader")
+else
+  echo -e "  ${GREEN}PASS${NC} Reader sees no attribution on a single-item read"
+  ((PASSED++))
+fi
+
+# The positive control. Without it the four absence assertions above would also
+# pass on an index that simply does not carry the column, which is exactly the
+# state before the pgsync mapping change and reindex land.
+if [ -f "$PGSYNC_SCHEMA" ] && grep -q 'createdByName' "$PGSYNC_SCHEMA"; then
+  http GET "$API/search?q=TEST-SUITE-&limit=100" "$TOKEN_ADMIN"
+  FOUND=$(attribution_in_search)
+  if [ "$FOUND" = "yes" ]; then
+    echo -e "  ${GREEN}PASS${NC} Admin does see attribution names in search"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} Admin sees no attribution names either (attribution_in_search=$FOUND)"
+    ((FAILED++))
+    ERRORS+=("admin should see createdByName in search: $FOUND")
+  fi
+
+  http GET "$API/search?q=TEST-SUITE-&limit=100&fields=createdByName" "$TOKEN_CATALOGUER"
+  FOUND=$(attribution_in_search)
+  if [ "$FOUND" = "yes" ]; then
+    echo -e "  ${GREEN}PASS${NC} Cataloguer sees attribution (drafts:manage clears the bar)"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} Cataloguer should see attribution (attribution_in_search=$FOUND)"
+    ((FAILED++))
+    ERRORS+=("cataloguer should see createdByName in search: $FOUND")
+  fi
+else
+  echo -e "  ${YELLOW}SKIP${NC} Attribution-visible-to-staff control (pgsync schema does not ship createdByName yet)"
+  ((SKIPPED++))
+fi
+
+# --- 15f: the projection cannot bypass the _source excludes -----------------
+# `?fields=` used to emit includes with no excludes alongside, so naming a
+# parent object pulled its excluded children back out with it.
+http GET "$API/search?limit=10&fields=file_attachments" "$TOKEN_ADMIN"
+if echo "$HTTP_BODY" | grep -q "extractedText"; then
+  echo -e "  ${RED}FAIL${NC} ?fields=file_attachments returns extractedText"
+  ((FAILED++))
+  ERRORS+=("?fields=file_attachments re-requests extractedText")
+else
+  echo -e "  ${GREEN}PASS${NC} ?fields=file_attachments still withholds extractedText"
+  ((PASSED++))
+fi
+
+# --- 15g: unknown projection fields are dropped, not passed through ---------
+http GET "$API/search?limit=1&fields=nonsense,metadata.title" "$TOKEN_ADMIN"
+assert_status "Unknown ?fields= entry does not error" "200"
+UNKNOWN_KEYS=$(echo "$HTTP_BODY" | python3 -c "
+import sys, json
+hits = json.load(sys.stdin)['hits']
+print(','.join(sorted(hits[0]['source'].keys())) if hits else 'empty')
+" 2>/dev/null)
+if [ "$UNKNOWN_KEYS" = "id,metadata" ]; then
+  echo -e "  ${GREEN}PASS${NC} Unknown ?fields= entry is dropped from the projection"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} Unexpected projection keys: $UNKNOWN_KEYS"
+  ((FAILED++))
+  ERRORS+=("projection allowlist returned: $UNKNOWN_KEYS")
+fi
+
+# ============================================================================
+# 16. USER DIRECTORY
+# ============================================================================
+section "16. User Directory"
+
+# `user_profiles` is a local shadow of the Keycloak realm, written ONLY by the
+# sync job. It is not consulted for authorization and not consulted to render a
+# name on a row — it exists for cross-user queries: the assignee picker, the
+# creator filter, and resolving a userId to a *current* name in aggregates.
+
+# A synthetic id that no Keycloak user backs, for the departed-user cases.
+GHOST_ID="test-suite-ghost-user"
+GHOST_NAME="Ghost McTestface"
+
+# Wait for an enqueued reconcile to finish. The trigger returns a jobId
+# immediately; the work happens on the queue.
+wait_for_sync() {
+  local before=$1
+  for _ in $(seq 1 30); do
+    http GET "$API/users/sync/status" "$TOKEN_ADMIN"
+    local finished
+    finished=$(json_field "['lastRun']['finishedAt']" 2>/dev/null)
+    if [ -n "$finished" ] && [ "$finished" != "$before" ]; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+last_sync_finished() {
+  http GET "$API/users/sync/status" "$TOKEN_ADMIN"
+  json_field "['lastRun']['finishedAt']" 2>/dev/null
+}
+
+# --- 16a: the startup sync populated the directory --------------------------
+http GET "$API/users" "$TOKEN_ADMIN"
+assert_status "GET /users returns 200 for staff" "200"
+DIR_USERS=$(echo "$HTTP_BODY" | python3 -c "
+import sys, json
+print(','.join(sorted(u['username'] for u in json.load(sys.stdin)['users'])))
+" 2>/dev/null)
+if [ "$DIR_USERS" = "admin,cataloguer,editor,pradles,reader" ]; then
+  echo -e "  ${GREEN}PASS${NC} Directory holds exactly the realm's human users"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} Unexpected directory contents: $DIR_USERS"
+  ((FAILED++))
+  ERRORS+=("directory contents: $DIR_USERS")
+fi
+
+# Service accounts must never appear — they would show up in an assignee picker.
+if echo "$HTTP_BODY" | grep -q "service-account"; then
+  echo -e "  ${RED}FAIL${NC} A service account leaked into the directory"
+  ((FAILED++))
+  ERRORS+=("service account in user_profiles")
+else
+  echo -e "  ${GREEN}PASS${NC} Service accounts are excluded from the directory"
+  ((PASSED++))
+fi
+
+# --- 16b: capability=publish, and the inverted terminology ------------------
+# `canPublish` is records:manage AND drafts:manage — the capability a transition
+# actually requires. Said out loud the roles imply the opposite of the truth:
+# `editors` can publish, `cataloguers` cannot.
+http GET "$API/users?capability=publish" "$TOKEN_ADMIN"
+assert_status "GET /users?capability=publish returns 200" "200"
+PUBLISHERS=$(echo "$HTTP_BODY" | python3 -c "
+import sys, json
+print(','.join(sorted(u['username'] for u in json.load(sys.stdin)['users'])))
+" 2>/dev/null)
+case ",$PUBLISHERS," in
+  *,editor,*) echo -e "  ${GREEN}PASS${NC} capability=publish includes editor"; ((PASSED++));;
+  *) echo -e "  ${RED}FAIL${NC} capability=publish should include editor (got: $PUBLISHERS)"; ((FAILED++)); ERRORS+=("publishers missing editor: $PUBLISHERS");;
+esac
+case ",$PUBLISHERS," in
+  *,cataloguer,*) echo -e "  ${RED}FAIL${NC} capability=publish must NOT include cataloguer (got: $PUBLISHERS)"; ((FAILED++)); ERRORS+=("cataloguer listed as publisher: $PUBLISHERS");;
+  *) echo -e "  ${GREEN}PASS${NC} capability=publish excludes cataloguer (the terminology trap)"; ((PASSED++));;
+esac
+case ",$PUBLISHERS," in
+  *,reader,*) echo -e "  ${RED}FAIL${NC} capability=publish must not include reader"; ((FAILED++)); ERRORS+=("reader listed as publisher");;
+  *) echo -e "  ${GREEN}PASS${NC} capability=publish excludes reader"; ((PASSED++));;
+esac
+
+# --- 16c: email is withheld below the staff bar ----------------------------
+http GET "$API/users" "$TOKEN_ADMIN"
+if echo "$HTTP_BODY" | grep -q '"email"'; then
+  echo -e "  ${GREEN}PASS${NC} Staff see contact details"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} Staff should see email"
+  ((FAILED++))
+  ERRORS+=("admin cannot see email in /users")
+fi
+
+http GET "$API/users" "$TOKEN_READER"
+assert_status "Reader can read the directory" "200"
+if echo "$HTTP_BODY" | grep -q '"email"'; then
+  echo -e "  ${RED}FAIL${NC} Reader sees staff email addresses"
+  ((FAILED++))
+  ERRORS+=("/users leaks email to reader")
+else
+  echo -e "  ${GREEN}PASS${NC} Reader sees the staff list without contact details"
+  ((PASSED++))
+fi
+
+# --- 16d: auth on the directory --------------------------------------------
+http GET "$API/users"
+assert_status "Anonymous cannot read the directory" "401"
+
+http GET "$API/users/sync/status" "$TOKEN_EDITOR"
+assert_status "Editor cannot read sync status" "403"
+http GET "$API/users/sync/status" "$TOKEN_ADMIN"
+assert_status "Admin can read sync status" "200"
+
+http POST "$API/users/sync"
+assert_status "Anonymous cannot trigger a sync" "401"
+http POST "$API/users/sync" "$TOKEN_READER"
+assert_status "Reader cannot trigger a sync" "403"
+http POST "$API/users/sync" "$TOKEN_CATALOGUER"
+assert_status "Cataloguer cannot trigger a sync" "403"
+http POST "$API/users/sync" "$TOKEN_EDITOR"
+assert_status "Editor cannot trigger a sync (users:manage is admins only)" "403"
+
+# --- 16e: single profile ---------------------------------------------------
+EDITOR_SUB=$(psql_text "SELECT \"userId\" FROM user_profiles WHERE username='editor'")
+if [ -n "$EDITOR_SUB" ]; then
+  http GET "$API/users/$EDITOR_SUB" "$TOKEN_ADMIN"
+  assert_status "GET /users/:id returns 200" "200"
+  assert_json_field "GET /users/:id resolves the display name" "['displayName']" "editor editor"
+else
+  echo -e "  ${YELLOW}SKIP${NC} GET /users/:id (could not read editor's sub)"
+  ((SKIPPED++))
+fi
+
+http GET "$API/users/no-such-user-id" "$TOKEN_ADMIN"
+assert_status "GET /users/:id on an unknown id returns 404" "404"
+
+# --- 16f: request traffic never writes the directory -----------------------
+# A user appears in this table because they exist in Keycloak *and* a sync ran.
+# Never as a side effect of traffic — "why is this person here?" has one answer.
+PROFILES_BEFORE=$(psql_query "SELECT count(*) FROM user_profiles")
+http GET "$API/search?q=TEST-SUITE-&limit=5" "$TOKEN_EDITOR"
+http GET "$API/users" "$TOKEN_CATALOGUER"
+http GET "$API/items/stats" "$TOKEN_ADMIN"
+PROFILES_AFTER=$(psql_query "SELECT count(*) FROM user_profiles")
+if [ "$PROFILES_BEFORE" = "$PROFILES_AFTER" ]; then
+  echo -e "  ${GREEN}PASS${NC} Authenticated traffic writes no directory rows ($PROFILES_AFTER)"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} Directory grew on request traffic: $PROFILES_BEFORE -> $PROFILES_AFTER"
+  ((FAILED++))
+  ERRORS+=("user_profiles written by a request: $PROFILES_BEFORE -> $PROFILES_AFTER")
+fi
+
+# --- 16g: a successful sync reconciles absences, without hard-deleting -----
+if [ "$PSQL_OK" = "1" ]; then
+  psql_query "INSERT INTO user_profiles (\"userId\", username, \"displayName\", \"canPublish\", enabled, \"syncedAt\")
+              VALUES ('$GHOST_ID', 'ghost', '$GHOST_NAME', false, true, now())
+              ON CONFLICT (\"userId\") DO UPDATE SET \"deletedAt\" = NULL" >/dev/null
+
+  SYNC_BEFORE=$(last_sync_finished)
+  http POST "$API/users/sync" "$TOKEN_ADMIN"
+  assert_status "Admin triggers a sync" "201"
+
+  if wait_for_sync "$SYNC_BEFORE"; then
+    echo -e "  ${GREEN}PASS${NC} Triggered sync completes"
+    ((PASSED++))
+
+    GHOST_DELETED=$(psql_query "SELECT count(*) FROM user_profiles WHERE \"userId\"='$GHOST_ID' AND \"deletedAt\" IS NOT NULL")
+    if [ "$GHOST_DELETED" = "1" ]; then
+      echo -e "  ${GREEN}PASS${NC} A user the realm no longer has is marked absent"
+      ((PASSED++))
+    else
+      echo -e "  ${RED}FAIL${NC} Absent user was not marked (deletedAt still null)"
+      ((FAILED++))
+      ERRORS+=("sync did not set deletedAt on an absent user")
+    fi
+
+    GHOST_ROW=$(psql_query "SELECT count(*) FROM user_profiles WHERE \"userId\"='$GHOST_ID'")
+    if [ "$GHOST_ROW" = "1" ]; then
+      echo -e "  ${GREEN}PASS${NC} An absent user's row is kept, not deleted (so old items still resolve)"
+      ((PASSED++))
+    else
+      echo -e "  ${RED}FAIL${NC} Absent user's row was hard-deleted"
+      ((FAILED++))
+      ERRORS+=("user_profiles row hard-deleted by sync")
+    fi
+
+    # Real users must not have been touched by the same run.
+    REAL_MARKED=$(psql_query "SELECT count(*) FROM user_profiles WHERE \"deletedAt\" IS NOT NULL AND \"userId\" <> '$GHOST_ID'")
+    if [ "$REAL_MARKED" = "0" ]; then
+      echo -e "  ${GREEN}PASS${NC} A sync marks only the users the realm actually dropped"
+      ((PASSED++))
+    else
+      echo -e "  ${RED}FAIL${NC} $REAL_MARKED real user(s) were marked absent"
+      ((FAILED++))
+      ERRORS+=("sync marked $REAL_MARKED real users absent")
+    fi
+
+    # Default list hides them; active=false brings them back.
+    http GET "$API/users?limit=500" "$TOKEN_ADMIN"
+    if echo "$HTTP_BODY" | grep -q "$GHOST_NAME"; then
+      echo -e "  ${RED}FAIL${NC} An absent user still appears in the default (active) list"
+      ((FAILED++))
+      ERRORS+=("departed user listed as active")
+    else
+      echo -e "  ${GREEN}PASS${NC} An absent user drops out of the assignable list"
+      ((PASSED++))
+    fi
+
+    http GET "$API/users?active=false&limit=500" "$TOKEN_ADMIN"
+    if echo "$HTTP_BODY" | grep -q "$GHOST_NAME"; then
+      echo -e "  ${GREEN}PASS${NC} ?active=false still shows them"
+      ((PASSED++))
+    else
+      echo -e "  ${RED}FAIL${NC} ?active=false should include an absent user"
+      ((FAILED++))
+      ERRORS+=("?active=false hides departed users")
+    fi
+
+    # --- 16h: a departed user still resolves in aggregates ----------------
+    # This is the payoff for deletedAt over a hard delete. Aggregates group by
+    # userId and resolve the current name, so a user who has left Keycloak
+    # entirely still renders on the productivity panel.
+    psql_query "INSERT INTO item_revisions (id, \"itemId\", version, action, \"userId\", \"userName\", \"createdAt\")
+                VALUES ('test-suite-ghost-rev', 'test-suite-ghost-item', 1, 'CREATE', '$GHOST_ID', 'Old Ghost Name', now())
+                ON CONFLICT (id) DO NOTHING" >/dev/null
+
+    http GET "$API/stats/users" "$TOKEN_ADMIN"
+    GHOST_STAT=$(echo "$HTTP_BODY" | python3 -c "
+import sys, json
+users = json.load(sys.stdin)['users']
+hit = [u for u in users if u['userId'] == '$GHOST_ID']
+print(hit[0]['displayName'] if hit else 'absent')
+" 2>/dev/null)
+    if [ "$GHOST_STAT" = "$GHOST_NAME" ]; then
+      echo -e "  ${GREEN}PASS${NC} A departed user still resolves in stats, to their current name"
+      ((PASSED++))
+    else
+      echo -e "  ${RED}FAIL${NC} Stats resolved a departed user as '$GHOST_STAT', expected '$GHOST_NAME'"
+      ((FAILED++))
+      ERRORS+=("stats name resolution for departed user: $GHOST_STAT")
+    fi
+
+    # And it must be the *directory* name, not the snapshot on the revision —
+    # grouping by the snapshot would split a renamed person into two rows.
+    if [ "$GHOST_STAT" = "Old Ghost Name" ]; then
+      echo -e "  ${RED}FAIL${NC} Stats used the revision snapshot instead of the current name"
+      ((FAILED++))
+      ERRORS+=("stats grouped by snapshot name")
+    else
+      echo -e "  ${GREEN}PASS${NC} Stats use the current directory name, not the row snapshot"
+      ((PASSED++))
+    fi
+
+    psql_query "DELETE FROM item_revisions WHERE id='test-suite-ghost-rev'" >/dev/null
+  else
+    echo -e "  ${RED}FAIL${NC} Triggered sync did not finish within 30s"
+    ((FAILED++))
+    ERRORS+=("sync did not complete")
+  fi
+
+  psql_query "DELETE FROM user_profiles WHERE \"userId\"='$GHOST_ID'" >/dev/null
+else
+  echo -e "  ${YELLOW}SKIP${NC} Directory reconciliation checks (psql unavailable)"
+  ((SKIPPED++))
+fi
+
+# --- 16i: the directory stays out of CDC ----------------------------------
+# The daily sync rewrites every row. A tracked table would re-index documents
+# on each run, for a table nothing in the index refers to.
+if [ ! -f "$PGSYNC_SCHEMA" ]; then
+  echo -e "  ${YELLOW}SKIP${NC} pgsync schema not found"
+  ((SKIPPED++))
+elif grep -q 'user_profiles' "$PGSYNC_SCHEMA"; then
+  echo -e "  ${RED}FAIL${NC} user_profiles is in the pgsync schema — every sync would re-index"
+  ((FAILED++))
+  ERRORS+=("user_profiles must not be tracked by pgsync")
+else
+  echo -e "  ${GREEN}PASS${NC} user_profiles is excluded from pgsync CDC"
+  ((PASSED++))
+fi
+
+# ============================================================================
+# 17. A FAILED SYNC IS NOT A DEPARTURE
+# ============================================================================
+section "17. Failed Sync Safety"
+
+# The single most damaging way to get this wrong: if enumeration dies halfway,
+# the users we did not see are not gone. Marking them absent would empty the
+# assignee picker every time Keycloak restarts. Only a run that completed, with
+# a non-empty roster, may reconcile absences.
+#
+# Fault-injected for real by stopping Keycloak — the API keeps validating the
+# already-minted token from its cached JWKS, so the request still gets through
+# while the Admin API call cannot.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+COMPOSE=(docker compose -f "$REPO_ROOT/docker-compose.yml" -f "$REPO_ROOT/docker-compose.ext.yml")
+
+if [ "$PSQL_OK" = "0" ] || ! docker info >/dev/null 2>&1; then
+  echo -e "  ${YELLOW}SKIP${NC} Failed-sync safety (needs docker + psql)"
+  ((SKIPPED++))
+else
+  DELETED_BEFORE=$(psql_query "SELECT count(*) FROM user_profiles WHERE \"deletedAt\" IS NOT NULL")
+  COUNT_BEFORE=$(psql_query "SELECT count(*) FROM user_profiles")
+
+  "${COMPOSE[@]}" stop keycloak >/dev/null 2>&1
+  echo -e "  ${YELLOW}NOTE${NC} Keycloak stopped — injecting a mid-enumeration failure"
+
+  http POST "$API/users/sync" "$TOKEN_ADMIN"
+  assert_status "Sync can still be triggered while Keycloak is down" "201"
+
+  # Wait for the first attempt to fail. Retries continue in the background and
+  # will succeed once Keycloak is back, which is the intended behaviour.
+  SYNC_FAILED=0
+  for _ in $(seq 1 20); do
+    http GET "$API/users/sync/status" "$TOKEN_ADMIN"
+    if echo "$HTTP_BODY" | grep -q '"lastError":{'; then SYNC_FAILED=1; break; fi
+    sleep 2
+  done
+
+  if [ "$SYNC_FAILED" = "1" ]; then
+    echo -e "  ${GREEN}PASS${NC} A failing sync is reported in sync/status"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} A failing sync left no error in sync/status"
+    ((FAILED++))
+    ERRORS+=("failed sync not visible in sync/status")
+  fi
+
+  DELETED_AFTER=$(psql_query "SELECT count(*) FROM user_profiles WHERE \"deletedAt\" IS NOT NULL")
+  COUNT_AFTER=$(psql_query "SELECT count(*) FROM user_profiles")
+
+  if [ "$DELETED_AFTER" = "$DELETED_BEFORE" ]; then
+    echo -e "  ${GREEN}PASS${NC} A failed sync marks nobody absent (deletedAt untouched: $DELETED_AFTER)"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} A failed sync changed deletedAt: $DELETED_BEFORE -> $DELETED_AFTER"
+    ((FAILED++))
+    ERRORS+=("failed sync set deletedAt: $DELETED_BEFORE -> $DELETED_AFTER")
+  fi
+
+  if [ "$COUNT_AFTER" = "$COUNT_BEFORE" ]; then
+    echo -e "  ${GREEN}PASS${NC} A failed sync deletes no rows ($COUNT_AFTER)"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} A failed sync changed the row count: $COUNT_BEFORE -> $COUNT_AFTER"
+    ((FAILED++))
+    ERRORS+=("failed sync changed user_profiles count")
+  fi
+
+  "${COMPOSE[@]}" start keycloak >/dev/null 2>&1
+  KC_BACK=0
+  for _ in $(seq 1 45); do
+    if curl -sf -o /dev/null -X POST "$KC" -d "grant_type=password&client_id=$KC_CLIENT&username=admin&password=admin"; then
+      KC_BACK=1; break
+    fi
+    sleep 2
+  done
+  if [ "$KC_BACK" = "1" ]; then
+    echo -e "  ${GREEN}PASS${NC} Keycloak restored"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} Keycloak did not come back — later runs will fail until it does"
+    ((FAILED++))
+    ERRORS+=("keycloak not restored after fault injection")
+  fi
 fi
 
 # ============================================================================

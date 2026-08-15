@@ -12,7 +12,9 @@
         "createdAt",
         "updatedAt",
         "createdByUserId",
-        "updatedByUserId"
+        "createdByName",
+        "updatedByUserId",
+        "updatedByName"
       ],
       "transform": {
         "mapping": {
@@ -23,7 +25,9 @@
           "createdAt": { "type": "date" },
           "updatedAt": { "type": "date" },
           "createdByUserId": { "type": "keyword" },
+          "createdByName": { "type": "keyword" },
           "updatedByUserId": { "type": "keyword" },
+          "updatedByName": { "type": "keyword" },
           "file_attachments": {
             "type": "nested",
             "properties": {
@@ -101,7 +105,9 @@
         "createdAt",
         "updatedAt",
         "createdByUserId",
-        "updatedByUserId"
+        "createdByName",
+        "updatedByUserId",
+        "updatedByName"
       ],
       "transform": {
         "mapping": {
@@ -112,7 +118,9 @@
           "createdAt": { "type": "date" },
           "updatedAt": { "type": "date" },
           "createdByUserId": { "type": "keyword" },
+          "createdByName": { "type": "keyword" },
           "updatedByUserId": { "type": "keyword" },
+          "updatedByName": { "type": "keyword" },
           "file_attachments": {
             "type": "nested",
             "properties": {

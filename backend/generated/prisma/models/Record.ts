@@ -43,7 +43,9 @@ export type RecordMinAggregateOutputType = {
   createdAt: Date | null
   updatedAt: Date | null
   createdByUserId: string | null
+  createdByName: string | null
   updatedByUserId: string | null
+  updatedByName: string | null
 }
 
 export type RecordMaxAggregateOutputType = {
@@ -53,7 +55,9 @@ export type RecordMaxAggregateOutputType = {
   createdAt: Date | null
   updatedAt: Date | null
   createdByUserId: string | null
+  createdByName: string | null
   updatedByUserId: string | null
+  updatedByName: string | null
 }
 
 export type RecordCountAggregateOutputType = {
@@ -64,7 +68,9 @@ export type RecordCountAggregateOutputType = {
   createdAt: number
   updatedAt: number
   createdByUserId: number
+  createdByName: number
   updatedByUserId: number
+  updatedByName: number
   _all: number
 }
 
@@ -84,7 +90,9 @@ export type RecordMinAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   createdByUserId?: true
+  createdByName?: true
   updatedByUserId?: true
+  updatedByName?: true
 }
 
 export type RecordMaxAggregateInputType = {
@@ -94,7 +102,9 @@ export type RecordMaxAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   createdByUserId?: true
+  createdByName?: true
   updatedByUserId?: true
+  updatedByName?: true
 }
 
 export type RecordCountAggregateInputType = {
@@ -105,7 +115,9 @@ export type RecordCountAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   createdByUserId?: true
+  createdByName?: true
   updatedByUserId?: true
+  updatedByName?: true
   _all?: true
 }
 
@@ -203,7 +215,9 @@ export type RecordGroupByOutputType = {
   createdAt: Date
   updatedAt: Date
   createdByUserId: string
+  createdByName: string
   updatedByUserId: string | null
+  updatedByName: string | null
   _count: RecordCountAggregateOutputType | null
   _avg: RecordAvgAggregateOutputType | null
   _sum: RecordSumAggregateOutputType | null
@@ -237,7 +251,9 @@ export type RecordWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"Record"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Record"> | Date | string
   createdByUserId?: Prisma.StringFilter<"Record"> | string
+  createdByName?: Prisma.StringFilter<"Record"> | string
   updatedByUserId?: Prisma.StringNullableFilter<"Record"> | string | null
+  updatedByName?: Prisma.StringNullableFilter<"Record"> | string | null
   fileAttachments?: Prisma.FileAttachmentListRelationFilter
 }
 
@@ -249,7 +265,9 @@ export type RecordOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
+  createdByName?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  updatedByName?: Prisma.SortOrderInput | Prisma.SortOrder
   fileAttachments?: Prisma.FileAttachmentOrderByRelationAggregateInput
 }
 
@@ -264,7 +282,9 @@ export type RecordWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"Record"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Record"> | Date | string
   createdByUserId?: Prisma.StringFilter<"Record"> | string
+  createdByName?: Prisma.StringFilter<"Record"> | string
   updatedByUserId?: Prisma.StringNullableFilter<"Record"> | string | null
+  updatedByName?: Prisma.StringNullableFilter<"Record"> | string | null
   fileAttachments?: Prisma.FileAttachmentListRelationFilter
 }, "id">
 
@@ -276,7 +296,9 @@ export type RecordOrderByWithAggregationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
+  createdByName?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  updatedByName?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.RecordCountOrderByAggregateInput
   _avg?: Prisma.RecordAvgOrderByAggregateInput
   _max?: Prisma.RecordMaxOrderByAggregateInput
@@ -295,7 +317,9 @@ export type RecordScalarWhereWithAggregatesInput = {
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Record"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Record"> | Date | string
   createdByUserId?: Prisma.StringWithAggregatesFilter<"Record"> | string
+  createdByName?: Prisma.StringWithAggregatesFilter<"Record"> | string
   updatedByUserId?: Prisma.StringNullableWithAggregatesFilter<"Record"> | string | null
+  updatedByName?: Prisma.StringNullableWithAggregatesFilter<"Record"> | string | null
 }
 
 export type RecordCreateInput = {
@@ -306,7 +330,9 @@ export type RecordCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
+  createdByName: string
   updatedByUserId?: string | null
+  updatedByName?: string | null
   fileAttachments?: Prisma.FileAttachmentCreateNestedManyWithoutRecordInput
 }
 
@@ -318,7 +344,9 @@ export type RecordUncheckedCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
+  createdByName: string
   updatedByUserId?: string | null
+  updatedByName?: string | null
   fileAttachments?: Prisma.FileAttachmentUncheckedCreateNestedManyWithoutRecordInput
 }
 
@@ -330,7 +358,9 @@ export type RecordUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fileAttachments?: Prisma.FileAttachmentUpdateManyWithoutRecordNestedInput
 }
 
@@ -342,7 +372,9 @@ export type RecordUncheckedUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fileAttachments?: Prisma.FileAttachmentUncheckedUpdateManyWithoutRecordNestedInput
 }
 
@@ -354,7 +386,9 @@ export type RecordCreateManyInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
+  createdByName: string
   updatedByUserId?: string | null
+  updatedByName?: string | null
 }
 
 export type RecordUpdateManyMutationInput = {
@@ -365,7 +399,9 @@ export type RecordUpdateManyMutationInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type RecordUncheckedUpdateManyInput = {
@@ -376,7 +412,9 @@ export type RecordUncheckedUpdateManyInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type RecordCountOrderByAggregateInput = {
@@ -387,7 +425,9 @@ export type RecordCountOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
+  createdByName?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrder
+  updatedByName?: Prisma.SortOrder
 }
 
 export type RecordAvgOrderByAggregateInput = {
@@ -401,7 +441,9 @@ export type RecordMaxOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
+  createdByName?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrder
+  updatedByName?: Prisma.SortOrder
 }
 
 export type RecordMinOrderByAggregateInput = {
@@ -411,7 +453,9 @@ export type RecordMinOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
+  createdByName?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrder
+  updatedByName?: Prisma.SortOrder
 }
 
 export type RecordSumOrderByAggregateInput = {
@@ -447,7 +491,9 @@ export type RecordCreateWithoutFileAttachmentsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
+  createdByName: string
   updatedByUserId?: string | null
+  updatedByName?: string | null
 }
 
 export type RecordUncheckedCreateWithoutFileAttachmentsInput = {
@@ -458,7 +504,9 @@ export type RecordUncheckedCreateWithoutFileAttachmentsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
+  createdByName: string
   updatedByUserId?: string | null
+  updatedByName?: string | null
 }
 
 export type RecordCreateOrConnectWithoutFileAttachmentsInput = {
@@ -485,7 +533,9 @@ export type RecordUpdateWithoutFileAttachmentsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type RecordUncheckedUpdateWithoutFileAttachmentsInput = {
@@ -496,7 +546,9 @@ export type RecordUncheckedUpdateWithoutFileAttachmentsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 
@@ -538,7 +590,9 @@ export type RecordSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
+  createdByName?: boolean
   updatedByUserId?: boolean
+  updatedByName?: boolean
   fileAttachments?: boolean | Prisma.Record$fileAttachmentsArgs<ExtArgs>
   _count?: boolean | Prisma.RecordCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["record"]>
@@ -551,7 +605,9 @@ export type RecordSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
+  createdByName?: boolean
   updatedByUserId?: boolean
+  updatedByName?: boolean
 }, ExtArgs["result"]["record"]>
 
 export type RecordSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -562,7 +618,9 @@ export type RecordSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
+  createdByName?: boolean
   updatedByUserId?: boolean
+  updatedByName?: boolean
 }, ExtArgs["result"]["record"]>
 
 export type RecordSelectScalar = {
@@ -573,10 +631,12 @@ export type RecordSelectScalar = {
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
+  createdByName?: boolean
   updatedByUserId?: boolean
+  updatedByName?: boolean
 }
 
-export type RecordOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "visibilityStatus" | "metadata" | "version" | "createdAt" | "updatedAt" | "createdByUserId" | "updatedByUserId", ExtArgs["result"]["record"]>
+export type RecordOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "visibilityStatus" | "metadata" | "version" | "createdAt" | "updatedAt" | "createdByUserId" | "createdByName" | "updatedByUserId" | "updatedByName", ExtArgs["result"]["record"]>
 export type RecordInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   fileAttachments?: boolean | Prisma.Record$fileAttachmentsArgs<ExtArgs>
   _count?: boolean | Prisma.RecordCountOutputTypeDefaultArgs<ExtArgs>
@@ -600,7 +660,12 @@ export type $RecordPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
     createdAt: Date
     updatedAt: Date
     createdByUserId: string
+    /**
+     * Snapshot — same rule as Draft.createdByName.
+     */
+    createdByName: string
     updatedByUserId: string | null
+    updatedByName: string | null
   }, ExtArgs["result"]["record"]>
   composites: {}
 }
@@ -1032,7 +1097,9 @@ export interface RecordFieldRefs {
   readonly createdAt: Prisma.FieldRef<"Record", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Record", 'DateTime'>
   readonly createdByUserId: Prisma.FieldRef<"Record", 'String'>
+  readonly createdByName: Prisma.FieldRef<"Record", 'String'>
   readonly updatedByUserId: Prisma.FieldRef<"Record", 'String'>
+  readonly updatedByName: Prisma.FieldRef<"Record", 'String'>
 }
     
 

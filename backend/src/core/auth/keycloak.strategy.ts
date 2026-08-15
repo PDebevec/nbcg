@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import * as jwksRsa from 'jwks-rsa';
 import type { Request } from 'express';
+import { formatDisplayName } from '../../shared/util/display-name';
 
 /**
  * Cookie fallback for browser-native loads (<img src>, <a href>) that cannot
@@ -51,6 +52,16 @@ export class KeycloakJwtStrategy extends PassportStrategy(Strategy) {
       sub: payload.sub,
       username: payload.preferred_username,
       email: payload.email,
+      // `given_name` / `family_name` / `preferred_username` all ship in the
+      // access token via nbcg-api's default `profile` scope, so attribution
+      // needs no directory lookup and works for a user no sync has seen.
+      // This is for attribution only — it must never become a write path into
+      // `user_profiles`, whose sole writer is the sync job.
+      displayName: formatDisplayName({
+        firstName: payload.given_name,
+        lastName: payload.family_name,
+        username: payload.preferred_username,
+      }),
       scopes: clientRoles,
     };
   }

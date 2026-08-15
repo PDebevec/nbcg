@@ -8,6 +8,7 @@ import { ChangeAction, ItemType, VisibilityStatus } from '../../../generated/pri
 import { EDITABLE_BASE_METADATA_SHAPE } from '../../core/types/metadata.types';
 import type { FieldChange } from '../../core/types/revision.types';
 import { DOMAIN_RECORD_SHAPE, FieldValidator } from '../import/cobiss/cobiss-util/cobiss.types';
+import type { Actor } from '../../core/auth/actor.type';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { RevisionsService } from '../../core/revisions/revisions.service';
 import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
@@ -71,7 +72,7 @@ export class ItemsService {
     visibilityStatus: VisibilityStatus,
     targetState: ItemType,
     rawMetadata: Record<string, unknown> | undefined,
-    userId: string,
+    actor: Actor,
   ) {
     const sanitizedMetadata = this.sanitizeMetadata(rawMetadata ?? {});
 
@@ -112,8 +113,10 @@ export class ItemsService {
       ...(id ? { id } : {}),
       visibilityStatus,
       metadata: finalMetadata,
-      createdByUserId: userId,
-      updatedByUserId: userId,
+      createdByUserId: actor.userId,
+      createdByName: actor.userName,
+      updatedByUserId: actor.userId,
+      updatedByName: actor.userName,
     };
 
     // The item and its opening revision are written together: a timeline that
@@ -127,7 +130,7 @@ export class ItemsService {
       // No `changes` on CREATE — the diff against nothing is just the item's
       // own metadata, which is already readable from the item.
       await this.revisions.record(
-        { itemId: item.id, version: item.version, action: ChangeAction.CREATE, userId },
+        { itemId: item.id, version: item.version, action: ChangeAction.CREATE, actor },
         tx,
       );
 
@@ -158,7 +161,7 @@ export class ItemsService {
     id: string,
     visibilityStatus: VisibilityStatus | undefined,
     rawMetadata: Record<string, unknown> | undefined,
-    userId: string,
+    actor: Actor,
     expectedVersion: number,
   ) {
     const metadataUpdate = rawMetadata ? this.sanitizeMetadata(rawMetadata) : undefined;
@@ -203,7 +206,8 @@ export class ItemsService {
       (existing.metadata as unknown as Record<string, unknown>) ?? {};
 
     const data: Record<string, unknown> = {
-      updatedByUserId: userId,
+      updatedByUserId: actor.userId,
+      updatedByName: actor.userName,
       version: existing.version + 1,
     };
     if (visibilityStatus) data.visibilityStatus = visibilityStatus;
@@ -243,7 +247,7 @@ export class ItemsService {
       }
 
       await this.revisions.record(
-        { itemId: id, version: existing.version + 1, action, changes, userId },
+        { itemId: id, version: existing.version + 1, action, changes, actor },
         tx,
       );
     });
@@ -251,7 +255,7 @@ export class ItemsService {
     return { version: existing.version + 1 };
   }
 
-  async delete(ids: string[], userId: string): Promise<void> {
+  async delete(ids: string[], actor: Actor): Promise<void> {
     const attachments = await this.prisma.fileAttachment.findMany({
       where: { OR: [{ draft_id: { in: ids } }, { record_id: { in: ids } }] },
       select: { originalFid: true },
@@ -289,7 +293,7 @@ export class ItemsService {
           itemId: item.id,
           version: item.version,
           action: ChangeAction.DELETE,
-          userId,
+          actor,
         })),
         tx,
       );
@@ -310,7 +314,7 @@ export class ItemsService {
   async transition(
     ids: string[],
     targetState: ItemType,
-    userId: string,
+    actor: Actor,
   ): Promise<Array<{ id: string; version: number }>> {
     return this.prisma.$transaction(async (tx) => {
       const [allDrafts, allRecords] = await Promise.all([
@@ -370,8 +374,10 @@ export class ItemsService {
               version: d.version + 1,
               createdAt: d.createdAt,
               createdByUserId: d.createdByUserId,
+              createdByName: d.createdByName,
               updatedAt: now,
-              updatedByUserId: userId,
+              updatedByUserId: actor.userId,
+              updatedByName: actor.userName,
             };
           }),
         });
@@ -386,8 +392,10 @@ export class ItemsService {
               version: r.version + 1,
               createdAt: r.createdAt,
               createdByUserId: r.createdByUserId,
+              createdByName: r.createdByName,
               updatedAt: now,
-              updatedByUserId: userId,
+              updatedByUserId: actor.userId,
+              updatedByName: actor.userName,
             };
           }),
         });
@@ -463,7 +471,7 @@ export class ItemsService {
               after: targetState,
             },
           ],
-          userId,
+          actor,
         })),
         tx,
       );

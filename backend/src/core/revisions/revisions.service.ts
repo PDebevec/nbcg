@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChangeAction } from '../../../generated/prisma/enums';
 import type { Prisma } from '../../../generated/prisma/client';
+import type { Actor } from '../auth/actor.type';
 import type { FieldChange } from '../types/revision.types';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -14,7 +15,8 @@ export interface RevisionInput {
   action: ChangeAction;
   /** Omitted for CREATE/DELETE, where the diff would just restate the item. */
   changes?: FieldChange[];
-  userId: string;
+  /** Id and display name travel together — the name is snapshotted, see {@link Actor}. */
+  actor: Actor;
 }
 
 @Injectable()
@@ -41,7 +43,8 @@ export class RevisionsService {
       version: i.version,
       action: i.action,
       ...(i.changes && i.changes.length > 0 ? { changes: i.changes } : {}),
-      userId: i.userId,
+      userId: i.actor.userId,
+      userName: i.actor.userName,
     }));
     if (rows.length === 0) return;
 

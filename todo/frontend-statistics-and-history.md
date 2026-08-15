@@ -91,6 +91,8 @@ export interface ItemRevision {
   changes: FieldChange[] | null;
   /** Raw Keycloak sub, or the literal "system" for COBISS imports. */
   userId: string;
+  /** Display-name snapshot, written at the time of the change. Added 2026-08-13. */
+  userName: string;
   createdAt: string;
 }
 
@@ -168,6 +170,8 @@ export interface StatsOverview {
 ```ts
 export interface UserTotals {
   userId: string;
+  /** The user's name *now*, resolved from the directory. Added 2026-08-13. */
+  displayName: string;
   created: number;
   published: number;
   /** Everything else — metadata edits, visibility flips, file and relation writes. */
@@ -221,10 +225,18 @@ lies about the data.
   do **not** filter the row out, or the list stops adding up to the totals.
 - **Time series are sparse.** Days with no activity are absent, not zero. A
   chart must fill the gaps itself or it will draw a misleading line.
-- **`userId` is a raw Keycloak UUID.** There is no display name yet — the
-  `user_profiles` cache from [Task Delegation](backend-task-delegation.md) is
-  what will provide it. Until then, either show the id or resolve it
-  client-side. Note the literal `"system"` for COBISS imports.
+- ~~**`userId` is a raw Keycloak UUID with no display name.**~~ **Resolved
+  2026-08-13** by [User Directory + Attribution Snapshots](backend-user-directory-sync.md).
+  Both endpoints now carry a name and no client-side resolution is needed:
+  - `/api/stats/users` rows carry **`displayName`** — the name the person goes by
+    *now*, resolved from `user_profiles`. Deliberately not the snapshot: grouping
+    by a frozen name would split a renamed person into two rows.
+  - `/api/items/:id/history` revisions carry **`userName`** — a snapshot of what
+    they were called *at the time of that change*, which is what a timeline
+    should show.
+  That difference is intentional, not an inconsistency. Both still render
+  `"System (import)"` for the literal `"system"` actor, and a user deleted from
+  Keycloak still resolves, because directory rows are never hard-deleted.
 - **`totals` in the overview ignores the range**; everything under `activity`
   and `usage` respects it. Don't present them as one consistent period.
 - **An out-of-range request is a 400**, not an empty result: `from` after `to`,
@@ -263,12 +275,15 @@ the developer's decision.**
       `package.json` today — adding one is a decision worth making deliberately.
 - [ ] Should the item history live on `AdminItemEditPage`, on
       `RecordDetailPage`, or its own route?
-- [ ] Resolve `userId` → name client-side via Keycloak now, or wait for
-      `user_profiles`?
+- [x] ~~Resolve `userId` → name client-side via Keycloak now, or wait for
+      `user_profiles`?~~ **Neither — both endpoints return the name already.**
+      Do not add client-side resolution.
 
 ## Related
 
-- [Task Delegation](backend-task-delegation.md) — provides `user_profiles`, needed for display names
+- [User Directory + Attribution Snapshots](backend-user-directory-sync.md) — **DONE**; supplies `displayName` and `userName` on these endpoints
+- [Attribution + User Directory catch-up](frontend-user-directory-and-attribution.md) — the `users.ts` API client and `canSeeAttribution` helper this task can reuse
+- [Task Delegation](backend-task-delegation.md) — consumes the same directory
 - `backend/BACKEND_REFERENCE.md` → "History & Statistics", the `item_revisions` /
   `item_metrics_daily` table notes, and "What `version` means". This is the
   reference for the backend side; the task that built it has been retired.

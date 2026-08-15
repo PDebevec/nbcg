@@ -36,7 +36,26 @@ const mockAccess = {
   })),
 };
 
-const principal = { sub: 'test-user', scopes: [] } as unknown as Principal;
+/**
+ * `Principal.scopes` is a Set, not an array — the attribution rule calls
+ * `.has()` on it. The previous fixture cast an array through `unknown`, which
+ * compiled and then blew up the moment anything actually read the scopes.
+ */
+function principalWith(scopes: string[]): Principal {
+  return {
+    sub: 'test-user',
+    username: 'test-user',
+    displayName: 'Test User',
+    scopes: new Set(scopes),
+    isAnonymous: false,
+  };
+}
+
+/** Below the attribution bar: no drafts:manage, no records:manage. */
+const principal = principalWith(['records:view:public']);
+
+/** Above it — cataloguer clears the bar on drafts:manage alone. */
+const staffPrincipal = principalWith(['drafts:manage']);
 
 describe('SearchService – query building', () => {
   let service: SearchService;
@@ -199,12 +218,69 @@ describe('SearchService – query building', () => {
   it('uses _source.includes with id when fields param is provided', async () => {
     const body = await searchWith({ q: 'test', fields: 'metadata.title,metadata.authors' });
     expect(body._source.includes).toEqual(['id', 'metadata.title', 'metadata.authors']);
-    expect(body._source.excludes).toBeUndefined();
+  });
+
+  // This assertion used to be `excludes).toBeUndefined()`, which pinned the
+  // includes-only projection in place: naming a parent object pulled its
+  // excluded children out with it, so `?fields=file_attachments` returned
+  // megabytes of extractedText. Excludes must ride along on both branches.
+  it('keeps _source.excludes alongside includes so a projection cannot bypass them', async () => {
+    const body = await searchWith({ q: 'test', fields: 'file_attachments' });
+    expect(body._source.includes).toEqual(['id', 'file_attachments']);
+    expect(body._source.excludes).toContain('file_attachments.extractedText');
   });
 
   it('deduplicates id in fields', async () => {
     const body = await searchWith({ fields: 'id,metadata.title' });
     expect(body._source.includes).toEqual(['id', 'metadata.title']);
+  });
+
+  // ── Attribution: staff-only, enforced on both the default and projected paths ──
+
+  it('excludes attribution names for a principal below the staff bar', async () => {
+    const body = await searchWith({ q: 'test' });
+    expect(body._source.excludes).toEqual(
+      expect.arrayContaining(['createdByName', 'updatedByName']),
+    );
+  });
+
+  it('does not exclude attribution names for staff', async () => {
+    await service.search({ q: 'test' } as SearchQueryDto, staffPrincipal);
+    expect(capturedBody._source.excludes).not.toContain('createdByName');
+    expect(capturedBody._source.excludes).toContain('file_attachments.extractedText');
+  });
+
+  it('still excludes attribution when the projection names it directly', async () => {
+    const body = await searchWith({ fields: 'createdByName' });
+    // Allowlisted, so it survives into `includes` — and is then removed by
+    // `excludes`, which OpenSearch applies last. That is what makes the
+    // projection unable to re-request a withheld field.
+    expect(body._source.includes).toEqual(['id', 'createdByName']);
+    expect(body._source.excludes).toContain('createdByName');
+  });
+
+  // ── Projection allowlist ──
+
+  it('drops field names that are not projectable', async () => {
+    const body = await searchWith({ fields: 'nonsense,__proto__,metadata.title' });
+    expect(body._source.includes).toEqual(['id', 'metadata.title']);
+  });
+
+  it('allows sub-paths of projectable objects', async () => {
+    const body = await searchWith({
+      fields: 'metadata.authors.familyName,file_attachments.filename,parent_relations.parentId',
+    });
+    expect(body._source.includes).toEqual([
+      'id',
+      'metadata.authors.familyName',
+      'file_attachments.filename',
+      'parent_relations.parentId',
+    ]);
+  });
+
+  it('falls back to id alone when every requested field is rejected', async () => {
+    const body = await searchWith({ fields: 'nope,alsonope' });
+    expect(body._source.includes).toEqual(['id']);
   });
 
   // ── Empty query ──
@@ -225,6 +301,91 @@ describe('SearchService – query building', () => {
   it('does not add sort clause for relevance', async () => {
     const body = await searchWith({ sort: 'relevance' });
     expect(body.sort).toBeUndefined();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Attribution stripping on the way out
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * The engine-side `excludes` above are the first line; this is the backstop for
+ * them. Both exist because `_source` used to be handed to the caller wholesale,
+ * and that is an easy mistake to reintroduce in a new query path.
+ */
+describe('SearchService – attribution stripping', () => {
+  let service: SearchService;
+
+  const hitWithAttribution = {
+    _id: 'item-1',
+    _index: 'records',
+    _score: 1,
+    _source: {
+      id: 'item-1',
+      visibilityStatus: 'PUBLIC',
+      createdByUserId: 'sub-1',
+      createdByName: 'Ana Perović',
+      updatedByName: 'Ana Perović',
+      metadata: { title: 'A record' },
+    },
+  };
+
+  beforeEach(() => {
+    mockOpenSearch.search.mockClear();
+    // Return a hit whose _source carries the names, as if the excludes had been
+    // forgotten — which is exactly the case this backstop exists for.
+    mockOpenSearch.search.mockImplementation(() => ({
+      hits: { total: { value: 1 }, hits: [hitWithAttribution] },
+    }));
+    service = new SearchService(mockOpenSearch as any, mockAccess as any);
+  });
+
+  afterAll(() => {
+    mockOpenSearch.search.mockImplementation((_indices: string[], body: any) => {
+      capturedBody = body;
+      return { hits: { total: { value: 0 }, hits: [] } };
+    });
+  });
+
+  it('removes attribution names from a hit for a principal below the bar', async () => {
+    const result = await service.search({} as SearchQueryDto, principal);
+    expect(result.hits[0].source).not.toHaveProperty('createdByName');
+    expect(result.hits[0].source).not.toHaveProperty('updatedByName');
+  });
+
+  it('leaves the rest of the document intact', async () => {
+    const result = await service.search({} as SearchQueryDto, principal);
+    expect(result.hits[0].source).toMatchObject({
+      id: 'item-1',
+      createdByUserId: 'sub-1',
+      metadata: { title: 'A record' },
+    });
+  });
+
+  it('keeps attribution names for staff', async () => {
+    const result = await service.search({} as SearchQueryDto, staffPrincipal);
+    expect(result.hits[0].source.createdByName).toBe('Ana Perović');
+  });
+
+  it('does not mutate the document it was handed', async () => {
+    await service.search({} as SearchQueryDto, principal);
+    // A shallow copy, not a delete on the original — otherwise the first
+    // low-privilege read would strip the name for everyone downstream.
+    expect(hitWithAttribution._source.createdByName).toBe('Ana Perović');
+  });
+
+  it('strips attribution on a single-item read too', async () => {
+    mockOpenSearch.getById.mockResolvedValue({
+      index: 'records',
+      source: { ...hitWithAttribution._source },
+    });
+    const hit = await service.getById('item-1', principal);
+    expect(hit.source).not.toHaveProperty('createdByName');
+    // And asks OpenSearch to withhold it in the first place.
+    expect(mockOpenSearch.getById).toHaveBeenCalledWith(
+      'item-1',
+      expect.arrayContaining(['createdByName', 'updatedByName']),
+    );
   });
 });
 

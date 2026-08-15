@@ -26,6 +26,21 @@ export class ResourceAccessService {
   }
 
   /**
+   * Assert the principal is anyone at all.
+   *
+   * For endpoints where being staff is the whole requirement and no scope
+   * narrows it further — reading the user directory, for instance. `@RequireScopes`
+   * cannot express this: there is no scope every authenticated user holds
+   * (`reader` has only `records:view:*`), and the guard lets an anonymous
+   * principal through when no scope is required.
+   */
+  assertAuthenticated(principal: Principal): void {
+    if (principal.isAnonymous) {
+      throw new UnauthorizedException();
+    }
+  }
+
+  /**
    * §4.6 — Compute the maximum visibility set per collection for this principal.
    */
   visibilityFilter(principal: Principal): VisibilityFilter {

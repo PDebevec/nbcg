@@ -43,7 +43,9 @@ export type DraftMinAggregateOutputType = {
   createdAt: Date | null
   updatedAt: Date | null
   createdByUserId: string | null
+  createdByName: string | null
   updatedByUserId: string | null
+  updatedByName: string | null
 }
 
 export type DraftMaxAggregateOutputType = {
@@ -53,7 +55,9 @@ export type DraftMaxAggregateOutputType = {
   createdAt: Date | null
   updatedAt: Date | null
   createdByUserId: string | null
+  createdByName: string | null
   updatedByUserId: string | null
+  updatedByName: string | null
 }
 
 export type DraftCountAggregateOutputType = {
@@ -64,7 +68,9 @@ export type DraftCountAggregateOutputType = {
   createdAt: number
   updatedAt: number
   createdByUserId: number
+  createdByName: number
   updatedByUserId: number
+  updatedByName: number
   _all: number
 }
 
@@ -84,7 +90,9 @@ export type DraftMinAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   createdByUserId?: true
+  createdByName?: true
   updatedByUserId?: true
+  updatedByName?: true
 }
 
 export type DraftMaxAggregateInputType = {
@@ -94,7 +102,9 @@ export type DraftMaxAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   createdByUserId?: true
+  createdByName?: true
   updatedByUserId?: true
+  updatedByName?: true
 }
 
 export type DraftCountAggregateInputType = {
@@ -105,7 +115,9 @@ export type DraftCountAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   createdByUserId?: true
+  createdByName?: true
   updatedByUserId?: true
+  updatedByName?: true
   _all?: true
 }
 
@@ -203,7 +215,9 @@ export type DraftGroupByOutputType = {
   createdAt: Date
   updatedAt: Date
   createdByUserId: string
+  createdByName: string
   updatedByUserId: string | null
+  updatedByName: string | null
   _count: DraftCountAggregateOutputType | null
   _avg: DraftAvgAggregateOutputType | null
   _sum: DraftSumAggregateOutputType | null
@@ -237,7 +251,9 @@ export type DraftWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"Draft"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Draft"> | Date | string
   createdByUserId?: Prisma.StringFilter<"Draft"> | string
+  createdByName?: Prisma.StringFilter<"Draft"> | string
   updatedByUserId?: Prisma.StringNullableFilter<"Draft"> | string | null
+  updatedByName?: Prisma.StringNullableFilter<"Draft"> | string | null
   fileAttachments?: Prisma.FileAttachmentListRelationFilter
 }
 
@@ -249,7 +265,9 @@ export type DraftOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
+  createdByName?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  updatedByName?: Prisma.SortOrderInput | Prisma.SortOrder
   fileAttachments?: Prisma.FileAttachmentOrderByRelationAggregateInput
 }
 
@@ -264,7 +282,9 @@ export type DraftWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"Draft"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Draft"> | Date | string
   createdByUserId?: Prisma.StringFilter<"Draft"> | string
+  createdByName?: Prisma.StringFilter<"Draft"> | string
   updatedByUserId?: Prisma.StringNullableFilter<"Draft"> | string | null
+  updatedByName?: Prisma.StringNullableFilter<"Draft"> | string | null
   fileAttachments?: Prisma.FileAttachmentListRelationFilter
 }, "id">
 
@@ -276,7 +296,9 @@ export type DraftOrderByWithAggregationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
+  createdByName?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrderInput | Prisma.SortOrder
+  updatedByName?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.DraftCountOrderByAggregateInput
   _avg?: Prisma.DraftAvgOrderByAggregateInput
   _max?: Prisma.DraftMaxOrderByAggregateInput
@@ -295,7 +317,9 @@ export type DraftScalarWhereWithAggregatesInput = {
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Draft"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Draft"> | Date | string
   createdByUserId?: Prisma.StringWithAggregatesFilter<"Draft"> | string
+  createdByName?: Prisma.StringWithAggregatesFilter<"Draft"> | string
   updatedByUserId?: Prisma.StringNullableWithAggregatesFilter<"Draft"> | string | null
+  updatedByName?: Prisma.StringNullableWithAggregatesFilter<"Draft"> | string | null
 }
 
 export type DraftCreateInput = {
@@ -306,7 +330,9 @@ export type DraftCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
+  createdByName: string
   updatedByUserId?: string | null
+  updatedByName?: string | null
   fileAttachments?: Prisma.FileAttachmentCreateNestedManyWithoutDraftInput
 }
 
@@ -318,7 +344,9 @@ export type DraftUncheckedCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
+  createdByName: string
   updatedByUserId?: string | null
+  updatedByName?: string | null
   fileAttachments?: Prisma.FileAttachmentUncheckedCreateNestedManyWithoutDraftInput
 }
 
@@ -330,7 +358,9 @@ export type DraftUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fileAttachments?: Prisma.FileAttachmentUpdateManyWithoutDraftNestedInput
 }
 
@@ -342,7 +372,9 @@ export type DraftUncheckedUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fileAttachments?: Prisma.FileAttachmentUncheckedUpdateManyWithoutDraftNestedInput
 }
 
@@ -354,7 +386,9 @@ export type DraftCreateManyInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
+  createdByName: string
   updatedByUserId?: string | null
+  updatedByName?: string | null
 }
 
 export type DraftUpdateManyMutationInput = {
@@ -365,7 +399,9 @@ export type DraftUpdateManyMutationInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type DraftUncheckedUpdateManyInput = {
@@ -376,7 +412,9 @@ export type DraftUncheckedUpdateManyInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type DraftCountOrderByAggregateInput = {
@@ -387,7 +425,9 @@ export type DraftCountOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
+  createdByName?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrder
+  updatedByName?: Prisma.SortOrder
 }
 
 export type DraftAvgOrderByAggregateInput = {
@@ -401,7 +441,9 @@ export type DraftMaxOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
+  createdByName?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrder
+  updatedByName?: Prisma.SortOrder
 }
 
 export type DraftMinOrderByAggregateInput = {
@@ -411,7 +453,9 @@ export type DraftMinOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   createdByUserId?: Prisma.SortOrder
+  createdByName?: Prisma.SortOrder
   updatedByUserId?: Prisma.SortOrder
+  updatedByName?: Prisma.SortOrder
 }
 
 export type DraftSumOrderByAggregateInput = {
@@ -471,7 +515,9 @@ export type DraftCreateWithoutFileAttachmentsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
+  createdByName: string
   updatedByUserId?: string | null
+  updatedByName?: string | null
 }
 
 export type DraftUncheckedCreateWithoutFileAttachmentsInput = {
@@ -482,7 +528,9 @@ export type DraftUncheckedCreateWithoutFileAttachmentsInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   createdByUserId: string
+  createdByName: string
   updatedByUserId?: string | null
+  updatedByName?: string | null
 }
 
 export type DraftCreateOrConnectWithoutFileAttachmentsInput = {
@@ -509,7 +557,9 @@ export type DraftUpdateWithoutFileAttachmentsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type DraftUncheckedUpdateWithoutFileAttachmentsInput = {
@@ -520,7 +570,9 @@ export type DraftUncheckedUpdateWithoutFileAttachmentsInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdByUserId?: Prisma.StringFieldUpdateOperationsInput | string
+  createdByName?: Prisma.StringFieldUpdateOperationsInput | string
   updatedByUserId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  updatedByName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 
@@ -562,7 +614,9 @@ export type DraftSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
+  createdByName?: boolean
   updatedByUserId?: boolean
+  updatedByName?: boolean
   fileAttachments?: boolean | Prisma.Draft$fileAttachmentsArgs<ExtArgs>
   _count?: boolean | Prisma.DraftCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["draft"]>
@@ -575,7 +629,9 @@ export type DraftSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
+  createdByName?: boolean
   updatedByUserId?: boolean
+  updatedByName?: boolean
 }, ExtArgs["result"]["draft"]>
 
 export type DraftSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -586,7 +642,9 @@ export type DraftSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
+  createdByName?: boolean
   updatedByUserId?: boolean
+  updatedByName?: boolean
 }, ExtArgs["result"]["draft"]>
 
 export type DraftSelectScalar = {
@@ -597,10 +655,12 @@ export type DraftSelectScalar = {
   createdAt?: boolean
   updatedAt?: boolean
   createdByUserId?: boolean
+  createdByName?: boolean
   updatedByUserId?: boolean
+  updatedByName?: boolean
 }
 
-export type DraftOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "visibilityStatus" | "metadata" | "version" | "createdAt" | "updatedAt" | "createdByUserId" | "updatedByUserId", ExtArgs["result"]["draft"]>
+export type DraftOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "visibilityStatus" | "metadata" | "version" | "createdAt" | "updatedAt" | "createdByUserId" | "createdByName" | "updatedByUserId" | "updatedByName", ExtArgs["result"]["draft"]>
 export type DraftInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   fileAttachments?: boolean | Prisma.Draft$fileAttachmentsArgs<ExtArgs>
   _count?: boolean | Prisma.DraftCountOutputTypeDefaultArgs<ExtArgs>
@@ -624,7 +684,18 @@ export type $DraftPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs 
     createdAt: Date
     updatedAt: Date
     createdByUserId: string
+    /**
+     * Display name captured from the JWT at write time. A SNAPSHOT: never
+     * updated when the user is renamed in Keycloak, so it records who created
+     * this as they were called then. Deliberate — a name that tracked the
+     * current one would re-index every document the person ever touched (see
+     * ItemMetricDaily's comment). `'System (import)'` for import-created rows.
+     * No FK to user_profiles: the snapshot is the point, and a FK would break on
+     * `'system'` and on departed users alike.
+     */
+    createdByName: string
     updatedByUserId: string | null
+    updatedByName: string | null
   }, ExtArgs["result"]["draft"]>
   composites: {}
 }
@@ -1056,7 +1127,9 @@ export interface DraftFieldRefs {
   readonly createdAt: Prisma.FieldRef<"Draft", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Draft", 'DateTime'>
   readonly createdByUserId: Prisma.FieldRef<"Draft", 'String'>
+  readonly createdByName: Prisma.FieldRef<"Draft", 'String'>
   readonly updatedByUserId: Prisma.FieldRef<"Draft", 'String'>
+  readonly updatedByName: Prisma.FieldRef<"Draft", 'String'>
 }
     
 

@@ -18,6 +18,7 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as os from 'os';
 import type { Response } from 'express';
+import { actorOf } from '../../core/auth/actor.type';
 import { GetPrincipal } from '../../core/auth/get-principal.decorator';
 import { ResourceAccessService } from '../../core/auth/resource-access.service';
 import type { Principal } from '../../core/auth/principal.type';
@@ -74,7 +75,7 @@ export class FilesController {
       await this.filesService.cleanupTempFiles(files);
       throw err;
     }
-    return this.filesService.upload(itemId, files, principal.sub, body.doOCR ?? false, body.extractedTexts, body.role);
+    return this.filesService.upload(itemId, files, actorOf(principal), body.doOCR ?? false, body.extractedTexts, body.role);
   }
 
   @Put(':fileId')
@@ -98,7 +99,7 @@ export class FilesController {
     if (!file) {
       throw new BadRequestException('No file provided — send multipart form data with a "file" field');
     }
-    return this.filesService.replace(fileId, file, principal.sub, body.doOCR ?? false, body.extractedText);
+    return this.filesService.replace(fileId, file, actorOf(principal), body.doOCR ?? false, body.extractedText);
   }
 
   @Put(':fileId/text')
@@ -163,6 +164,6 @@ export class FilesController {
   @Delete(':fileId')
   async delete(@GetPrincipal() principal: Principal, @Param('fileId') fileId: string) {
     await this.access.assertCanManageFile(principal, fileId);
-    return this.filesService.delete(fileId, principal.sub);
+    return this.filesService.delete(fileId, actorOf(principal));
   }
 }

@@ -1,6 +1,17 @@
 # Backend: Task Delegation (assign work between cataloguers and publishers)
 
-## Status: TODO
+## Status: TODO — but its main prerequisite is now BUILT
+
+> **[User Directory + Attribution Snapshots](backend-user-directory-sync.md) shipped
+> on 2026-08-13.** That was the hard half of this task and it is done: names are
+> persisted, the Keycloak Admin API client exists, and there is a synced
+> `user_profiles` table with a `canPublish` flag. What remains here is the task
+> model itself.
+>
+> **Three things in this document are now out of date and are corrected inline
+> below:** the "there is no User table" premise, the `UserProfile` sketch, and
+> `GET /api/tasks/assignable-users` — which should not be built. Use
+> `GET /api/users?capability=publish`.
 
 ## Why we need it
 
@@ -15,18 +26,30 @@ see what is waiting on them.
 
 ## Current State
 
-- **There is no `User` table.** Identity is the raw Keycloak `sub` (a UUID)
-  stored as a bare `String` in `Draft.createdByUserId` / `updatedByUserId`. No
-  username, no display name, no email is persisted anywhere in Postgres. A GUI
-  today literally cannot render "created by Ana" — only the UUID.
-- **There is no "publisher" or "editor" role.** Authorisation is capability
+Rewritten 2026-08-13 — the first three bullets used to say the opposite.
+
+- ~~**There is no `User` table.**~~ **There is now: `user_profiles`**, a synced
+  shadow of the Keycloak realm. Read it through `GET /api/users`, or in-process via
+  `UsersService`. Never write to it — the sync job is its only writer.
+- ~~**A GUI cannot render "created by Ana".**~~ **It can, off the row.** `Draft`,
+  `Record` and `ItemRevision` all carry a `createdByName` / `updatedByName` /
+  `userName` **snapshot**, written from the JWT at write time. No lookup needed,
+  and it works for a user the sync has never seen.
+- ~~**The backend has no Keycloak Admin API client.**~~ **`KeycloakAdminService`
+  exists** in `src/core/keycloak/` — cached client-credentials token with a 401
+  re-mint, paginated user enumeration, composite role resolution, service-account
+  filtering. Do not write a second one.
+- **There is still no "publisher" or "editor" role.** Authorisation is capability
   scopes on the `nbcg-api` client: `drafts:manage`, `records:manage`,
-  `drafts:view:*`, `records:view:*`, `import:execute`.
-- **"Can publish" already has an exact definition**: `records:manage` **AND**
-  `drafts:manage` — see `assertCanTransition()` in
-  `resource-access.service.ts:148`. That is the capability to key off; do not
-  invent a new concept.
-- **Users get their roles only through groups.** Live realm state:
+  `drafts:view:*`, `records:view:*`, `import:execute`, and now `users:manage`
+  (admins only — it gates the sync endpoints, nothing else).
+- **"Can publish" still has exactly one definition**: `records:manage` **AND**
+  `drafts:manage` — `assertCanTransition()` in
+  `resource-access.service.ts:164`. That is the capability to key off; do not
+  invent a new concept. It is already computed for you as
+  `UserProfile.canPublish`.
+- **Users get their roles only through groups.** Live realm state, re-verified
+  2026-08-13 via per-user composite mappings:
 
   | Group | `records:manage` | `drafts:manage` | Members | Can publish |
   |---|---|---|---|---|
@@ -35,7 +58,8 @@ see what is waiting on them.
   | `nbcg/cataloguers` | no | yes | cataloguer | no |
   | `nbcg/readers` | no | no | reader | no |
 
-- The backend has **no Keycloak Admin API client at all** today.
+  The table is documentation only — nothing in the code reads a group name, and
+  `canPublish` on each directory row already encodes the last column.
 
 ## ⚠️ Two traps, both verified live
 
@@ -55,10 +79,21 @@ has zero direct mappings, so that call currently returns:
 service-account-nbcg-worker
 ```
 
-— a service account, and **not one** of admin / editor / pradles. Enumerate via
-group members (`GET /groups/{id}/members`) or per-user composite mappings
-(`/users/{id}/role-mappings/clients/{cid}/composite`) instead, and filter out
-service accounts.
+— a service account, and **not one** of admin / editor / pradles.
+
+✅ **Already solved, don't re-solve it.** `UserSyncService` enumerates
+`GET /users` (which excludes service accounts by itself — verified) and resolves
+rights per user through
+`/users/{id}/role-mappings/clients/{uuid}/composite`. The composite variant is
+what makes the group walk unnecessary: it returns group-derived roles *and*
+expands `records:manage` into its `records:view:*` composites. `canPublish` falls
+out of that and is stored on the row.
+
+⚠️ **One extra realm grant was needed** and is easy to trip over again:
+resolving `nbcg-api`'s internal UUID needs `realm-management:view-clients`.
+`view-users` alone gets a **403** on `GET /clients`, and the weaker
+`query-clients` returns **200 with an empty list** — which reads as "the client
+does not exist". Both grants are applied live and in `nbcg-realm.conf.json`.
 
 ## Design
 
@@ -120,47 +155,65 @@ Use `@db.Timestamptz(3)` on every timestamp — plain `timestamp` was fixed
 project-wide precisely because pgsync emitted offset-less strings that clients
 parsed as local time.
 
-### User directory cache
+### User directory — BUILT, consume it as-is
 
-> **Superseded — see [User Directory + Attribution Snapshots](backend-user-directory-sync.md).**
-> The sketch below was the starting point. The split-out plan separates two
-> concerns this section conflated: **attribution** (`createdByName` snapshot
-> columns written from the JWT, for display) and the **directory**
-> (`user_profiles`, synced from the Keycloak Admin API, for pickers and
-> delegation). It also drops `groups`, replaces `isActive` with
-> `enabled` + `deletedAt`, and moves `assignable-users` to
-> `GET /api/users?capability=publish` in its own module. Build that first; this
-> section is kept for context only.
+> Fully replaced by [User Directory + Attribution Snapshots](backend-user-directory-sync.md).
+> The `UserProfile` sketch that used to live here has been deleted rather than kept
+> "for context", because it differed from what shipped in ways that would mislead:
+> it had a `groups` column (dropped — rights are the lookup key, not membership),
+> a single `isActive` (split into `enabled` + `deletedAt`), no `scopes[]`, and no
+> stored `displayName`.
 
-Assignment needs names, and every list response needs to turn a `sub` into
-something human. Hitting the Keycloak Admin API on every request is too slow and
-makes Keycloak a hard dependency of an ordinary read.
+What exists now, and all this task needs to know:
 
-Cache it in Postgres and refresh on a schedule:
+| Need | Use |
+|---|---|
+| Fill the assignee picker | `GET /api/users?capability=publish` — one indexed read |
+| Search the picker | `?q=` over displayName / username / email |
+| Only assignable people | `?active=true` is the default (`enabled && deletedAt IS NULL`) |
+| Resolve ids → current names, in-process | `UsersService.resolveNames(ids)` → `Map<string, string>` |
+| Is this person a publisher? | `UserProfile.canPublish` (already `records:manage` AND `drafts:manage`) |
 
-```prisma
-model UserProfile {
-  userId     String   @id            // Keycloak sub
-  username   String
-  firstName  String?
-  lastName   String?
-  email      String?
-  groups     String[]                // e.g. ["nbcg/editors"]
-  canPublish Boolean                 // records:manage AND drafts:manage
-  isActive   Boolean  @default(true) // false once they vanish from Keycloak
-  syncedAt   DateTime @db.Timestamptz(3)
+`UsersService` is exported from `UsersModule`, so `TasksModule` imports that module
+and injects it. No Keycloak call on any request path.
 
-  @@index([canPublish, isActive])
-  @@map("user_profiles")
-}
-```
+**`resolveNames()` never returns a miss** — every id resolves, falling back to
+`'System (import)'` for `'system'` and `'Unknown user'` otherwise. That is what
+makes it safe for a task list: a user deleted from Keycloak still renders, because
+directory rows are never hard-deleted.
 
-`canPublish` is **derived during sync**, not stored in Keycloak — computed from
-the composite role mapping. Recomputing it in one place keeps the trap above
-from resurfacing at every call site.
+#### Tasks should NOT copy the attribution snapshot pattern
 
-Never delete a profile whose `userId` is referenced by a task — flip `isActive`
-instead, or historical tasks lose their assignee name.
+Items store `createdByName` on the row. **Do not do that for tasks.** The snapshot
+exists for one reason: `drafts`/`records` are pgsync-tracked, so a name that
+tracked the current one would re-index every document a renamed person ever
+touched, nested `extractedText` included. That cost scales with the item count —
+50,000 items — and is why the name is frozen.
+
+Tasks have neither property. `work_tasks` is not pgsync-tracked and scales with
+staff activity, not the collection. So resolve both the assignee and the creator
+through `resolveNames()` at read time:
+
+- A task list is bounded (`?assignedTo=me`, `status=OPEN`), so it is **one** extra
+  indexed query per response, not per row.
+- A live work item should show who someone **is now**, not what they were called
+  when the task was filed. A renamed assignee showing their old name on an open
+  task is a bug; on a two-year-old revision it is history.
+
+The governing rule from the directory task: **snapshot for a specific row,
+directory for a group of rows.** Tasks are read as groups.
+
+#### Where the tables live
+
+`work_tasks` and `task_comments` are keyed by `itemId`, so they belong in `public`
+alongside the item model — see
+[Move `user_profiles` to a `directory` schema](backend-postgres-schema-split.md),
+which moves only the one table that has no item linkage. If that split has landed
+by the time this is built, both new models need `@@schema("public")`.
+
+**Neither table may be added to `pgsync/schema.json`**, for the same reason
+`item_revisions` is not: CDC re-indexes the whole document on any tracked change,
+and a comment on a task would re-index the item it points at.
 
 ### Endpoints
 
@@ -171,26 +224,39 @@ instead, or historical tasks lose their assignee name.
 | `GET` | `/api/tasks/:id` | includes comments |
 | `PATCH` | `/api/tasks/:id` | status change, reassign, edit |
 | `POST` | `/api/tasks/:id/comments` | the "sending it back with notes" path |
-| `GET` | `/api/tasks/assignable-users?capability=publish` | **the endpoint the frontend needs** |
 
-`assignable-users` reads `user_profiles`, not Keycloak — so it is a single
-indexed query. `capability=publish` filters `canPublish = true`; omitting it
-returns everyone active. Response is `{ userId, username, displayName,
-canPublish }[]`.
+~~`GET /api/tasks/assignable-users`~~ — **do not build this.** It already exists as
+`GET /api/users?capability=publish`, in its own module, because the directory
+outlives task delegation: "filter search by cataloguer" and "who can review this"
+want the same list. Response is
+`{ total, users: [{ userId, username, displayName, canPublish, isActive, … }] }`.
+
+For endpoints where being staff is the only requirement, use
+`ResourceAccessService.assertAuthenticated(principal)` — `@RequireScopes` cannot
+express it, because no scope is held by every authenticated user (`reader` has only
+`records:view:*`) and the guard lets anonymous through when no scope is required.
 
 Guard rails worth enforcing server-side, not just in the UI:
 - Assigning a *review/publish* task to someone with `canPublish = false` should
   be a `400` — otherwise the task can never be completed by its assignee.
+  **Comment it as advisory when you write it:** `canPublish` comes from a directory
+  that may be up to one sync interval (24h) stale, so this guard can reject an
+  assignment the assignee's token would in fact permit. The manual
+  `POST /api/users/sync` fixes that instantly. The authoritative check remains
+  `assertCanTransition(principal)` reading the JWT — **`canPublish` must never gate
+  an actual permission.**
 - Only the assignee, the creator, or a `records:manage` holder may change status.
 - Validate `itemId` resolves to a real draft or record (`404` otherwise).
 
 ## Open questions
 
-- **Should `records:publish` become a real scope?** Deriving publish rights from
-  `records:manage` + `drafts:manage` works today, but it conflates "can edit
-  records" with "may approve someone else's work". A dedicated role would be
-  cleaner and makes `assignable-users` trivial — at the cost of a realm change
-  and a migration for existing users.
+- ~~**Should `records:publish` become a real scope?**~~ **Decided: no.** Settled in
+  the directory task — `canPublish` stays derived from `records:manage` +
+  `drafts:manage`. Considered and rejected as not worth a realm change plus a
+  regrant of every existing group. It is already computed once, at sync time, so no
+  call site re-derives it and the inverted-terminology trap cannot resurface.
+  Reopen only if "may approve someone else's work" ever needs to differ from "can
+  edit records" — which is a product question, not a plumbing one.
 - **Notifications** — email/in-app on assignment, or is the task list enough for v1?
 - **One open task per item, or many?** Affects whether `itemId` needs a partial
   unique index.
@@ -199,40 +265,57 @@ Guard rails worth enforcing server-side, not just in the UI:
 
 ### Backend
 
-- [ ] Add `TaskStatus`, `WorkTask`, `TaskComment`, `UserProfile` to
-      `schema.prisma` + migration (`@db.Timestamptz(3)` throughout).
-- [ ] New `KeycloakAdminService` in `src/core/keycloak/` — client-credentials
-      token, user enumeration **via groups**, composite role resolution,
-      service-account filtering.
-- [x] **~~Grant the `nbcg-worker` service account `view-users` + `query-groups`~~**
-      Done — `view-users` alone is sufficient (it is composite over `query-users`
-      + `query-groups`). Applied to the live realm *and*
-      `nbcg-realm.conf.json`. See
-      [User Directory Sync](backend-user-directory-sync.md).
-- [ ] User sync job (startup + interval, plus a manual
-      `POST /api/admin/users/sync`) populating `user_profiles` and computing
-      `canPublish`.
-- [ ] `TasksModule` — controller, service, DTOs, the 6 endpoints above.
-- [ ] Resolve assignee/creator display names in every task response so the GUI
-      never sees a bare UUID.
+- [ ] Add `TaskStatus`, `WorkTask`, `TaskComment` to `schema.prisma` + migration
+      (`@db.Timestamptz(3)` throughout). **Not `UserProfile`** — it exists.
+- [x] ~~New `KeycloakAdminService`~~ — **built**, `src/core/keycloak/`. Cached
+      token with 401 re-mint, pagination, composite role resolution,
+      service-account filtering. Reuse it; do not add a second client.
+- [x] ~~Grant the `nbcg-worker` service account `view-users` + `query-groups`~~ —
+      **done, and it needed one more than expected**: `view-users` (composite over
+      `query-users` + `query-groups`) **plus `view-clients`**, without which the
+      `nbcg-api` UUID cannot be resolved. Live and in `nbcg-realm.conf.json`.
+- [x] ~~User sync job~~ — **built.** BullMQ repeatable (fixed `jobId`, daily,
+      deduped through Redis so replicas do not double-sync) plus one run at
+      startup, and `POST /api/users/sync` for a manual trigger
+      (`users:manage`). `GET /api/users/sync/status` reports last run and last
+      error.
+- [ ] `TasksModule` — controller, service, DTOs, the 5 remaining endpoints above.
+      Import `UsersModule` for `UsersService`.
+- [ ] Resolve assignee/creator display names in every task response via
+      `UsersService.resolveNames()` — one query per response. Do **not** add
+      snapshot name columns to `work_tasks`; see the reasoning above.
 - [ ] Cascade: deleting a draft/record should cancel or delete its open tasks —
       no FK exists to do this automatically.
-- [ ] Add all new endpoints to `backend/test/api-test-suite.sh`, including a
-      cataloguer-vs-publisher permission case and the
-      "assign publish task to a non-publisher → 400" case.
+- [ ] Add all new endpoints to `backend/test/api-test-suite.sh` (currently 308
+      tests, §16 covers the directory) including a cataloguer-vs-publisher
+      permission case and the "assign publish task to a non-publisher → 400" case.
+      The persona facts are already asserted there: `editor` and `admin` publish,
+      `cataloguer` does **not**, `reader` holds nothing relevant.
+- [ ] Also run `npx jest`. It is not wired into any build step, and the directory
+      task found it silently broken with a green `npm run build` — a type-level
+      pass proves nothing about a `Set` vs an array.
 
 ### Frontend
 
-- [ ] "Assign for review" action on a draft, using `assignable-users` to fill
-      the picker.
+- [ ] "Assign for review" action on a draft, filling the picker from
+      `GET /api/users?capability=publish` (not a tasks endpoint).
+- [ ] "Created by" columns can render `createdByName` straight off the row/hit —
+      no lookup, already indexed as an OpenSearch `keyword` so it sorts and
+      aggregates. Hidden automatically for principals below
+      `drafts:manage`/`records:manage`.
 - [ ] "My tasks" inbox; task detail with comment thread and return-with-notes.
 - [ ] Badge on items that have an open task.
 
 ## Key Files
 
-- `backend/prisma/schema.prisma` — new models
-- `backend/src/core/auth/resource-access.service.ts:148` — `assertCanTransition`, the publish capability
-- `backend/src/core/auth/principal.type.ts` — `Principal.sub` is the user key
+- `backend/prisma/schema.prisma` — new models (`WorkTask`, `TaskComment`); `UserProfile` is already there
+- `backend/src/core/auth/resource-access.service.ts:164` — `assertCanTransition`, the publish capability
+- `backend/src/core/auth/resource-access.service.ts:37` — `assertAuthenticated`, for staff-only reads
+- `backend/src/core/auth/principal.type.ts` — `Principal.sub` is the user key; `displayName` is the name from the token
+- `backend/src/core/auth/actor.type.ts` — `Actor` / `actorOf()` / `SYSTEM_ACTOR`, the attribution pair
+- `backend/src/modules/users/users.service.ts:90` — `resolveNames()`, the id → current-name lookup
+- `backend/src/modules/users/users.controller.ts` — `GET /api/users`, the picker source
+- `backend/src/core/keycloak/keycloak-admin.service.ts` — the Admin API client, already built
 - `backend/src/modules/items/items.service.ts` — `transition()`, id stability
-- `infrastructure/docker/keycloak/nbcg-realm.json` — realm/client roles
-- `backend/test/api-test-suite.sh` — API tests
+- `infrastructure/docker/keycloak/nbcg-realm.conf.json` — realm/client roles (the tracked file; `nbcg-realm.json` is generated and gitignored)
+- `backend/test/api-test-suite.sh` — API tests; §16 is the directory precedent

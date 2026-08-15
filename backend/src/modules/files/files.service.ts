@@ -7,6 +7,7 @@ import {
   FileType,
   TextExtractionStatus,
 } from '../../../generated/prisma/enums';
+import type { Actor } from '../../core/auth/actor.type';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { RevisionsService } from '../../core/revisions/revisions.service';
 import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
@@ -38,7 +39,7 @@ export class FilesService {
     );
   }
 
-  async upload(itemId: string, files: Express.Multer.File[], userId: string, doOcr = false, extractedTextsJson?: string, role?: FileRole) {
+  async upload(itemId: string, files: Express.Multer.File[], actor: Actor, doOcr = false, extractedTextsJson?: string, role?: FileRole) {
     if (!files?.length) {
       throw new BadRequestException('No files provided — send multipart form data with a "files" field');
     }
@@ -130,7 +131,7 @@ export class FilesService {
         version,
         action: ChangeAction.FILE_ADDED,
         changes: [{ path: `files[${f.id}]`, before: null, after: f.filename }],
-        userId,
+        actor,
       })),
     );
 
@@ -168,7 +169,7 @@ export class FilesService {
    * Replace an existing attachment's blob (and optionally its text) in place.
    * The attachment id stays stable — only the underlying file content changes.
    */
-  async replace(fileId: string, file: Express.Multer.File, userId: string, doOcr = false, extractedText?: string) {
+  async replace(fileId: string, file: Express.Multer.File, actor: Actor, doOcr = false, extractedText?: string) {
     const existing = await this.prisma.fileAttachment.findUnique({ where: { id: fileId } });
     if (!existing) {
       await unlink(file.path).catch(() => undefined);
@@ -226,7 +227,7 @@ export class FilesService {
         version: await this.revisions.currentVersion(parentId),
         action: ChangeAction.UPDATE,
         changes: [{ path: `files[${fileId}]`, before: existing.filename, after: file.originalname }],
-        userId,
+        actor,
       });
     }
 
@@ -306,7 +307,7 @@ export class FilesService {
     };
   }
 
-  async delete(fileId: string, userId: string): Promise<void> {
+  async delete(fileId: string, actor: Actor): Promise<void> {
     const file = await this.prisma.fileAttachment.findUnique({ where: { id: fileId } });
     if (!file) throw new NotFoundException(`File not found: ${fileId}`);
 
@@ -319,7 +320,7 @@ export class FilesService {
         version: await this.revisions.currentVersion(parentId),
         action: ChangeAction.FILE_REMOVED,
         changes: [{ path: `files[${fileId}]`, before: file.filename, after: null }],
-        userId,
+        actor,
       });
     }
 

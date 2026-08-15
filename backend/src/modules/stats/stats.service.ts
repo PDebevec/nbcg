@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ChangeAction, MetricKind } from '../../../generated/prisma/enums';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { ItemsService } from '../items/items.service';
+import { UsersService } from '../users/users.service';
 
 /** Widest window a single query may span. Keeps a stray `from=1970-01-01` off the metrics table. */
 const MAX_RANGE_DAYS = 366;
@@ -33,8 +34,8 @@ export interface StatsRange {
   to: string;
 }
 
-/** One row of `/api/stats/users`. */
-export interface UserTotals {
+/** Counters accumulated per user before names are resolved. */
+interface UserCounts {
   userId: string;
   created: number;
   published: number;
@@ -44,11 +45,22 @@ export interface UserTotals {
   total: number;
 }
 
+/** One row of `/api/stats/users`. */
+export interface UserTotals extends UserCounts {
+  /**
+   * The user's name *now*, resolved from the directory — deliberately not the
+   * snapshot stored on the revisions being counted. A productivity panel asks
+   * "who is this person", not "what were they called at the time".
+   */
+  displayName: string;
+}
+
 @Injectable()
 export class StatsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly items: ItemsService,
+    private readonly directory: UsersService,
   ) {}
 
   /**
@@ -122,9 +134,15 @@ export class StatsService {
   /**
    * Per-cataloguer productivity for the period.
    *
-   * `userId` is the raw Keycloak sub. Resolving it to a display name needs the
-   * `user_profiles` cache from the Task Delegation work, which does not exist
-   * yet — until it does, the frontend has to map these itself.
+   * Groups by `userId` **alone** and resolves the name afterwards. Grouping by
+   * the stored `userName` would fragment one person into several rows the moment
+   * their name had ever changed — the whole point of a snapshot is that old rows
+   * keep the old value, so "Ana Perović: 40" and "Ana Novak: 12" would look like
+   * two people.
+   *
+   * The name lookup is one indexed query over a `LIMIT`-ed result set, not a
+   * per-row resolution, so it stays cheap at any realm size. A departed user
+   * still resolves, because directory rows are never hard-deleted.
    */
   async users(fromRaw?: string, toRaw?: string, limit = 50) {
     const range = resolveRange(fromRaw, toRaw);
@@ -139,7 +157,7 @@ export class StatsService {
       GROUP BY 1, 2
     `;
 
-    const byUser = new Map<string, UserTotals>();
+    const byUser = new Map<string, UserCounts>();
 
     for (const row of rows) {
       let entry = byUser.get(row.userId);
@@ -165,7 +183,9 @@ export class StatsService {
       entry.total += row.count;
     }
 
-    const users = [...byUser.values()].sort((a, b) => b.total - a.total).slice(0, limit);
+    const ranked = [...byUser.values()].sort((a, b) => b.total - a.total).slice(0, limit);
+    const names = await this.directory.resolveNames(ranked.map((u) => u.userId));
+    const users = ranked.map((u) => ({ ...u, displayName: names.get(u.userId)! }));
     return { range, limit, users };
   }
 

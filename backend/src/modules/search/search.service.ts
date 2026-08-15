@@ -30,6 +30,50 @@ export interface SearchHit {
 // extractedText can be megabytes per attachment — never return it to clients
 const SOURCE_EXCLUDES = ['file_attachments.extractedText'];
 
+/**
+ * Snapshot attribution names, indexed as `keyword` so the engine can sort and
+ * aggregate on them. Staff-only: a reader or an anonymous visitor must not learn
+ * who created or edited an item.
+ */
+const ATTRIBUTION_FIELDS = ['createdByName', 'updatedByName'];
+
+/**
+ * `drafts:manage` OR `records:manage` is the bar for seeing attribution. It
+ * admits cataloguer, editor and admin; it excludes `reader` (who holds only
+ * `records:view:*`) and anonymous, and it needs no new realm scope.
+ */
+function canSeeAttribution(principal: Principal): boolean {
+  return principal.scopes.has('drafts:manage') || principal.scopes.has('records:manage');
+}
+
+/**
+ * Top-level `_source` fields a client may name in `?fields=`.
+ *
+ * An allowlist, not a denylist, and required rather than cosmetic: without it a
+ * client-supplied projection is handed straight to OpenSearch as `includes`, so
+ * `?fields=createdByName` becomes a direct request for the one field the
+ * attribution rule above exists to withhold. Anything not listed is dropped
+ * silently — a projection is a hint about response shape, not an assertion that
+ * the field exists, so an unknown name is not worth a 400.
+ */
+const PROJECTABLE_FIELDS = new Set([
+  'id',
+  'visibilityStatus',
+  'version',
+  'createdAt',
+  'updatedAt',
+  'createdByUserId',
+  'updatedByUserId',
+  ...ATTRIBUTION_FIELDS,
+]);
+
+/** Fields whose sub-paths are projectable too — `metadata.title`, `file_attachments.filename`. */
+const PROJECTABLE_PREFIXES = ['metadata', 'file_attachments', 'parent_relations'];
+
+function isProjectable(field: string): boolean {
+  return PROJECTABLE_FIELDS.has(field) || PROJECTABLE_PREFIXES.includes(field.split('.')[0]);
+}
+
 /** inner_hits name for the fullText nested query */
 const MATCHED_FILES = 'matched_files';
 
@@ -247,22 +291,55 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
   return { bool: { ...(must.length ? { must } : {}), ...(filter.length ? { filter } : {}) } };
 }
 
-/** Build `_source` control based on the `fields` query param. */
-function buildSourceControl(fields?: string): Record<string, unknown> {
+/**
+ * Build `_source` control based on the `fields` query param.
+ *
+ * `excludes` is applied on both branches, which the earlier includes-only branch
+ * did not do: OpenSearch lets excludes win over includes, so this is what makes
+ * the projection unable to re-request a withheld field — and it also stops
+ * `?fields=file_attachments` from returning megabytes of extracted text.
+ */
+function buildSourceControl(fields: string | undefined, showAttribution: boolean): Record<string, unknown> {
+  const excludes = showAttribution ? SOURCE_EXCLUDES : [...SOURCE_EXCLUDES, ...ATTRIBUTION_FIELDS];
+
   if (!fields?.trim()) {
-    // Default: return everything except extracted text
-    return { excludes: SOURCE_EXCLUDES };
+    // Default: everything the principal may see
+    return { excludes };
   }
 
-  const requested = fields.split(',').map((f) => f.trim()).filter(Boolean);
+  const requested = fields
+    .split(',')
+    .map((f) => f.trim())
+    .filter(Boolean)
+    .filter(isProjectable);
   // Always include id; deduplicate
   const includes = [...new Set(['id', ...requested])];
-  return { includes };
+  return { includes, excludes };
+}
+
+/**
+ * Application-side backstop for the engine-side `_source` excludes above.
+ *
+ * Both exist deliberately. The excludes stop the field leaving OpenSearch; this
+ * stops it leaving the process if any future query path builds its own body and
+ * forgets them — `_source` used to be handed to the caller wholesale, which is
+ * exactly the shape of mistake that is easy to reintroduce.
+ */
+function sanitizeSource(
+  source: Record<string, unknown> | undefined,
+  showAttribution: boolean,
+): Record<string, unknown> {
+  if (!source) return {};
+  if (showAttribution) return source;
+
+  const clean = { ...source };
+  for (const field of ATTRIBUTION_FIELDS) delete clean[field];
+  return clean;
 }
 
 /** Map a raw OpenSearch hit to a SearchHit, lifting per-attachment matches out of inner_hits. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapHit(hit: any): SearchHit {
+function mapHit(hit: any, showAttribution: boolean): SearchHit {
   const innerHits: any[] = hit.inner_hits?.[MATCHED_FILES]?.hits?.hits ?? [];
   const matchedFiles: MatchedFile[] = innerHits.map((inner) => ({
     id: inner._source?.id,
@@ -276,7 +353,7 @@ function mapHit(hit: any): SearchHit {
     id: hit._id,
     index: hit._index,
     score: hit._score,
-    source: hit._source,
+    source: sanitizeSource(hit._source, showAttribution),
     ...(matchedFiles.length
       ? { matchedFiles, highlights: matchedFiles.flatMap((f) => f.highlights) }
       : {}),
@@ -506,6 +583,7 @@ export class SearchService {
       return { total: 0, page, limit, pages: 0, hits: [] };
     }
 
+    const showAttribution = canSeeAttribution(principal);
     const userQuery = buildQuery(dto);
     const query = {
       bool: {
@@ -519,7 +597,7 @@ export class SearchService {
       size: limit,
       query,
       track_total_hits: true,
-      _source: buildSourceControl(dto.fields),
+      _source: buildSourceControl(dto.fields, showAttribution),
       ...(dto.sort === 'newest' ? { sort: [{ createdAt: 'desc' as const }] } : {}),
     };
 
@@ -535,7 +613,7 @@ export class SearchService {
       page,
       limit,
       pages: Math.ceil(total / limit),
-      hits: hits.map(mapHit),
+      hits: hits.map((hit) => mapHit(hit, showAttribution)),
     };
   }
 
@@ -556,6 +634,7 @@ export class SearchService {
       return { total: 0, page, limit, pages: 0, hits: [] };
     }
 
+    const showAttribution = canSeeAttribution(principal);
     const innerQuery = buildQuery(dto);
     const query = {
       bool: {
@@ -572,7 +651,7 @@ export class SearchService {
       size: limit,
       query,
       track_total_hits: true,
-      _source: buildSourceControl(dto.fields),
+      _source: buildSourceControl(dto.fields, showAttribution),
     };
     const result = await this.opensearch.search(indices, body);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -586,12 +665,16 @@ export class SearchService {
       page,
       limit,
       pages: Math.ceil(total / limit),
-      hits: hits.map(mapHit),
+      hits: hits.map((hit) => mapHit(hit, showAttribution)),
     };
   }
 
   async getById(id: string, principal: Principal): Promise<SearchHit> {
-    const result = await this.opensearch.getById(id);
+    const showAttribution = canSeeAttribution(principal);
+    const result = await this.opensearch.getById(
+      id,
+      showAttribution ? SOURCE_EXCLUDES : [...SOURCE_EXCLUDES, ...ATTRIBUTION_FIELDS],
+    );
     if (!result) {
       throw new NotFoundException(`Item with id "${id}" not found`);
     }
@@ -606,7 +689,12 @@ export class SearchService {
       throw new NotFoundException(`Item with id "${id}" not found`);
     }
 
-    return { id, index: result.index, score: 1, source: result.source };
+    return {
+      id,
+      index: result.index,
+      score: 1,
+      source: sanitizeSource(result.source, showAttribution),
+    };
   }
 
   // ─── Suggest ──────────────────────────────────────────────────────────────

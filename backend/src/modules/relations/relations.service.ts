@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ChangeAction, ItemType } from '../../../generated/prisma/client';
+import type { Actor } from '../../core/auth/actor.type';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { RevisionsService } from '../../core/revisions/revisions.service';
 
@@ -26,7 +27,7 @@ export class RelationsService {
   async connect(
     parentId: string,
     childIds: string[],
-    userId: string,
+    actor: Actor,
   ): Promise<RelationWriteResult> {
     if (childIds.includes(parentId)) {
       throw new BadRequestException('An item cannot be its own child');
@@ -62,14 +63,14 @@ export class RelationsService {
     });
 
     const state = await this.readParentState(parentId, parentType);
-    await this.recordRelationChange(ChangeAction.RELATION_ADDED, parentId, childIds, state, userId);
+    await this.recordRelationChange(ChangeAction.RELATION_ADDED, parentId, childIds, state, actor);
     return state;
   }
 
   async disconnect(
     parentId: string,
     childIds: string[],
-    userId: string,
+    actor: Actor,
   ): Promise<RelationWriteResult> {
     await this.prisma.itemRelation.deleteMany({
       where: {
@@ -84,7 +85,7 @@ export class RelationsService {
       parentId,
       childIds,
       state,
-      userId,
+      actor,
     );
     return state;
   }
@@ -99,7 +100,7 @@ export class RelationsService {
     parentId: string,
     childIds: string[],
     state: RelationWriteResult,
-    userId: string,
+    actor: Actor,
   ): Promise<void> {
     const added = action === ChangeAction.RELATION_ADDED;
     await this.revisions.recordDetached({
@@ -111,7 +112,7 @@ export class RelationsService {
         before: added ? null : childId,
         after: added ? childId : null,
       })),
-      userId,
+      actor,
     });
   }
 

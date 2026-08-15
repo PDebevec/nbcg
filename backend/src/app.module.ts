@@ -14,6 +14,7 @@ import { FilesModule } from './modules/files/files.module';
 import { SearchModule } from './modules/search/search.module';
 import { SchemaModule } from './modules/schema/schema.module';
 import { StatsModule } from './modules/stats/stats.module';
+import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './core/prisma/prisma.module';
 import { MetricsModule } from './core/metrics/metrics.module';
 import { RevisionsModule } from './core/revisions/revisions.module';
@@ -40,6 +41,7 @@ import { SeaweedfsModule } from './core/seaweedfs/seaweedfs.module';
     SearchModule,
     SchemaModule,
     StatsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [

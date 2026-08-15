@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { actorOf } from '../../core/auth/actor.type';
 import { GetPrincipal } from '../../core/auth/get-principal.decorator';
 import { RequireScopes } from '../../core/auth/scopes.decorator';
 import { ResourceAccessService } from '../../core/auth/resource-access.service';
@@ -41,14 +42,14 @@ export class ItemsController {
       dto.visibilityStatus,
       dto.targetState,
       dto.metadata,
-      principal.sub,
+      actorOf(principal),
     );
   }
 
   @Post('transition')
   transition(@GetPrincipal() principal: Principal, @Body() dto: TransitionItemsDto) {
     this.access.assertCanTransition(principal);
-    return this.itemsService.transition(dto.ids, dto.targetState, principal.sub);
+    return this.itemsService.transition(dto.ids, dto.targetState, actorOf(principal));
   }
 
   @Patch(':id')
@@ -62,7 +63,7 @@ export class ItemsController {
       id,
       dto.visibilityStatus,
       dto.metadata,
-      principal.sub,
+      actorOf(principal),
       dto.expectedVersion,
     );
   }
@@ -70,6 +71,6 @@ export class ItemsController {
   @Delete()
   async delete(@GetPrincipal() principal: Principal, @Body() dto: DeleteItemsDto) {
     await this.access.assertCanManageBatch(principal, dto.ids);
-    return this.itemsService.delete(dto.ids, principal.sub);
+    return this.itemsService.delete(dto.ids, actorOf(principal));
   }
 }

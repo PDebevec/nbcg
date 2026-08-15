@@ -46,6 +46,23 @@ export type ItemRelation = Prisma.ItemRelationModel
  */
 export type ItemRevision = Prisma.ItemRevisionModel
 /**
+ * Model UserProfile
+ * Local shadow of the Keycloak realm's human users. Never deleted: item rows,
+ * revisions and tasks reference `userId` with no FK, so a departed user must
+ * still resolve to a name.
+ * 
+ * Written ONLY by the sync job (scheduled or manually triggered). Nothing else
+ * may insert or update a row here — no opportunistic population from the JWT of
+ * whoever happens to make a request, so "why is this person in the table?" has
+ * exactly one answer.
+ * 
+ * NOT an authorization source. `scopes`/`canPublish` are display and validation
+ * hints and may be up to one sync interval stale; real permission checks read
+ * the JWT via `Principal.scopes`. Attribution does not read this table either —
+ * that is a snapshot on the row itself.
+ */
+export type UserProfile = Prisma.UserProfileModel
+/**
  * Model ItemMetricDaily
  * Per-day usage counters. Kept out of drafts/records on purpose: pgsync CDC
  * watches those tables, so a counter column there would re-index the whole

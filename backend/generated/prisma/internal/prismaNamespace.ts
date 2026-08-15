@@ -389,6 +389,7 @@ export const ModelName = {
   FileAttachment: 'FileAttachment',
   ItemRelation: 'ItemRelation',
   ItemRevision: 'ItemRevision',
+  UserProfile: 'UserProfile',
   ItemMetricDaily: 'ItemMetricDaily',
   FileMetricDaily: 'FileMetricDaily'
 } as const
@@ -406,7 +407,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "draft" | "record" | "fileAttachment" | "itemRelation" | "itemRevision" | "itemMetricDaily" | "fileMetricDaily"
+    modelProps: "draft" | "record" | "fileAttachment" | "itemRelation" | "itemRevision" | "userProfile" | "itemMetricDaily" | "fileMetricDaily"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -780,6 +781,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    UserProfile: {
+      payload: Prisma.$UserProfilePayload<ExtArgs>
+      fields: Prisma.UserProfileFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.UserProfileFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.UserProfileFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        findFirst: {
+          args: Prisma.UserProfileFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.UserProfileFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        findMany: {
+          args: Prisma.UserProfileFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>[]
+        }
+        create: {
+          args: Prisma.UserProfileCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        createMany: {
+          args: Prisma.UserProfileCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.UserProfileCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>[]
+        }
+        delete: {
+          args: Prisma.UserProfileDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        update: {
+          args: Prisma.UserProfileUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        deleteMany: {
+          args: Prisma.UserProfileDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.UserProfileUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.UserProfileUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>[]
+        }
+        upsert: {
+          args: Prisma.UserProfileUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UserProfilePayload>
+        }
+        aggregate: {
+          args: Prisma.UserProfileAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateUserProfile>
+        }
+        groupBy: {
+          args: Prisma.UserProfileGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UserProfileGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.UserProfileCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UserProfileCountAggregateOutputType> | number
+        }
+      }
+    }
     ItemMetricDaily: {
       payload: Prisma.$ItemMetricDailyPayload<ExtArgs>
       fields: Prisma.ItemMetricDailyFieldRefs
@@ -975,7 +1050,9 @@ export const DraftScalarFieldEnum = {
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   createdByUserId: 'createdByUserId',
-  updatedByUserId: 'updatedByUserId'
+  createdByName: 'createdByName',
+  updatedByUserId: 'updatedByUserId',
+  updatedByName: 'updatedByName'
 } as const
 
 export type DraftScalarFieldEnum = (typeof DraftScalarFieldEnum)[keyof typeof DraftScalarFieldEnum]
@@ -989,7 +1066,9 @@ export const RecordScalarFieldEnum = {
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   createdByUserId: 'createdByUserId',
-  updatedByUserId: 'updatedByUserId'
+  createdByName: 'createdByName',
+  updatedByUserId: 'updatedByUserId',
+  updatedByName: 'updatedByName'
 } as const
 
 export type RecordScalarFieldEnum = (typeof RecordScalarFieldEnum)[keyof typeof RecordScalarFieldEnum]
@@ -1031,10 +1110,28 @@ export const ItemRevisionScalarFieldEnum = {
   action: 'action',
   changes: 'changes',
   userId: 'userId',
+  userName: 'userName',
   createdAt: 'createdAt'
 } as const
 
 export type ItemRevisionScalarFieldEnum = (typeof ItemRevisionScalarFieldEnum)[keyof typeof ItemRevisionScalarFieldEnum]
+
+
+export const UserProfileScalarFieldEnum = {
+  userId: 'userId',
+  username: 'username',
+  firstName: 'firstName',
+  lastName: 'lastName',
+  email: 'email',
+  displayName: 'displayName',
+  scopes: 'scopes',
+  canPublish: 'canPublish',
+  enabled: 'enabled',
+  deletedAt: 'deletedAt',
+  syncedAt: 'syncedAt'
+} as const
+
+export type UserProfileScalarFieldEnum = (typeof UserProfileScalarFieldEnum)[keyof typeof UserProfileScalarFieldEnum]
 
 
 export const ItemMetricDailyScalarFieldEnum = {
@@ -1246,6 +1343,13 @@ export type ListEnumChangeActionFieldRefInput<$PrismaModel> = FieldRefInputType<
 
 
 /**
+ * Reference to a field of type 'Boolean'
+ */
+export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+/**
  * Reference to a field of type 'MetricKind'
  */
 export type EnumMetricKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MetricKind'>
@@ -1372,6 +1476,7 @@ export type GlobalOmitConfig = {
   fileAttachment?: Prisma.FileAttachmentOmit
   itemRelation?: Prisma.ItemRelationOmit
   itemRevision?: Prisma.ItemRevisionOmit
+  userProfile?: Prisma.UserProfileOmit
   itemMetricDaily?: Prisma.ItemMetricDailyOmit
   fileMetricDaily?: Prisma.FileMetricDailyOmit
 }

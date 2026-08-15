@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { ImportJobData, ImportJobProgress } from './import-job.types';
 import { fetchCobissRecord } from '../cobiss/cobiss-util/cobiss-fetch';
+import { SYSTEM_ACTOR } from '../../../core/auth/actor.type';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import { RevisionsService } from '../../../core/revisions/revisions.service';
 import { generateDeterministicId } from '../../../shared/util/generateUuidFromCobissId';
@@ -96,8 +97,10 @@ export class ImportQueueProcessor extends WorkerHost {
       id: recordId,
       visibilityStatus,
       metadata,
-      createdByUserId: 'system',
-      updatedByUserId: 'system',
+      createdByUserId: SYSTEM_ACTOR.userId,
+      createdByName: SYSTEM_ACTOR.userName,
+      updatedByUserId: SYSTEM_ACTOR.userId,
+      updatedByName: SYSTEM_ACTOR.userName,
     };
 
     // Imported items open their timeline the same way hand-created ones do,
@@ -115,7 +118,7 @@ export class ImportQueueProcessor extends WorkerHost {
       }
 
       await this.revisions.record(
-        { itemId: recordId, version: 0, action: ChangeAction.CREATE, userId: 'system' },
+        { itemId: recordId, version: 0, action: ChangeAction.CREATE, actor: SYSTEM_ACTOR },
         tx,
       );
     });

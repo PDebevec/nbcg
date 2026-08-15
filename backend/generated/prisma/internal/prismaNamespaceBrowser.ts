@@ -56,6 +56,7 @@ export const ModelName = {
   FileAttachment: 'FileAttachment',
   ItemRelation: 'ItemRelation',
   ItemRevision: 'ItemRevision',
+  UserProfile: 'UserProfile',
   ItemMetricDaily: 'ItemMetricDaily',
   FileMetricDaily: 'FileMetricDaily'
 } as const
@@ -84,7 +85,9 @@ export const DraftScalarFieldEnum = {
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   createdByUserId: 'createdByUserId',
-  updatedByUserId: 'updatedByUserId'
+  createdByName: 'createdByName',
+  updatedByUserId: 'updatedByUserId',
+  updatedByName: 'updatedByName'
 } as const
 
 export type DraftScalarFieldEnum = (typeof DraftScalarFieldEnum)[keyof typeof DraftScalarFieldEnum]
@@ -98,7 +101,9 @@ export const RecordScalarFieldEnum = {
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   createdByUserId: 'createdByUserId',
-  updatedByUserId: 'updatedByUserId'
+  createdByName: 'createdByName',
+  updatedByUserId: 'updatedByUserId',
+  updatedByName: 'updatedByName'
 } as const
 
 export type RecordScalarFieldEnum = (typeof RecordScalarFieldEnum)[keyof typeof RecordScalarFieldEnum]
@@ -140,10 +145,28 @@ export const ItemRevisionScalarFieldEnum = {
   action: 'action',
   changes: 'changes',
   userId: 'userId',
+  userName: 'userName',
   createdAt: 'createdAt'
 } as const
 
 export type ItemRevisionScalarFieldEnum = (typeof ItemRevisionScalarFieldEnum)[keyof typeof ItemRevisionScalarFieldEnum]
+
+
+export const UserProfileScalarFieldEnum = {
+  userId: 'userId',
+  username: 'username',
+  firstName: 'firstName',
+  lastName: 'lastName',
+  email: 'email',
+  displayName: 'displayName',
+  scopes: 'scopes',
+  canPublish: 'canPublish',
+  enabled: 'enabled',
+  deletedAt: 'deletedAt',
+  syncedAt: 'syncedAt'
+} as const
+
+export type UserProfileScalarFieldEnum = (typeof UserProfileScalarFieldEnum)[keyof typeof UserProfileScalarFieldEnum]
 
 
 export const ItemMetricDailyScalarFieldEnum = {

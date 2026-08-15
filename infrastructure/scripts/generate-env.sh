@@ -39,6 +39,7 @@ KEYCLOAK_POSTGRES_PASSWORD=$(generate_secret)
 KEYCLOAK_ADMIN_PASSWORD=$(generate_secret)
 PGADMIN_DEFAULT_PASSWORD=$(generate_secret)
 OPENSEARCH_INITIAL_ADMIN_PASSWORD=$(generate_secret)
+KEYCLOAK_WORKER_CLIENT_SECRET=$(generate_secret)
 EOF
 }
 

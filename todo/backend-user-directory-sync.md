@@ -1,9 +1,110 @@
 # Backend: User Directory + Attribution Snapshots
 
-## Status: TODO — realm prerequisites DONE
+## Status: DONE — all four steps landed 2026-08-13
+
+Attribution snapshots, the search leak fix, the pgsync mapping + reindex, and the
+directory (`user_profiles`, `KeycloakAdminService`, the sync job, four endpoints)
+are all in and verified against the live stack.
+
+- `backend/test/api-test-suite.sh`: **307 passed, 0 failed, 1 skipped** (308 total),
+  including the leak test with a working positive control and a fault-injected
+  failed sync.
+- `npx jest`: **42 passed** — see the note under Tests, because this task started
+  by *breaking* the existing spec without the build noticing.
+
+Remaining work is the Follow-on section: task delegation consuming
+`GET /api/users?capability=publish`, and the frontend.
 
 Split out of [Task Delegation](backend-task-delegation.md), which sketched a
 `UserProfile` model but left the sync mechanism open.
+
+> **Follow-up planned:** [Move `user_profiles` to a `directory` schema](backend-postgres-schema-split.md)
+> — it is the only table in the database with no link to an item. Nothing in this
+> task changes if that lands: every read here goes through Prisma, which qualifies
+> from `@@schema` automatically.
+
+## How it works, end to end
+
+The two halves never touch each other at runtime. That separation is the whole
+design, so here is the actual flow rather than the rationale.
+
+### Writing an item (attribution — no directory involved)
+
+```
+POST /api/items  ──►  KeycloakJwtStrategy.validate()
+                        reads given_name / family_name / preferred_username
+                        from the token, builds displayName via formatDisplayName()
+                      ScopesGuard  ──►  Principal { sub, displayName, scopes: Set }
+                      ItemsController  ──►  actorOf(principal) = { userId, userName }
+                      ItemsService.create()
+                        writes createdByUserId + createdByName onto the row
+                        writes the same pair onto the ItemRevision, in one transaction
+```
+
+No database lookup anywhere in that path. A brand-new Keycloak user who has never
+been synced gets their name rendered correctly on their very first request. The
+COBISS importer has no principal, so it passes `SYSTEM_ACTOR`
+(`'system'` / `'System (import)'`).
+
+The name is **frozen**. `transition()` copies the source row's `createdByName`
+across, so publishing does not reattribute the creator. A rename in Keycloak never
+rewrites history — which is what stops one rename re-indexing every document that
+person ever touched.
+
+### Reading a name back
+
+Straight off the row. No join, no cache, no decorate step — from Postgres or from
+OpenSearch alike, because pgsync ships `createdByName` as a `keyword` field.
+
+Staff-only on the way out, enforced twice:
+
+```
+GET /api/search  ──►  canSeeAttribution(principal)     drafts:manage OR records:manage
+                      buildSourceControl(fields, show)  ──► OpenSearch _source.excludes
+                      mapHit(hit, show)  ──►  sanitizeSource() deletes the keys again
+```
+
+Both layers are deliberate. The excludes stop the field leaving OpenSearch;
+`sanitizeSource` stops it leaving the process if a future query path forgets them.
+`?fields=` is checked against an allowlist so the projection cannot re-request a
+withheld field, and `excludes` now rides along on the projected branch too — which
+also closed an unrelated hole where `?fields=file_attachments` returned megabytes
+of `extractedText`.
+
+### Populating the directory (sync — no request involved)
+
+```
+app boot ──► UserSyncQueueService.onModuleInit()
+               registers a repeatable job (fixed jobId, daily, deduped via Redis)
+               enqueues one immediate run
+POST /api/users/sync (users:manage) ──► enqueues the same job
+
+UserSyncProcessor (concurrency 1) ──► UserSyncService.reconcile()
+   1. GET /users?briefRepresentation=false&first=N&max=100   (paginate to a short page)
+   2. per user: GET /users/{id}/role-mappings/clients/{uuid}/composite
+                canPublish = scopes ⊇ { records:manage, drafts:manage }
+   3. upsert every roster row
+   4. ONLY if 1-3 all succeeded and the roster is non-empty:
+        set deletedAt on rows not in the roster, clear it on rows that came back
+```
+
+Step 4's guard is the load-bearing one: a failed enumeration must not turn users
+into departures. Step 2's `/composite` is what makes storing group membership
+unnecessary — it resolves group-derived roles *and* expands `records:manage` into
+its `records:view:*` composites.
+
+### Reading the directory
+
+`GET /api/users` is a single indexed read for pickers and filters. It is never in
+the auth path — `canPublish` is a UI hint, and the real check stays
+`assertCanTransition(principal)` on the token. `email` is withheld below the same
+staff bar as attribution.
+
+`/api/stats/users` is the one place that must **not** use the snapshots: it groups
+by `userId` alone and resolves current names through `UsersService.resolveNames()`,
+because grouping by a snapshot name would split a renamed person into two rows.
+
+**Rule of thumb: snapshot for a specific row, directory for a group of rows.**
 
 ## Two separate problems, two separate mechanisms
 
@@ -72,6 +173,34 @@ Keycloak database, so editing the file alone would leave a running instance
 Verified end to end with a real `client_credentials` token as `nbcg-worker`:
 `GET /users` → `200` (5 users, with names and emails), per-user composite
 role-mappings → `200`.
+
+⚠️ **`view-users` is not sufficient.** It does not cover `GET /clients`, which is
+403 with `view-users` alone — and the plan's "resolve the `nbcg-api` internal
+client UUID at startup" needs exactly that call. Two dead ends before the fix:
+`GET /users/{id}/role-mappings` returns an empty `clientMappings` (this realm's
+roles are group-derived, which is the same fact that makes the composite endpoint
+necessary), and `query-clients` returns `200` with an **empty list** — worse than
+a 403, because it reads as "the client does not exist".
+
+**Applied:** `realm-management` → `view-clients` on
+`service-account-nbcg-worker`, live and in `nbcg-realm.conf.json`. Read-only, and
+still far short of `realm-admin`. Effective roles are now `view-users`,
+`view-clients`, `query-users`, `query-groups`, `query-clients`.
+
+⚠️ **The worker secret is not in the repo.** `nbcg-realm.conf.json` stores it as
+the literal `**********` — Keycloak masks client secrets on export — so there is
+nothing to "reuse", and a `make qd && make qs` would not reproduce whatever the
+live instance holds. **Decided:** pin an explicit literal secret in the realm
+JSON and in `.env.dev`, the way `KEYCLOAK_ADMIN_PASSWORD=nbcg` already is, and
+set the same value on the live client. Prod regenerates it through the existing
+`append_prod_secrets` path in `generate-env.sh`.
+
+Two further config corrections: `KEYCLOAK_URL` lives in `.env.dev`, not
+`.env.shared` (only `KEYCLOAK_REALM` and `KEYCLOAK_CLIENT_ID` are shared), and
+`backend/.env` is generated by `gen-end-env.sh`, which sets the `KEYCLOAK_*`
+vars **only in its dev branch** — so the worker vars need an edit there too.
+`config.template.yml` is the wrong home for the secret: it carries an explicit
+"do not add secrets to the template file" warning.
 
 ## Live-verified facts
 
@@ -273,6 +402,12 @@ model UserProfile {
   @@map("user_profiles")
 }
 ```
+
+As shipped this lives in `public`, like everything else. Moving it to a
+`directory` schema is planned separately —
+[Move `user_profiles` to a `directory` schema](backend-postgres-schema-split.md).
+It changes no code in this task: `UsersService` and `UserSyncService` go
+through Prisma, which qualifies from `@@schema` on its own.
 
 `@db.Timestamptz(3)` throughout — plain `timestamp` was fixed project-wide
 because pgsync emitted offset-less strings that clients parsed as local time.
@@ -486,11 +621,14 @@ otherwise invisible until the picker is mysteriously empty.
 
 ## Open questions
 
-- **Should `GET /api/users` expose email?** Any authenticated user seeing the
-  staff list is normal for an internal tool; email is a step further. Splitting
-  `displayName`-only from full profile is the alternative.
-- **What happens to a deactivated user's open tasks?** Task-delegation territory,
-  but it is this table that flips the flag.
+- **Should `GET /api/users` expose email?** ✅ **Resolved: only above the staff
+  bar.** `email` is included for principals holding `drafts:manage` or
+  `records:manage` and omitted otherwise — the same bar that gates attribution, so
+  no new scope and one rule to remember. Seeing *who exists* stays open to any
+  authenticated principal, because a picker needs it; seeing how to contact them
+  is a step further and nothing below that bar needs it. Asserted in §16.
+- **What happens to a deactivated user's open tasks?** Still open —
+  task-delegation territory, but it is this table that flips the flag.
 
 ## Changes Needed
 
@@ -499,82 +637,159 @@ otherwise invisible until the picker is mysteriously empty.
 - [x] `service-account-nbcg-worker` → `realm-management:view-users`
 - [x] `users:manage` role on `nbcg-api`, granted to `nbcg/admins`
 
-### Backend — attribution (independent of the directory; can ship first)
+### Backend — attribution (independent of the directory; can ship first) — ✅ DONE
 
-- [ ] `createdByName` / `updatedByName` on `Draft` + `Record`, `userName` on
-      `ItemRevision`, in `schema.prisma` + migration.
-- [ ] Populate from the JWT at every write site: `items.service.ts:115` (create),
-      `:206` (update), `:374`/`:390` (transition), and every `revisions.service`
-      call. `import-queue.processor.ts:99` writes `'System (import)'` alongside
-      its existing `'system'` id.
-- [ ] Extend `keycloak.strategy.ts:50` + `Principal` to carry the display name
+- [x] `createdByName` / `updatedByName` on `Draft` + `Record`, `userName` on
+      `ItemRevision`, in `schema.prisma` + migration
+      (`20260813190000_add_attribution_snapshots`). Added **nullable, backfilled
+      with placeholders, then `SET NOT NULL`** — a plain `ADD COLUMN … NOT NULL`
+      fails on non-empty tables, and these tables are not empty.
+- [x] Populate from the JWT at every write site. Done by replacing the bare
+      `userId: string` parameter with an `Actor` (`{ userId, userName }`) through
+      `items.service`, `files.service`, `relations.service` and
+      `RevisionInput` — 8 write sites and 4 controllers. `actorOf(principal)` at
+      the controller boundary, `SYSTEM_ACTOR` on the import queue.
+      `transition()` carries the source row's `createdByName` across, so
+      publishing does not reattribute the creator.
+- [x] Extend `keycloak.strategy.ts` + `Principal` to carry the display name
       from `given_name`/`family_name`/`preferred_username`. **This is for
       attribution only** — it must not become a write path into `user_profiles`.
-- [ ] Share one `formatDisplayName()` helper between the strategy and the sync,
-      so a snapshot and a directory row never disagree cosmetically.
-- [ ] **Backfill existing rows** before the reindex: resolve every distinct
-      `createdByUserId`/`updatedByUserId` via one sync, write the names, leave
-      `'system'` rows as `'System (import)'`, unresolvable ids as `'Unknown user'`.
-- [ ] **Strip attribution for principals without `drafts:manage` or
-      `records:manage`** — items, search, revisions, all of it.
-- [ ] **Allowlist `?fields=`** in `buildSourceControl()` (`search.service.ts:251`)
-      so the projection cannot re-request a stripped field, and stop returning
-      `hit._source` wholesale at `search.service.ts:279`. **Both are required —
-      neither alone closes the hole.**
-- [ ] Admin backfill script: rewrite `createdByName`/`updatedByName`/`userName`
-      for a given `userId`, for genuine name corrections. Snapshots do not
-      self-heal; this is the escape hatch.
+- [x] Share one `formatDisplayName()` helper between the strategy and the sync —
+      `src/shared/util/display-name.ts`, which also owns `SYSTEM_USER_ID`,
+      `SYSTEM_USER_NAME` and `UNKNOWN_USER_NAME`.
+- [x] **Backfill existing rows** before the reindex — done, 172 rows rewritten
+      across `drafts`, `records` and `item_revisions`. Zero `'Unknown user'`
+      remain. Ran after the directory half, before the reindex (see the
+      reordering note under "Suggested order").
+- [x] **Strip attribution for principals without `drafts:manage` or
+      `records:manage`**. Enforced twice on the search path: OpenSearch `_source`
+      excludes, and `sanitizeSource()` in the process before the hit leaves
+      `SearchService`. Verified the bar admits cataloguer (holds `drafts:manage`)
+      and excludes `reader` (`records:view:*` only) and anonymous. No other read
+      path needed it — `/items/:id/history` is already gated on
+      `records:view:hidden` + `drafts:view:hidden`, which is stricter.
+- [x] **Allowlist `?fields=`** in `buildSourceControl()`, and stop returning
+      `hit._source` wholesale. Both landed. The allowlist also closed a second,
+      unrelated hole the plan did not name: the old includes-only branch emitted
+      no `excludes`, so `?fields=file_attachments` returned megabytes of
+      `extractedText`. `excludes` now applies on both branches.
+- [x] Admin backfill script: `backend/scripts/backfill-attribution.ts`. Same
+      script serves both jobs — no args for the full backfill, `--user <sub>` for
+      a single correction, `--dry-run` for either. Plain `pg` and explicit SQL
+      rather than the Prisma client, which cannot be required under ts-node. An
+      id with no directory row is **left alone** rather than stamped
+      `'Unknown user'`: an unresolvable id usually means the directory has not
+      synced yet, and overwriting a real name with a placeholder is worse than
+      leaving the placeholder.
 
-### Infrastructure
+### Infrastructure — ✅ DONE
 
-- [ ] `pgsync/schema.json` — add `createdByName`/`updatedByName` to the `columns`
-      list and an explicit `keyword` mapping, on **both** the `records` and
-      `drafts` nodes.
-- [ ] One full reindex of `records` + `drafts`, sequenced **after** the backfill.
+- [x] `pgsync/schema.json` — `createdByName`/`updatedByName` added to the
+      `columns` list and given an explicit `keyword` mapping on **both** the
+      `records` and `drafts` nodes.
+- [x] One full reindex of `records` + `drafts`, run **after** the backfill.
+      Procedure: stop pgsync → `DELETE /records,drafts` → `DEL
+      queue:nbcg_records:meta queue:nbcg_drafts:meta` in Redis → start pgsync.
+      Verified after: 11 records + 5 drafts (matching Postgres), `keyword`
+      mapping on all four attribution fields, names populated in `_source`, and a
+      terms aggregation on `createdByName` returning buckets — which was the
+      whole point of `keyword` over `text`.
+      Note `_cat/indices` reports 25 docs for `records`: nested
+      `file_attachments` are separate Lucene docs. Use `_count` to compare
+      against Postgres.
 
-### Backend — directory
+### Backend — directory — ✅ DONE
 
-- [ ] `UserProfile` model in `schema.prisma` + migration (`@db.Timestamptz(3)`
-      throughout). No enum needed.
-- [ ] `src/core/keycloak/keycloak-admin.service.ts` — client-credentials token
+- [x] `UserProfile` model in `schema.prisma` + migration
+      (`20260813200000_add_user_profiles`, `@db.Timestamptz(3)` throughout).
+- [x] `src/core/keycloak/keycloak-admin.service.ts` — client-credentials token
       with caching + 401 re-mint, cached `nbcg-api` internal client id, `undici`,
       pagination loop, service-account filtering.
-- [ ] `src/modules/users/` — controller (4 endpoints), `UserSyncService` (the
-      algorithm above). **No `decorate()` helper and no in-process user map** —
-      superseded by the snapshot columns.
-- [ ] `src/modules/users/queue/` — BullMQ repeatable job (fixed `jobId`, daily)
-      + startup run, following `files/queue/`.
-- [ ] `stats.service.users()` — keep `GROUP BY userId`, resolve current names
-      from `user_profiles` (`LIMIT 50`, one indexed query). **Never group by the
-      snapshot name**, which would split a renamed person into several rows.
-- [ ] Remove the now-obsolete TODO comment at `stats.service.ts:125`.
-- [ ] Comment the `assign-to-non-publisher → 400` guard as advisory: it reads a
-      directory that may be up to one sync interval stale, and the authoritative
-      check is `assertCanTransition` on the token.
-- [ ] `KEYCLOAK_WORKER_CLIENT_ID` / `KEYCLOAK_WORKER_CLIENT_SECRET` in
-      `.env.shared` / `.env.dev` + `config.template.yml`.
+- [x] `src/modules/users/` — controller (4 endpoints), `UserSyncService` (the
+      algorithm above), `UsersService` for the read side. No `decorate()` helper
+      and no in-process user map.
+- [x] `src/modules/users/queue/` — BullMQ repeatable job (fixed `jobId`, daily)
+      + startup run. Verified in the log: `User directory synced: 5 seen, 0 marked
+      absent, 0 restored, 255ms`.
+- [x] `stats.service.users()` — groups by `userId` alone and resolves current
+      names through `UsersService.resolveNames()`. The accumulator got its own
+      `UserCounts` type so `displayName` is added once, at the end, rather than
+      carried as a placeholder through the aggregation.
+- [x] Removed the obsolete TODO comment in `stats.service.ts`.
+- ⟶ Comment the `assign-to-non-publisher → 400` guard as advisory: **not
+      actionable here.** Task delegation has not built that guard yet, so there is
+      nothing to annotate. Carried into Follow-on below.
+- [x] `KEYCLOAK_WORKER_CLIENT_ID` in `.env.shared`,
+      `KEYCLOAK_WORKER_CLIENT_SECRET` in `.env.dev`, both propagated to
+      `backend/.env` by `gen-end-env.sh`, and the secret added to
+      `generate-env.sh`'s `append_prod_secrets` so prod generates its own.
+      **Not** in `config.template.yml` — that file carries an explicit "do not add
+      secrets" warning.
 
 ### Tests
 
-- [ ] `backend/test/api-test-suite.sh`: sync populates profiles;
-      `?capability=publish` includes `editor` and excludes `cataloguer` (assert
-      the inverted-terminology trap); `POST /users/sync` is 403 for `editor`,
-      200 for `admin`.
-- [ ] **The leak test, both vectors**: as `reader` and as anonymous, assert
+- [x] **Unit tests, and a bug this task created and nearly shipped.**
+      `src/modules/search/search.service.spec.ts` already existed and the
+      attribution work **broke 19 of its 30 tests** — `npm run build` stayed green
+      throughout, because both causes were runtime, not type, problems:
+      1. Its principal fixture was `{ scopes: [] } as unknown as Principal`. An
+         array cast through `unknown` compiles, and then `canSeeAttribution`
+         calls `.has()` on it. `Principal.scopes` is a `Set`. Replaced with a
+         `principalWith(scopes)` helper that builds a real one, plus a
+         `staffPrincipal` above the bar.
+      2. One assertion was `expect(body._source.excludes).toBeUndefined()`, which
+         **pinned the leak in place** — it asserted the includes-only projection
+         was correct. Inverted, with a comment saying why.
+      Added 12 unit tests for the new rules: the `?fields=` allowlist (unknown
+      names dropped, sub-paths allowed, `id`-only fallback), both sides of the
+      attribution bar, that a projection naming `createdByName` still gets it
+      excluded, and that `sanitizeSource` does not mutate the document it was
+      handed. **42 passing.**
+      Lesson worth keeping: `npm run build` is not a test run. This suite is not
+      wired into any script beyond `npm test`, so it is easy to forget it exists.
+- [x] `backend/test/api-test-suite.sh` §16: sync populates profiles;
+      `?capability=publish` includes `editor` and excludes `cataloguer` (the
+      inverted-terminology trap, asserted in both directions); `POST /users/sync`
+      is 403 for `editor` (and reader, and cataloguer), 401 for anonymous, **201**
+      for `admin` — Nest returns 201 from a POST, not 200. Also: service accounts
+      absent from the directory, email withheld from `reader`, `GET /users` 401
+      for anonymous, unknown id → 404, and `user_profiles` excluded from pgsync.
+- [x] **The leak test, both vectors**: as `reader` and as anonymous, assert
       `createdByName` is absent from a search response *and* that
-      `?fields=createdByName` does not return it.
-- [ ] Attribution survives the directory: an item created by a user who is **not**
-      in `user_profiles` still renders their name.
-- [ ] A user deleted from Keycloak still renders their name on old items, and
-      still resolves in the stats panel.
-- [ ] **A sync that throws mid-enumeration leaves every `deletedAt` untouched.**
-- [ ] **A request never writes `user_profiles`** — row count unchanged after
-      authenticated traffic from a user the sync has not seen.
+      `?fields=createdByName` does not return it. Section 15 of
+      `api-test-suite.sh`, plus a **positive control** (admin and cataloguer *do*
+      see the name) — without it the four absence assertions also pass on an
+      index that simply lacks the column, which is the state until the reindex.
+      The control is skipped while `pgsync/schema.json` has no `createdByName`,
+      so it activates by itself when step 3 lands.
+- [x] Attribution survives the directory: an item created by a user who is **not**
+      in `user_profiles` still renders their name. Trivially true today — the
+      table does not exist and no write path consults it — and asserted as
+      "created / edited / published by" over three different users.
+- [x] A user deleted from Keycloak still renders their name on old items, and
+      still resolves in the stats panel. Tested with a synthetic profile row that
+      no Keycloak user backs: a sync marks it `deletedAt`, it drops out of the
+      default list, `?active=false` still shows it, and `/stats/users` resolves it
+      to the **directory** name rather than the older snapshot on its revision —
+      which is the assertion that would catch an aggregate grouping by the
+      snapshot.
+- [x] **A sync that throws mid-enumeration leaves every `deletedAt` untouched.**
+      §17, fault-injected for real by stopping the Keycloak container. The API
+      keeps validating the already-minted token from its cached JWKS, so the
+      request still lands while the Admin API call cannot — `lastError` is
+      populated, `deletedAt` and the row count are unchanged, and Keycloak is
+      restarted and waited for before the suite continues.
+- [x] **A request never writes `user_profiles`** — row count unchanged after
+      authenticated traffic across three endpoints and three personas.
 
 ### Follow-on
 
 - [ ] Task delegation consumes `GET /api/users?capability=publish` — drop
       `/api/tasks/assignable-users` from that plan.
+- [ ] When task delegation builds the `assign-to-non-publisher → 400` guard,
+      comment it as advisory: it reads a directory that may be up to one sync
+      interval stale, and the authoritative check is `assertCanTransition` on the
+      token.
 - [ ] Frontend: assignee picker; "created by" column rendering the snapshot name
       directly off the row; admin sync button hitting `POST /api/users/sync`.
 
@@ -582,13 +797,20 @@ otherwise invisible until the picker is mysteriously empty.
 
 The two halves are independent. Attribution is the one users notice.
 
-1. **Attribution columns + JWT plumbing + backfill** — ships "created by Ana"
+1. ✅ **Attribution columns + JWT plumbing** — ships "created by Ana"
    everywhere in Postgres, no Keycloak Admin API involved.
-2. **The strip + `fields` allowlist** — must land *before* step 3, or the reindex
+2. ✅ **The strip + `fields` allowlist** — must land *before* step 3, or the reindex
    publishes staff names to anonymous callers.
-3. **pgsync mapping + reindex** — search results gain names.
-4. **Directory** (`user_profiles`, sync job, endpoints) — unblocks the picker,
+3. ✅ **pgsync mapping + reindex** — search results gain names.
+4. ✅ **Directory** (`user_profiles`, sync job, endpoints) — unblocks the picker,
    filtering, task delegation, and the stats names.
+
+⚠️ **The backfill had to move, and did.** This order put it in step 1, but
+resolving a `sub` to a name needs `KeycloakAdminService`, which is built in step
+4 — while the plan also required the backfill to land *before* the step 3
+reindex, or the index ships a column full of placeholders. The three could not all
+hold. **What was actually done: 1 → 2 → 4 → backfill → 3.** Nothing was lost by
+delaying the reindex, because the index carried no attribution until it ran.
 
 ## Key Files
 

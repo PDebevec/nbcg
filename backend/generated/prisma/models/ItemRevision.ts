@@ -45,6 +45,7 @@ export type ItemRevisionMinAggregateOutputType = {
   version: number | null
   action: $Enums.ChangeAction | null
   userId: string | null
+  userName: string | null
   createdAt: Date | null
 }
 
@@ -54,6 +55,7 @@ export type ItemRevisionMaxAggregateOutputType = {
   version: number | null
   action: $Enums.ChangeAction | null
   userId: string | null
+  userName: string | null
   createdAt: Date | null
 }
 
@@ -64,6 +66,7 @@ export type ItemRevisionCountAggregateOutputType = {
   action: number
   changes:PrismaJson.FieldChangeList
   userId: number
+  userName: number
   createdAt: number
   _all: number
 }
@@ -83,6 +86,7 @@ export type ItemRevisionMinAggregateInputType = {
   version?: true
   action?: true
   userId?: true
+  userName?: true
   createdAt?: true
 }
 
@@ -92,6 +96,7 @@ export type ItemRevisionMaxAggregateInputType = {
   version?: true
   action?: true
   userId?: true
+  userName?: true
   createdAt?: true
 }
 
@@ -102,6 +107,7 @@ export type ItemRevisionCountAggregateInputType = {
   action?: true
   changes?: true
   userId?: true
+  userName?: true
   createdAt?: true
   _all?: true
 }
@@ -199,6 +205,7 @@ export type ItemRevisionGroupByOutputType = {
   action: $Enums.ChangeAction
   changes:PrismaJson.FieldChangeList | null
   userId: string
+  userName: string
   createdAt: Date
   _count: ItemRevisionCountAggregateOutputType | null
   _avg: ItemRevisionAvgAggregateOutputType | null
@@ -232,6 +239,7 @@ export type ItemRevisionWhereInput = {
   action?: Prisma.EnumChangeActionFilter<"ItemRevision"> | $Enums.ChangeAction
   changes?: Prisma.JsonNullableFilter<"ItemRevision">
   userId?: Prisma.StringFilter<"ItemRevision"> | string
+  userName?: Prisma.StringFilter<"ItemRevision"> | string
   createdAt?: Prisma.DateTimeFilter<"ItemRevision"> | Date | string
 }
 
@@ -242,6 +250,7 @@ export type ItemRevisionOrderByWithRelationInput = {
   action?: Prisma.SortOrder
   changes?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrder
+  userName?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -255,6 +264,7 @@ export type ItemRevisionWhereUniqueInput = Prisma.AtLeast<{
   action?: Prisma.EnumChangeActionFilter<"ItemRevision"> | $Enums.ChangeAction
   changes?: Prisma.JsonNullableFilter<"ItemRevision">
   userId?: Prisma.StringFilter<"ItemRevision"> | string
+  userName?: Prisma.StringFilter<"ItemRevision"> | string
   createdAt?: Prisma.DateTimeFilter<"ItemRevision"> | Date | string
 }, "id">
 
@@ -265,6 +275,7 @@ export type ItemRevisionOrderByWithAggregationInput = {
   action?: Prisma.SortOrder
   changes?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrder
+  userName?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.ItemRevisionCountOrderByAggregateInput
   _avg?: Prisma.ItemRevisionAvgOrderByAggregateInput
@@ -283,6 +294,7 @@ export type ItemRevisionScalarWhereWithAggregatesInput = {
   action?: Prisma.EnumChangeActionWithAggregatesFilter<"ItemRevision"> | $Enums.ChangeAction
   changes?: Prisma.JsonNullableWithAggregatesFilter<"ItemRevision">
   userId?: Prisma.StringWithAggregatesFilter<"ItemRevision"> | string
+  userName?: Prisma.StringWithAggregatesFilter<"ItemRevision"> | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"ItemRevision"> | Date | string
 }
 
@@ -293,6 +305,7 @@ export type ItemRevisionCreateInput = {
   action: $Enums.ChangeAction
   changes?:PrismaJson.FieldChangeList | Prisma.NullableJsonNullValueInput
   userId: string
+  userName: string
   createdAt?: Date | string
 }
 
@@ -303,6 +316,7 @@ export type ItemRevisionUncheckedCreateInput = {
   action: $Enums.ChangeAction
   changes?:PrismaJson.FieldChangeList | Prisma.NullableJsonNullValueInput
   userId: string
+  userName: string
   createdAt?: Date | string
 }
 
@@ -313,6 +327,7 @@ export type ItemRevisionUpdateInput = {
   action?: Prisma.EnumChangeActionFieldUpdateOperationsInput | $Enums.ChangeAction
   changes?:PrismaJson.FieldChangeList | Prisma.NullableJsonNullValueInput
   userId?: Prisma.StringFieldUpdateOperationsInput | string
+  userName?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -323,6 +338,7 @@ export type ItemRevisionUncheckedUpdateInput = {
   action?: Prisma.EnumChangeActionFieldUpdateOperationsInput | $Enums.ChangeAction
   changes?:PrismaJson.FieldChangeList | Prisma.NullableJsonNullValueInput
   userId?: Prisma.StringFieldUpdateOperationsInput | string
+  userName?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -333,6 +349,7 @@ export type ItemRevisionCreateManyInput = {
   action: $Enums.ChangeAction
   changes?:PrismaJson.FieldChangeList | Prisma.NullableJsonNullValueInput
   userId: string
+  userName: string
   createdAt?: Date | string
 }
 
@@ -343,6 +360,7 @@ export type ItemRevisionUpdateManyMutationInput = {
   action?: Prisma.EnumChangeActionFieldUpdateOperationsInput | $Enums.ChangeAction
   changes?:PrismaJson.FieldChangeList | Prisma.NullableJsonNullValueInput
   userId?: Prisma.StringFieldUpdateOperationsInput | string
+  userName?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -353,6 +371,7 @@ export type ItemRevisionUncheckedUpdateManyInput = {
   action?: Prisma.EnumChangeActionFieldUpdateOperationsInput | $Enums.ChangeAction
   changes?:PrismaJson.FieldChangeList | Prisma.NullableJsonNullValueInput
   userId?: Prisma.StringFieldUpdateOperationsInput | string
+  userName?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -363,6 +382,7 @@ export type ItemRevisionCountOrderByAggregateInput = {
   action?: Prisma.SortOrder
   changes?: Prisma.SortOrder
   userId?: Prisma.SortOrder
+  userName?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -376,6 +396,7 @@ export type ItemRevisionMaxOrderByAggregateInput = {
   version?: Prisma.SortOrder
   action?: Prisma.SortOrder
   userId?: Prisma.SortOrder
+  userName?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -385,6 +406,7 @@ export type ItemRevisionMinOrderByAggregateInput = {
   version?: Prisma.SortOrder
   action?: Prisma.SortOrder
   userId?: Prisma.SortOrder
+  userName?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -405,6 +427,7 @@ export type ItemRevisionSelect<ExtArgs extends runtime.Types.Extensions.Internal
   action?: boolean
   changes?: boolean
   userId?: boolean
+  userName?: boolean
   createdAt?: boolean
 }, ExtArgs["result"]["itemRevision"]>
 
@@ -415,6 +438,7 @@ export type ItemRevisionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   action?: boolean
   changes?: boolean
   userId?: boolean
+  userName?: boolean
   createdAt?: boolean
 }, ExtArgs["result"]["itemRevision"]>
 
@@ -425,6 +449,7 @@ export type ItemRevisionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   action?: boolean
   changes?: boolean
   userId?: boolean
+  userName?: boolean
   createdAt?: boolean
 }, ExtArgs["result"]["itemRevision"]>
 
@@ -435,10 +460,11 @@ export type ItemRevisionSelectScalar = {
   action?: boolean
   changes?: boolean
   userId?: boolean
+  userName?: boolean
   createdAt?: boolean
 }
 
-export type ItemRevisionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "itemId" | "version" | "action" | "changes" | "userId" | "createdAt", ExtArgs["result"]["itemRevision"]>
+export type ItemRevisionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "itemId" | "version" | "action" | "changes" | "userId" | "userName" | "createdAt", ExtArgs["result"]["itemRevision"]>
 
 export type $ItemRevisionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "ItemRevision"
@@ -460,6 +486,13 @@ export type $ItemRevisionPayload<ExtArgs extends runtime.Types.Extensions.Intern
      * Keycloak sub, or "system" for imports.
      */
     userId: string
+    /**
+     * Snapshot of the actor's display name — same rule as Draft.createdByName,
+     * and revisions are historical by nature so freezing it is doubly right.
+     * Aggregates must group by `userId` alone: grouping by this column would
+     * split a renamed person into several rows.
+     */
+    userName: string
     createdAt: Date
   }, ExtArgs["result"]["itemRevision"]>
   composites: {}
@@ -890,6 +923,7 @@ export interface ItemRevisionFieldRefs {
   readonly action: Prisma.FieldRef<"ItemRevision", 'ChangeAction'>
   readonly changes: Prisma.FieldRef<"ItemRevision", 'Json'>
   readonly userId: Prisma.FieldRef<"ItemRevision", 'String'>
+  readonly userName: Prisma.FieldRef<"ItemRevision", 'String'>
   readonly createdAt: Prisma.FieldRef<"ItemRevision", 'DateTime'>
 }
     

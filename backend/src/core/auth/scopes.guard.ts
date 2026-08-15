@@ -29,6 +29,7 @@ export class ScopesGuard implements CanActivate {
           sub: user.sub,
           username: user.username,
           email: user.email,
+          displayName: user.displayName,
           scopes: new Set(user.scopes as string[]),
           isAnonymous: false,
         } satisfies Principal;

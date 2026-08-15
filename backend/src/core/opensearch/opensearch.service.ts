@@ -16,14 +16,22 @@ export class OpenSearchService {
     return response.body;
   }
 
-  async getById(id: string, indices = ['records', 'drafts']): Promise<{ index: string; source: Record<string, unknown> } | null> {
+  /**
+   * @param excludes `_source` paths to withhold. The caller owns this policy —
+   *   extractedText is excluded because it can be megabytes per attachment,
+   *   attribution names because they are staff-only.
+   */
+  async getById(
+    id: string,
+    excludes: string[] = [],
+    indices = ['records', 'drafts'],
+  ): Promise<{ index: string; source: Record<string, unknown> } | null> {
     for (const index of indices) {
       try {
-        // extractedText can be megabytes per attachment — never return it to clients
         const response = await this.client.get({
           index,
           id,
-          _source_excludes: ['file_attachments.extractedText'],
+          _source_excludes: excludes,
         });
         if (response.body.found) {
           return { index, source: response.body._source as Record<string, unknown> };
