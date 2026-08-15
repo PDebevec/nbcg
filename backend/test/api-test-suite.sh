@@ -723,7 +723,7 @@ assert_status "Upload PDF with pre-extracted text" "201"
 # Verify extractedText was stored
 TEXT_STATUS=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['textExtractionStatus'])" 2>/dev/null || echo "")
 if [ "$TEXT_STATUS" = "EXTRACTED" ]; then
-  echo -e "  ${GREEN}PASS${NC} textExtractionStatus is EXTRACTED (Tika skipped)"
+  echo -e "  ${GREEN}PASS${NC} textExtractionStatus is EXTRACTED"
   ((PASSED++))
 else
   echo -e "  ${RED}FAIL${NC} Expected textExtractionStatus=EXTRACTED, got $TEXT_STATUS"

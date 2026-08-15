@@ -24,7 +24,7 @@ import { ResourceAccessService } from '../../core/auth/resource-access.service';
 import type { Principal } from '../../core/auth/principal.type';
 import { MetricsService } from '../../core/metrics/metrics.service';
 import { FilesService } from './files.service';
-import { ReextractDto, ReplaceFileDto, SetTextDto, UploadFilesDto } from './dto/upload-files.dto';
+import { ReplaceFileDto, SetTextDto, UploadFilesDto } from './dto/upload-files.dto';
 
 /**
  * Build an RFC 6266 Content-Disposition value.
@@ -75,7 +75,7 @@ export class FilesController {
       await this.filesService.cleanupTempFiles(files);
       throw err;
     }
-    return this.filesService.upload(itemId, files, actorOf(principal), body.doOCR ?? false, body.extractedTexts, body.role);
+    return this.filesService.upload(itemId, files, actorOf(principal), body.extractedTexts, body.role);
   }
 
   @Put(':fileId')
@@ -99,7 +99,7 @@ export class FilesController {
     if (!file) {
       throw new BadRequestException('No file provided — send multipart form data with a "file" field');
     }
-    return this.filesService.replace(fileId, file, actorOf(principal), body.doOCR ?? false, body.extractedText);
+    return this.filesService.replace(fileId, file, actorOf(principal), body.extractedText);
   }
 
   @Put(':fileId/text')
@@ -110,16 +110,6 @@ export class FilesController {
   ) {
     await this.access.assertCanManageFile(principal, fileId);
     return this.filesService.setText(fileId, body.text);
-  }
-
-  @Post(':fileId/extract')
-  async reextract(
-    @GetPrincipal() principal: Principal,
-    @Param('fileId') fileId: string,
-    @Body() body: ReextractDto,
-  ) {
-    await this.access.assertCanManageFile(principal, fileId);
-    return this.filesService.reextract(fileId, body.doOCR ?? true);
   }
 
   @Get(':itemId')

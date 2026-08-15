@@ -7,8 +7,7 @@ import { fetch as undiciFetch } from 'undici';
  *
  * Raw `undici` rather than `@keycloak/keycloak-admin-client`: three endpoints
  * are needed, and the official client is a large dependency with a history of
- * ESM/CJS friction in CommonJS Nest builds. This follows the house pattern in
- * `tika.service.ts`.
+ * ESM/CJS friction in CommonJS Nest builds.
  *
  * The service account holds `view-users` + `view-clients` and nothing more —
  * not `realm-admin`, which is 18 roles including `manage-users` and

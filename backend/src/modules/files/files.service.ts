@@ -11,8 +11,6 @@ import type { Actor } from '../../core/auth/actor.type';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { RevisionsService } from '../../core/revisions/revisions.service';
 import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
-import { TikaService } from '../../core/tika/tika.service';
-import { PdfExtractionQueueService } from './queue/pdf-extraction-queue.service';
 
 const MIME_TO_FILE_TYPE: Record<string, FileType> = {
   'image/jpeg': FileType.IMAGE,
@@ -27,8 +25,6 @@ export class FilesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly seaweedfs: SeaweedfsService,
-    private readonly pdfQueue: PdfExtractionQueueService,
-    private readonly tika: TikaService,
     private readonly revisions: RevisionsService,
   ) {}
 
@@ -39,7 +35,7 @@ export class FilesService {
     );
   }
 
-  async upload(itemId: string, files: Express.Multer.File[], actor: Actor, doOcr = false, extractedTextsJson?: string, role?: FileRole) {
+  async upload(itemId: string, files: Express.Multer.File[], actor: Actor, extractedTextsJson?: string, role?: FileRole) {
     if (!files?.length) {
       throw new BadRequestException('No files provided — send multipart form data with a "files" field');
     }
@@ -135,33 +131,6 @@ export class FilesService {
       })),
     );
 
-    // Enqueue Tika extraction only for PDFs that did NOT have text pre-supplied.
-    // Best-effort: files are already stored at this point, so a queue failure
-    // (e.g. Redis down) must not fail the request — extraction can be
-    // re-triggered later via POST /files/:fileId/extract.
-    const pdfsNeedingExtraction = created.filter(
-      (f) => f.mimeType === 'application/pdf' && !extractedTexts?.[f.filename],
-    );
-    if (pdfsNeedingExtraction.length > 0) {
-      try {
-        const languageCodes = await this.getItemLanguageCodes(itemId, itemType);
-        for (const file of pdfsNeedingExtraction) {
-          await this.pdfQueue.enqueue({
-            fileAttachmentId: file.id,
-            originalFid: file.originalFid,
-            filename: file.filename,
-            languageCodes,
-            doOcr,
-          });
-        }
-      } catch (err) {
-        this.logger.error(
-          `Failed to enqueue PDF extraction for item ${itemId} — upload succeeded, extraction must be re-triggered`,
-          err instanceof Error ? err.stack : String(err),
-        );
-      }
-    }
-
     return created;
   }
 
@@ -169,7 +138,7 @@ export class FilesService {
    * Replace an existing attachment's blob (and optionally its text) in place.
    * The attachment id stays stable — only the underlying file content changes.
    */
-  async replace(fileId: string, file: Express.Multer.File, actor: Actor, doOcr = false, extractedText?: string) {
+  async replace(fileId: string, file: Express.Multer.File, actor: Actor, extractedText?: string) {
     const existing = await this.prisma.fileAttachment.findUnique({ where: { id: fileId } });
     if (!existing) {
       await unlink(file.path).catch(() => undefined);
@@ -203,7 +172,7 @@ export class FilesService {
             extractedText: extractedText || null,
             textExtractionStatus: this.classifyText(extractedText),
           } : {
-            // No text supplied — reset extraction status so Tika can re-extract
+            // No text supplied — reset extraction status
             extractedText: null,
             textExtractionStatus: TextExtractionStatus.NOT_EXTRACTED,
           }),
@@ -231,52 +200,7 @@ export class FilesService {
       });
     }
 
-    // Enqueue Tika extraction for PDFs without pre-supplied text
-    if (file.mimetype === 'application/pdf' && !hasSuppliedText) {
-      try {
-        const itemId = existing.draft_id ?? existing.record_id;
-        const languageCodes = itemId
-          ? await this.getItemLanguageCodes(itemId, existing.draft_id ? 'draft' : 'record')
-          : [];
-        await this.pdfQueue.enqueue({
-          fileAttachmentId: fileId,
-          originalFid: fid,
-          filename: file.originalname,
-          languageCodes,
-          doOcr,
-        });
-      } catch (err) {
-        this.logger.error(
-          `Failed to enqueue PDF extraction after replace for ${fileId} — extraction must be re-triggered`,
-          err instanceof Error ? err.stack : String(err),
-        );
-      }
-    }
-
     return updated;
-  }
-
-  /** Re-enqueue text extraction for an already-uploaded PDF attachment. Defaults to OCR — that's what the endpoint is for. */
-  async reextract(fileId: string, doOcr = true): Promise<{ enqueued: true }> {
-    const file = await this.prisma.fileAttachment.findUnique({ where: { id: fileId } });
-    if (!file) throw new NotFoundException(`File not found: ${fileId}`);
-    if (file.mimeType !== 'application/pdf') {
-      throw new BadRequestException(`Text extraction is only supported for PDFs, got ${file.mimeType}`);
-    }
-
-    const itemId = file.draft_id ?? file.record_id;
-    const languageCodes = itemId
-      ? await this.getItemLanguageCodes(itemId, file.draft_id ? 'draft' : 'record')
-      : [];
-
-    await this.pdfQueue.enqueue({
-      fileAttachmentId: file.id,
-      originalFid: file.originalFid,
-      filename: file.filename,
-      languageCodes,
-      doOcr,
-    });
-    return { enqueued: true };
   }
 
   async listByItem(itemId: string) {
@@ -350,20 +274,58 @@ export class FilesService {
   /** Classify extracted text as EXTRACTED, GARBAGE, or NO_TEXT. */
   private classifyText(text: string | undefined | null): TextExtractionStatus {
     if (!text) return TextExtractionStatus.NO_TEXT;
-    if (this.tika.looksGarbled(text)) return TextExtractionStatus.GARBAGE;
+    if (this.looksGarbled(text)) return TextExtractionStatus.GARBAGE;
     return TextExtractionStatus.EXTRACTED;
   }
 
-  private async getItemLanguageCodes(itemId: string, itemType: 'draft' | 'record'): Promise<string[]> {
-    const item = itemType === 'draft'
-      ? await this.prisma.draft.findUnique({ where: { id: itemId }, select: { metadata: true } })
-      : await this.prisma.record.findUnique({ where: { id: itemId }, select: { metadata: true } });
+  /**
+   * Detects broken font-to-Unicode mappings in embedded PDF text.
+   * Two signals:
+   * 1. Symbols/digits sandwiched between letters within words
+   *    (e.g. "&4Н1*егпед", "(5гб(1псће", "®фгШеб")
+   * 2. Latin and Cyrillic mixed within the same word
+   *    (e.g. "итМГепђе" next to "Schilderung" in the same passage)
+   */
+  private looksGarbled(text: string): boolean {
+    const words = text.slice(0, 5000).split(/\s+/).filter(w => w.length >= 3);
+    if (words.length < 10) return false;
 
-    const metadata = item?.metadata as Record<string, unknown> | null;
-    const languages = metadata?.language as Array<{ code?: string }> | undefined;
-    if (!languages?.length) return [];
+    const LATIN = /[a-zA-ZÀ-ɏ]/;
+    const CYRILLIC = /[Ѐ-ӿ]/;
+    // Symbols/digits that should never appear mid-word
+    const SYMBOL = /[0-9*&@#$®©™§¶†‡°±×÷()\[\]|<>^~`]/;
 
-    return languages.map(l => l.code).filter((c): c is string => !!c);
+    let suspicious = 0;
+    let latinWords = 0;
+    let cyrillicWords = 0;
+
+    for (const word of words) {
+      const hasLatin = LATIN.test(word);
+      const hasCyrillic = CYRILLIC.test(word);
+
+      if (hasLatin) latinWords++;
+      if (hasCyrillic) cyrillicWords++;
+
+      // Mixed scripts within a single word
+      if (hasLatin && hasCyrillic) {
+        suspicious++;
+        continue;
+      }
+
+      // Strip leading/trailing punctuation, then check for symbols between letters
+      const inner = word.replace(/^[^\p{L}\d]+|[^\p{L}\d]+$/gu, '');
+      if (inner.length < 3) continue;
+      if (/\p{L}/u.test(inner) && SYMBOL.test(inner) && /\p{L}.*[0-9*&@#$®©™§()\[\]|<>^~`].*\p{L}/u.test(inner)) {
+        suspicious++;
+      }
+    }
+
+    // Also flag if document has significant presence of both scripts (>15% each)
+    // which suggests font encoding mapped Latin glyphs to Cyrillic codepoints
+    const total = words.length;
+    const bothScripts = latinWords / total > 0.15 && cyrillicWords / total > 0.15;
+
+    return suspicious / total > 0.1 || bothScripts;
   }
 
   private async resolveItem(itemId: string): Promise<'draft' | 'record'> {

@@ -534,10 +534,6 @@ summarise as `N/N running · N healthy · …`.
 - **Keycloak's `resetPasswordAllowed` is on, but `smtpServer` is `{}`** — the
   password-reset flow will fail at the point of sending mail. Configure SMTP in
   the realm or turn the feature off.
-- **`TikaService` reads `TIKA_HOST`, but the tika service was removed** from the
-  infrastructure. The variable is generated empty so the dependency stays
-  visible — restoring the service or dropping `TikaService` is a decision for
-  you.
 - **SeaweedFS `filer`, `s3` and `webdav` may be unused.** The backend talks only
   to `master` and `volume`
   ([`seaweedfs.service.ts`](../backend/src/core/seaweedfs/seaweedfs.service.ts)),
