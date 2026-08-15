@@ -64,7 +64,7 @@ http {
     server {
         listen 443 ssl default_server;
         http2 on;
-        server_name 10.10.12.1 nbcg.me;
+        server_name $(ALLOWED_HOSTNAMES_SPACED);
 
         ssl_certificate     /etc/nginx/certs/server.crt;
         ssl_certificate_key /etc/nginx/certs/server.key;
@@ -101,7 +101,7 @@ http {
         # setGlobalPrefix('api'), so it expects to see it.
         # -----------------------------------------------------------------
         location /api/ {
-            set $upstream_backend http://backend:3000;
+            set $upstream_backend http://backend:$(BACKEND_PORT_INTERNAL);
             proxy_pass $upstream_backend;
         }
 
@@ -110,7 +110,7 @@ http {
         # so there is nothing to rewrite here either.
         # -----------------------------------------------------------------
         location /auth/ {
-            set $upstream_keycloak http://keycloak:8080;
+            set $upstream_keycloak http://keycloak:$(KEYCLOAK_PORT_INTERNAL);
             proxy_pass $upstream_keycloak;
             # Keycloak sends large headers after a login round-trip
             proxy_buffer_size   8k;
@@ -146,7 +146,7 @@ http {
             proxy_set_header     X-Forwarded-Host  $host;
             proxy_set_header     X-Forwarded-Port  $server_port;
             proxy_set_header     X-Script-Name     /pgadmin;
-            set $upstream_pgadmin http://pgadmin:80;
+            set $upstream_pgadmin http://pgadmin:$(PGADMIN_PORT_INTERNAL);
             proxy_pass $upstream_pgadmin/$1$is_args$args;
         }
 
@@ -155,7 +155,7 @@ http {
         location /dashboards/ {
             auth_basic           "Restricted";
             auth_basic_user_file /etc/nginx/htpasswd;
-            set $upstream_dashboards http://opensearch-dashboards:5601;
+            set $upstream_dashboards http://opensearch-dashboards:$(OPENSEARCH_DASHBOARDS_INTERNAL);
             proxy_pass $upstream_dashboards;
         }
 

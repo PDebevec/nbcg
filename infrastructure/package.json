@@ -1,0 +1,24 @@
+{
+  "name": "infrastructure",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "cli.js",
+  "scripts": {
+    "cli": "node cli.js",
+    "list": "node scripts/run.js list",
+    "check": "node scripts/run.js check",
+    "setup": "node scripts/run.js setup",
+    "step": "node scripts/run.js step",
+    "docker": "node scripts/run.js docker",
+    "app": "node scripts/run.js app",
+    "clear": "node scripts/run.js clear",
+    "config": "node scripts/run.js config"
+  },
+  "dependencies": {
+    "inquirer": "^14.0.2",
+    "pm2": "^7.0.3"
+  }
+}

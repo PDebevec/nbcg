@@ -1,163 +1,112 @@
-.PHONY: $(shell grep -E '^[a-zA-Z0-9_-]+:' Makefile | cut -d: -f1)
+#####
+# Entry point for the infrastructure CLI.
+#
+# Every target here is a thin call into infrastructure/package.json's npm
+# scripts, which are themselves aliases for infrastructure/scripts/run.js.
+# The CLI stays runnable directly (`cd infrastructure && npm run ...`) — this
+# file exists so you never have to change directory first.
+#
+# The legacy `scripts/*.sh` flow is no longer wired up here. Those scripts are
+# still on disk and still runnable by hand; the CLI supersedes them.
+#####
 
-ENV ?= dev
+ENV   ?= dev
+INFRA := infrastructure
+NPM   := npm --prefix $(INFRA) --silent
 
-#####
-# check system requirements
-#####
-check-requirements:
-	./infrastructure/scripts/check-requirements.sh
-
-#####
-# generate env
-#####
-env:
-	./infrastructure/scripts/generate-env.sh ${ENV}
-
-#####
-# generate env for frontend and backend, only specific to those
-#####
-end-env:
-	./infrastructure/scripts/gen-end-env.sh
+.PHONY: help deps cli list check setup step config clear app docker \
+        up down down-v stop restart create ps build pull logs migrate health \
+        cron-backup cron-restore
 
 #####
-# copy config file
+# npm dependencies for the CLI itself. `touch` keeps the directory newer than
+# package.json so this only reruns when the manifest actually changes.
 #####
-config:
-	cp config.template.yml config.yml
+deps: $(INFRA)/node_modules
+
+$(INFRA)/node_modules: $(INFRA)/package.json
+	npm --prefix $(INFRA) install
+	@touch $@
 
 #####
-# apply config
+# interactive menus
 #####
-apply-conf:
-	./infrastructure/scripts/apply-conf.sh
+cli: deps
+	$(NPM) run cli
 
 #####
-# apply env
+# setup pipeline
+#   make check ENV=prod
+#   make setup ENV=prod
+#   make step STEP=config ENV=dev
+#   make step STEP=env ENV=prod FLAGS=--rotate
 #####
-apply-env:
-	./infrastructure/scripts/apply-env.sh
+list: deps
+	$(NPM) run list
+
+check: deps
+	$(NPM) run check -- $(ENV)
+
+setup: deps
+	$(NPM) run setup -- $(ENV)
+
+step: deps
+	$(NPM) run step -- $(STEP) $(ENV) $(FLAGS)
 
 #####
-# copy docker to base dir
+# master.config.json vs its template
+#   make config A=diff
+#   make config A=merge
 #####
-docker:
-	cp infrastructure/docker/docker-compose.yml .
-	cp infrastructure/docker/docker-compose.${ENV}.yml ./docker-compose.ext.yml
-
-#####
-# initialize backend and frontend env
-#####
-back-end:
-	cd backend && npm ci
-
-front-end:
-	cd frontend && npm ci
+config: deps
+	$(NPM) run config -- $(A)
 
 #####
-# startup scripts
+# remove generated artifacts
+#   make clear T=list
+#   make clear T=volumes FLAGS=--yes
 #####
-init-dev:
-	$(MAKE) env ENV=dev
-	$(MAKE) config
-	$(MAKE) apply-conf
-	$(MAKE) end-env
-	$(MAKE) apply-env
-	$(MAKE) docker ENV=dev
-	$(MAKE) back-end
-	$(MAKE) front-end
-	$(MAKE) create
-
-init-prod:
-	$(MAKE) env ENV=prod
-	$(MAKE) config
-	$(MAKE) apply-conf
-	$(MAKE) end-env
-	$(MAKE) apply-env
-	$(MAKE) docker ENV=prod
-	$(MAKE) cert-gen
-	$(MAKE) create
-
-migrate:
-	./infrastructure/scripts/migrate.sh
+clear: deps
+	$(NPM) run clear -- $(T) $(FLAGS)
 
 #####
-# quich create
+# pm2-managed frontend / backend (dev only)
+#   make app A=start T=backend
 #####
-qc:
-	$(MAKE) init-dev
-
-#####
-# quich start
-#####
-qs:
-	$(MAKE) init-dev
-	$(MAKE) start
-	$(MAKE) migrate
+app: deps
+	$(NPM) run app -- $(A) $(T)
 
 #####
-# docker create and start
+# any docker action, optionally scoped to services
+#   make docker A=up SVC="db redis"
 #####
-create:
-	docker compose -f docker-compose.yml -f docker-compose.ext.yml create
-
-up:
-	docker compose -f docker-compose.yml -f docker-compose.ext.yml up -d
+docker: deps
+	$(NPM) run docker -- $(A) $(SVC)
 
 #####
-# handle docker services
+# shortcuts for the common docker actions. $@ is the target name, which is
+# also the CLI action name — so `make up SVC=db` is `docker -- up db`.
 #####
-start:
-	docker compose -f docker-compose.yml -f docker-compose.ext.yml start
-
-stop:
-	docker compose -f docker-compose.yml -f docker-compose.ext.yml stop
-
-restart:
-	docker compose -f docker-compose.yml -f docker-compose.ext.yml restart
-
-ps:
-	docker compose ps -a
+up down down-v stop restart create ps build pull logs migrate health: deps
+	$(NPM) run docker -- $@ $(SVC)
 
 #####
-# destroy
-#####
-down:
-	docker compose -f docker-compose.yml -f docker-compose.ext.yml down
-
-down-v:
-	docker compose -f docker-compose.yml -f docker-compose.ext.yml down -v
-	./infrastructure/scripts/clear-volumes.sh
-
-clear:
-	$(MAKE) down
-	rm -f docker-compose.yml
-	rm -f docker-compose.ext.yml
-	rm -f .env
-	rm -f backend/.env
-	rm -f frontend/.env
-	rm -f infrastructure/docker/nginx/certs/*
-	rm -f infrastructure/docker/pgadmin/servers.json
-	rm -f config.yml
-
-qd:
-	$(MAKE) down-v
-	$(MAKE) clear
-
-#####
-# generate self signed certificate
-#####
-cert-gen:
-	./infrastructure/scripts/cert-gen.sh
-
-#####
-# backup script for cron job
+# cron jobs. Kept as shell scripts: the CLI has no equivalent for these.
 #####
 cron-backup:
 	./infrastructure/scripts/backup.sh
 
-#####
-# restore script for cron job
-#####
 cron-restore:
 	./infrastructure/scripts/restore.sh
+
+help:
+	@echo "make cli                          interactive menus"
+	@echo "make check|setup ENV=dev|prod     prerequisites / whole pipeline"
+	@echo "make step STEP=<key> [ENV=] [FLAGS=--force]"
+	@echo "make list                         every step and action, with status"
+	@echo "make config A=diff|merge          master.config.json vs template"
+	@echo "make clear T=<target> [FLAGS=--yes]"
+	@echo "make app A=<action> T=frontend|backend"
+	@echo "make docker A=<action> [SVC=\"db redis\"]"
+	@echo "make up|down|down-v|stop|restart|create|ps|build|pull|logs|migrate|health [SVC=]"
+	@echo "make cron-backup|cron-restore"

@@ -1,0 +1,15 @@
+node_modules
+dist
+.quasar
+quasar.config.*.temporary.compiled*
+.git
+.gitignore
+npm-debug.log*
+.DS_Store
+.idea
+
+# NOTE: .env is deliberately NOT ignored. Quasar reads it at build time and
+# inlines every VITE_* value into the bundle, so excluding it would produce an
+# image whose Keycloak configuration is empty — the "[keycloak] Missing config"
+# failure, baked in permanently.
+.env.local*

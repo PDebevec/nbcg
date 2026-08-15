@@ -48,6 +48,15 @@ services:
         condition: service_healthy
       keycloak-db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/misc/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # pgAdmin takes ~30s to boot gunicorn and load servers.json. Without
+      # this, those first failures count against `retries` and the container
+      # is briefly reported unhealthy even though it comes up fine.
+      start_period: 60s
 
 ##### REDIS #####
   redis:
@@ -55,6 +64,11 @@ services:
     restart: unless-stopped
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 ##### KEYCLOAK DATABASE #####
   keycloak-db:
@@ -84,14 +98,25 @@ services:
       keycloak-db:
         condition: service_healthy
     environment:
-      KC_HOSTNAME_PORT: ${INTERNAL_HTTPHTTP}
       KC_HEALTH_ENABLED: true
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # KEYCLOAK_ADMIN / KEYCLOAK_ADMIN_PASSWORD were renamed in Keycloak 26;
+      # the old names still work but log a deprecation warning on every start.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-db:${INTERNAL_POSTGRES}/${KEYCLOAK_POSTGRES_DB}
+      # in-network address: must be the container port, not the published one
+      KC_DB_URL: jdbc:postgresql://keycloak-db:${KEYCLOAK_POSTGRES_PORT_INTERNAL}/${KEYCLOAK_POSTGRES_DB}
       KC_DB_USERNAME: ${KEYCLOAK_POSTGRES_USER}
       KC_DB_PASSWORD: ${KEYCLOAK_POSTGRES_PASSWORD}
+    healthcheck:
+      # The Keycloak image ships no curl and no wget, so the probe is done with
+      # bash's /dev/tcp. Health lives on the management port (9000), not on
+      # 8080 — Keycloak moved it there in 25.x.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
 ##### PGSYNC #####
   pgsync:
@@ -101,14 +126,14 @@ services:
       - REDIS_CHECKPOINT=true
       - REDIS_HOST=redis
       - PG_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
-      - ELASTICSEARCH_URL=http://opensearch-node:${INTERNAL_OPENSEARCH_NODE_P1}
+      - ELASTICSEARCH_URL=http://opensearch-node:${OPENSEARCH_NODE_P1_INTERNAL}
       - ELASTICSEARCH=false
       - OPENSEARCH=true
     depends_on:
       db:
         condition: service_healthy
       redis:
-        condition: service_started # Redis is usually instant, but you can add a healthcheck there too
+        condition: service_started
       opensearch-node:
         condition: service_healthy
     volumes:
@@ -142,67 +167,88 @@ services:
     volumes:
       - opensearch-data:/usr/share/opensearch/data
 
-##### dashboard
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:3.5.0
     depends_on:
      - opensearch-node
     environment:
-      OPENSEARCH_HOSTS: '["http://opensearch-node:${INTERNAL_OPENSEARCH_NODE_P1}"]'
+      OPENSEARCH_HOSTS: '["http://opensearch-node:${OPENSEARCH_NODE_P1_INTERNAL}"]'
       DISABLE_SECURITY_DASHBOARDS_PLUGIN: true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
 ##### SEAWEEDFS #####
   master:
-    image: chrislusf/seaweedfs:4.23 # use a remote image
+    image: chrislusf/seaweedfs:4.23
     restart: unless-stopped
-    ports:
-      - ${EXTERNAL_SEAWEEDFS_MASTER_P1}:${INTERNAL_SEAWEEDFS_MASTER}
-      - ${EXTERNAL_SEAWEEDFS_MASTER_P2}:19333
-      - ${EXTERNAL_SEAWEEDFS_MASTER_P3}:9324
     command: 'master -ip=master -ip.bind=0.0.0.0 -metricsPort=9324'
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9333/cluster/status"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
   volume:
-    image: chrislusf/seaweedfs:4.23 # use a remote image
+    image: chrislusf/seaweedfs:4.23
     volumes:
       - seaweedfs-data:/data
     restart: unless-stopped
-    ports:
-      - ${EXTERNAL_SEAWEEDFS_VOLUME_P1}:${INTERNAL_SEAWEEDFS_VOLUME}
-      - ${EXTERNAL_SEAWEEDFS_VOLUME_P2}:18080
-      - ${EXTERNAL_SEAWEEDFS_VOLUME_P3}:9325
-    command: 'volume -ip=volume -master="master:${INTERNAL_SEAWEEDFS_MASTER}" -ip.bind=0.0.0.0 -port=8080 -metricsPort=9325'
+    command: 'volume -ip=volume -master="master:9333" -ip.bind=0.0.0.0 -port=8080 -metricsPort=9325'
     depends_on:
-      - master
+      master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/status"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
   filer:
-    image: chrislusf/seaweedfs:4.23 # use a remote image
+    image: chrislusf/seaweedfs:4.23
     restart: unless-stopped
-    ports:
-      - ${EXTERNAL_SEAWEEDFS_FILER_P1}:8888
-      - ${EXTERNAL_SEAWEEDFS_FILER_P2}:18888
-      - ${EXTERNAL_SEAWEEDFS_FILER_P3}:9326
-    command: 'filer -ip=filer -master="master:9333" -ip.bind=0.0.0.0 -metricsPort=9326 -maxMB=4096' 
+    command: 'filer -ip=filer -master="master:9333" -ip.bind=0.0.0.0 -metricsPort=9326 -maxMB=4096'
     tty: true
     stdin_open: true
     depends_on:
-      - master
-      - volume
+      master:
+        condition: service_healthy
+      volume:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8888/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
   s3:
-    image: chrislusf/seaweedfs:4.23 # use a remote image
+    image: chrislusf/seaweedfs:4.23
     restart: unless-stopped
-    ports:
-      - ${EXTERNAL_SEAWEEDFS_S3_P1}:8333
-      - ${EXTERNAL_SEAWEEDFS_S3_P2}:9327
     command: 's3 -filer="filer:8888" -ip.bind=0.0.0.0 -metricsPort=9327'
     depends_on:
-      - master
-      - volume
-      - filer
+      master:
+        condition: service_healthy
+      volume:
+        condition: service_healthy
+      filer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8333/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
   webdav:
-    image: chrislusf/seaweedfs:4.23 # use a remote image
+    image: chrislusf/seaweedfs:4.23
     restart: unless-stopped
-    ports:
-      - ${EXTERNAL_SEAWEEDFS_WEBDAV}:7333
     command: 'webdav -filer="filer:8888"'
     depends_on:
-      - master
-      - volume
-      - filer
+      master:
+        condition: service_healthy
+      volume:
+        condition: service_healthy
+      filer:
+        condition: service_healthy

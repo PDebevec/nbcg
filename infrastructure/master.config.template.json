@@ -1,0 +1,105 @@
+{
+  "available_hostnames":["localhost", "127.0.0.1", "10.10.12.1", "nbcg.me"],
+  "ports": {
+    "POSTGRES_PORT": { "internal": 5432, "external": 15432 },
+    "KEYCLOAK_POSTGRES_PORT": { "internal": 5432, "external": 25432 },
+    "KEYCLOAK_PORT": { "internal": 8080, "external": 8082 },
+    "PGADMIN_PORT": { "internal": 80, "external": 8081 },
+    "REDIS_PORT": { "internal": 6379, "external": 6379 },
+    "OPENSEARCH_NODE_P1": { "internal": 9200, "external": 9200 },
+    "OPENSEARCH_NODE_P2": { "internal": 9600, "external": 9600 },
+    "OPENSEARCH_DASHBOARDS": { "internal": 5601, "external": 5601 },
+    "SEAWEEDFS_MASTER_P1": { "internal": 9333, "external": 9333 },
+    "SEAWEEDFS_MASTER_P2": { "internal": 19333, "external": 19333 },
+    "SEAWEEDFS_MASTER_P3": { "internal": 9324, "external": 9324 },
+    "SEAWEEDFS_VOLUME_P1": { "internal": 8080, "external": 8083 },
+    "SEAWEEDFS_VOLUME_P2": { "internal": 18080, "external": 18083 },
+    "SEAWEEDFS_VOLUME_P3": { "internal": 9325, "external": 9325 },
+    "SEAWEEDFS_FILER_P1": { "internal": 8888, "external": 8888 },
+    "SEAWEEDFS_FILER_P2": { "internal": 18888, "external": 18888 },
+    "SEAWEEDFS_FILER_P3": { "internal": 9326, "external": 9326 },
+    "SEAWEEDFS_S3_P1": { "internal": 8333, "external": 8333 },
+    "SEAWEEDFS_S3_P2": { "internal": 9327, "external": 9327 },
+    "SEAWEEDFS_WEBDAV": { "internal": 7333, "external": 7333 },
+    "BACKEND_PORT": { "internal": 3000, "external": 3000 },
+    "HTTP_PORT": { "internal": 80, "external": 80 },
+    "HTTPS_PORT": { "internal": 443, "external": 443 }
+  },
+  "prod_published_ports": {
+    "comment": "Ports the PRODUCTION stack actually publishes to the host.",
+    "names": ["HTTP_PORT", "HTTPS_PORT"]
+  },
+  "certificates": {
+    "comment": "Subject of every generated certificate.",
+    "subject": { "C": "ME", "ST": "State", "L": "City", "O": "NBCG", "OU": "IT" },
+    "ca_common_name": "NBCG Internal CA",
+    "leaf_days": 825,
+    "ca_days": 3650,
+    "nginx_external": false,
+    "nginx_external_comment": "Set nginx_external to true after placing a real certificate at docker/certs/nginx/server.crt + server.key."
+  },
+  "secrets_to_generate": [
+    "POSTGRES_PASSWORD",
+    "KEYCLOAK_POSTGRES_PASSWORD",
+    "KEYCLOAK_ADMIN_PASSWORD",
+    "PGADMIN_DEFAULT_PASSWORD",
+    "OPENSEARCH_INITIAL_ADMIN_PASSWORD",
+    "OPENSEARCH_APP_PASSWORD",
+    "OPENSEARCH_DASHBOARDS_PASSWORD",
+    "ADMIN_UI_PASSWORD",
+    "SEAWEEDFS_S3_SECRET"
+  ],
+  "conf_templates": [
+    { "template": "docker/pgadmin/servers.conf.json", "output": "docker/pgadmin/servers.json" },
+    { "template": "docker/keycloak/nbcg-realm.conf.json", "output": "docker/keycloak/nbcg-realm.json" },
+    { "template": "docker/nginx/nginx.conf.template", "output": "docker/nginx/nginx.conf" },
+    { "template": "docker/nginx/htpasswd.template", "output": "docker/nginx/htpasswd" }
+  ],
+  "env_routing": {
+    "frontend": {
+      "path": "./frontend",
+      "vars": {
+        "VITE_KEYCLOAK_URL": "${KEYCLOAK_URL}",
+        "VITE_KEYCLOAK_REALM": "${KEYCLOAK_REALM}",
+        "VITE_KEYCLOAK_CLIENT_ID": "nbcg-web",
+        "VITE_KEYCLOAK_API_CLIENT_ID": "nbcg-api"
+      }
+    },
+    "backend": {
+      "path": "./backend",
+      "vars": {
+        "NODE_ENV": "${NODE_ENV}",
+        "PORT": "${BACKEND_PORT}",
+        "CORS_ORIGIN": "${CORS_ORIGIN}",
+        "DATABASE_URL": "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOSTNAME}:${POSTGRES_PORT}/${POSTGRES_DB}?schema=public",
+        "REDIS_HOST": "${REDIS_HOSTNAME}",
+        "REDIS_PORT": "${REDIS_PORT}",
+        "KEYCLOAK_URL": "${KEYCLOAK_URL}",
+        "KEYCLOAK_REALM": "${KEYCLOAK_REALM}",
+        "KEYCLOAK_CLIENT_ID": "nbcg-api",
+        "OPENSEARCH_URL": "${OPENSEARCH_URL}",
+        "SEAWEEDFS_MASTER": "http://${SEAWEEDFS_MASTER_HOSTNAME}:${SEAWEEDFS_MASTER_P1}",
+        "SEAWEEDFS_VOLUME": "http://${SEAWEEDFS_VOLUME_HOSTNAME}:${SEAWEEDFS_VOLUME_P1}",
+        "COBISS_TOKEN": "${COBISS_TOKEN}"
+      }
+    },
+    "external": {
+      "path": "../nbcg-external",
+      "vars": {}
+    }
+  },
+  "apps": {
+    "frontend": {
+      "setup": [
+        { "command": "npm", "args": ["install"], "options": {} }
+      ],
+      "run": { "command": "npm", "args": ["run", "dev"], "options": {} }
+    },
+    "backend": {
+      "setup": [
+        { "command": "npm", "args": ["install"], "options": {} }
+      ],
+      "run": { "command": "npm", "args": ["run", "start:dev"], "options": {} }
+    }
+  }
+}

@@ -34,8 +34,9 @@
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername(undefined) and passwordHistory(3)",
   "editUsernameAllowed": false,
-  "bruteForceProtected": false,
+  "bruteForceProtected": true,
   "permanentLockout": false,
   "maxTemporaryLockouts": 0,
   "bruteForceStrategy": "MULTIPLE",
@@ -44,7 +45,7 @@
   "waitIncrementSeconds": 60,
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
-  "failureFactor": 30,
+  "failureFactor": 5,
   "roles": {
     "realm": [
       {
@@ -688,8 +689,7 @@
           "records:manage"
         ],
         "realm-management": [
-          "view-users",
-          "view-clients"
+          "view-users"
         ]
       },
       "notBefore": 0,
@@ -962,22 +962,14 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "redirectUris": [
-        "http://localhost:3000/*",
-        "http://localhost:3080/*",
-        "http://localhost:5173/*"
-      ],
-      "webOrigins": [
-        "http://localhost:3000",
-        "http://localhost:3080",
-        "http://localhost:5173"
-      ],
+      "redirectUris": $(KEYCLOAK_WEB_REDIRECT_URIS),
+      "webOrigins": $(KEYCLOAK_WEB_ORIGINS),
       "notBefore": 0,
       "bearerOnly": false,
       "consentRequired": false,
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "publicClient": true,
       "frontchannelLogout": false,
@@ -988,7 +980,7 @@
         "oidc.ciba.grant.enabled": "false",
         "backchannel.logout.session.required": "false",
         "standard.token.exchange.enabled": "false",
-        "post.logout.redirect.uris": "http://localhost:3000/*##http://localhost:3080/*##http://localhost:5173/*",
+        "post.logout.redirect.uris": "$(KEYCLOAK_WEB_POST_LOGOUT_URIS)",
         "oauth2.device.authorization.grant.enabled": "false",
         "display.on.consent.screen": "false",
         "pkce.code.challenge.method": "S256",
@@ -1038,7 +1030,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "CHANGE_ME_worker_secret",
+      "secret": "**********",
       "redirectUris": [],
       "webOrigins": [],
       "notBefore": 0,

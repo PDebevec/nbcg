@@ -1,4 +1,33 @@
 ##### PRODUCTION #####
+#
+# A project name of its own, so prod's volumes and containers never collide
+# with dev's on the same host. Without this both environments share
+# nbcg_postgres-data and nbcg_keycloak-data — and since Postgres only applies
+# POSTGRES_PASSWORD when it initialises an empty data directory, switching
+# dev -> prod hands the generated production password to a database that was
+# created with the development one. It fails as
+# "password authentication failed for user nbcg", which looks like a secrets
+# bug rather than a shared-volume one.
+#
+name: nbcg
+# Topology
+#   frontend network (bridge, has egress)
+#     nginx        the only thing published to the host (80/443)
+#     frontend     static SPA, reached only by nginx
+#     backend      reached by nginx; needs egress for COBISS/IZUM
+#
+#   backend network (internal: true, NO egress)
+#     everything else: db, keycloak-db, keycloak, redis, opensearch,
+#     pgsync, pgadmin, dashboards, seaweedfs
+#
+# TLS terminates at nginx. Inside the compose network services speak plain
+# HTTP, except OpenSearch, whose security plugin requires TLS.
+#
+# nginx carries a network ALIAS equal to PUBLIC_HOSTNAME. That is what lets the
+# backend resolve the public URL from inside the network, so the token issuer
+# it verifies and the JWKS endpoint it fetches are the same URL a browser uses.
+# Without it the backend cannot validate a single token.
+
 networks:
   frontend:
     driver: bridge
@@ -9,35 +38,92 @@ networks:
 volumes:
 ##### NGINX
   nginx-logs:
-  nginx-certs:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${NGINX_CERTIFICATE_LOCATION}
+##### SEAWEEDFS — filer metadata (leveldb); prod-only because dev does not
+##### keep the filer's state across recreates
+  seaweedfs-filer:
 
-##### NGINX #####
 services:
+##### NGINX #####
   nginx:
     image: nginx:1.29.5-perl
-    user: nginx
+    # No `user:` override. The image already drops its WORKER processes to the
+    # nginx user via its own directive; the master must stay root to write the
+    # pid file and to create /var/cache/nginx. Overriding it makes nginx exit
+    # with "mkdir /var/cache/nginx/client_temp failed (13: Permission denied)".
     restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-k", "-f", "https://localhost/"]
+      # This image does ship curl (the -perl tag is the full Debian image).
+      # -k because the certificate is signed by our own CA.
+      test: ["CMD", "curl", "-kf", "https://localhost/"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
     networks:
-      - frontend
-      - backend
+      frontend:
+        aliases:
+          - "${PUBLIC_HOSTNAME}"
+      backend:
+        aliases:
+          - "${PUBLIC_HOSTNAME}"
     ports:
-      - 8080:8080
-      - 80:80
-      - 443:443
+      - "${HTTP_PORT_EXTERNAL}:${HTTP_PORT_INTERNAL}"
+      - "${HTTPS_PORT_EXTERNAL}:${HTTPS_PORT_INTERNAL}"
     volumes:
       - ./infrastructure/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - nginx-certs:/etc/nginx/certs:ro
-      - nginx-logs:/var/log/nginx:ro
+      - ./infrastructure/docker/nginx/htpasswd:/etc/nginx/htpasswd:ro
+      - ./infrastructure/docker/certs/nginx:/etc/nginx/certs:ro
+      # NOT :ro — nginx writes access.log/error.log here and refuses to start
+      # if it cannot.
+      - nginx-logs:/var/log/nginx
+
+##### FRONTEND — static SPA behind nginx #####
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    # The image is environment-specific: Quasar inlines every VITE_* value at
+    # build time, so changing available_hostnames needs a rebuild, not a
+    # restart. That is what the "appImages" setup step exists for.
+    networks:
+      - frontend
+
+##### BACKEND #####
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # One trust anchor for everything signed by our CA: Keycloak through
+      # nginx, and OpenSearch. Node reads this for both https and undici, so
+      # neither jwks-rsa nor the OpenSearch client needs its own configuration.
+      NODE_EXTRA_CA_CERTS: /etc/ssl/nbcg/ca.crt
+    volumes:
+      - ./infrastructure/docker/certs/ca/ca.crt:/etc/ssl/nbcg/ca.crt:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      opensearch-node:
+        condition: service_healthy
+    networks:
+      # backend: the data services. frontend: reachable by nginx, and the only
+      # one with egress — the COBISS import calls ws.cobiss.net and
+      # home.izum.si, which an internal network cannot route to.
+      - backend
+      - frontend
 
 ##### KEYCLOAK
   keycloak:
@@ -46,31 +132,47 @@ services:
         condition: service_healthy
     command: start --import-realm
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      # No curl and no wget in this image, so the probe is bash's /dev/tcp.
+      # Health lives on the MANAGEMENT port (9000), not 8080 — Keycloak moved
+      # it there in 25.x — and KC_HTTP_RELATIVE_PATH below moves the management
+      # endpoints under /auth as well, so the path is /auth/health/ready.
+      # Verified: /health/ready returns 404, /auth/health/ready returns 200.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /auth/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 30s
     environment:
-      KC_HOSTNAME: keycloak
-      KC_HOSTNAME_STRICT_BACKCHANNEL: true
-      KC_HTTP_ENABLED: false
-      KC_HOSTNAME_STRICT_HTTPS: true
-      KC_HTTPS_CERTIFICATE_FILE: /etc/x509/https/server.crt
-      KC_HTTPS_CERTIFICATE_KEY_FILE: /etc/x509/https/server.key
+      # The public URL, derived from available_hostnames. It is the token
+      # ISSUER as well as the address the browser is redirected to, so the
+      # frontend, the backend and this must all agree — which they do by all
+      # reading the same variable.
+      KC_HOSTNAME: ${KEYCLOAK_URL}
+      # nginx terminates TLS and proxies here over plain HTTP. That is the
+      # documented reverse-proxy setup and it is why Keycloak needs no
+      # certificate of its own.
+      KC_HTTP_ENABLED: true
+      KC_PROXY_HEADERS: xforwarded
+      # Serve under /auth so nginx can proxy without rewriting paths.
+      KC_HTTP_RELATIVE_PATH: /auth
+      # No KC_HOSTNAME_STRICT_BACKCHANNEL: it is a hostname v1 option that
+      # Keycloak 26 warns about on every start. Under v2 the backchannel
+      # defaults to the same KC_HOSTNAME above, which is exactly right here —
+      # the backend reaches Keycloak through nginx on that very URL.
       KC_LOG_LEVEL: info
-    volumes:
-      - ${KC_HTTPS_CERTIFICATE}/server.crt:/etc/x509/https/server.crt:ro
-      - ${KC_HTTPS_CERTIFICATE}/server.key:/etc/x509/https/server.key:ro
     networks:
       - backend
 
-##### PGADMIN
+##### PGADMIN — not published to the host; reached through nginx at /pgadmin/
   pgadmin:
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost/misc/ping"]
       interval: 30s
       timeout: 10s
       retries: 3
+    environment:
+      # Served under a subpath by nginx, which passes X-Script-Name.
+      - PGADMIN_CONFIG_PROXY_X_PREFIX_COUNT=1
     depends_on:
       db:
         condition: service_healthy
@@ -96,16 +198,116 @@ services:
     networks:
       - backend
 
+##### PGSYNC #####
   pgsync:
+    depends_on:
+      # The backend applies migrations on start (start:prod runs
+      # `prisma migrate deploy`), and pgsync needs those tables to exist.
+      backend:
+        condition: service_healthy
+      opensearch-node:
+        condition: service_healthy
+    environment:
+      - REDIS_CHECKPOINT=true
+      - REDIS_HOST=redis
+      - PG_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db/${POSTGRES_DB}
+      - ELASTICSEARCH=false
+      - OPENSEARCH=true
+      # Discrete variables rather than ELASTICSEARCH_URL: that one short-
+      # circuits pgsync's URL builder (urls.py returns it verbatim) and leaves
+      # no way to pass verify_certs or ca_certs, which TLS needs.
+      #
+      # It must be blanked explicitly. Compose MERGES environment maps rather
+      # than replacing them, so the base file's
+      # ELASTICSEARCH_URL=http://opensearch-node:9200 survives into prod and
+      # silently wins — pgsync then speaks plain HTTP to the TLS port and dies
+      # with "Remote end closed connection without response". An empty value is
+      # falsy to pgsync's settings, which is what re-enables the vars below.
+      - ELASTICSEARCH_URL=
+      - ELASTICSEARCH_SCHEME=https
+      - ELASTICSEARCH_HOST=opensearch-node
+      - ELASTICSEARCH_PORT=${OPENSEARCH_NODE_P1_INTERNAL}
+      - ELASTICSEARCH_USER=${OPENSEARCH_APP_USER}
+      - ELASTICSEARCH_PASSWORD=${OPENSEARCH_APP_PASSWORD}
+      - ELASTICSEARCH_USE_SSL=true
+      - ELASTICSEARCH_VERIFY_CERTS=true
+      - ELASTICSEARCH_CA_CERTS=/certs/ca.crt
+    volumes:
+      - ./infrastructure/docker/pgsync/schema.json:/app/schema.json
+      - ./infrastructure/docker/certs/ca/ca.crt:/certs/ca.crt:ro
     networks:
       - backend
 
+##### OPENSEARCH #####
   opensearch-node:
+    environment:
+      # The security plugin is ON here (dev disables it). Our own opensearch.yml
+      # is mounted below, which suppresses the demo-config installer.
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+    volumes:
+      - ./infrastructure/docker/opensearch/opensearch.yml:/usr/share/opensearch/config/opensearch.yml:ro
+      # One mount, not two: this directory holds node.*, admin.* AND a copy of
+      # ca.crt (placed there by the certs step). Mounting the CA separately
+      # underneath would need a mountpoint created inside a read-only mount,
+      # which docker refuses.
+      - ./infrastructure/docker/certs/opensearch:/usr/share/opensearch/config/certs:ro
+    healthcheck:
+      # Authenticated by the admin CERTIFICATE, not a password — so the probe
+      # keeps working while "Configure OpenSearch security" replaces the
+      # credentials.
+      test: ["CMD-SHELL", "curl -sf --cacert config/certs/ca.crt --cert config/certs/admin.crt --key config/certs/admin.key https://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
     networks:
       - backend
 
   opensearch-dashboards:
+    environment:
+      OPENSEARCH_HOSTS: '["https://opensearch-node:${OPENSEARCH_NODE_P1_INTERNAL}"]'
+      OPENSEARCH_USERNAME: ${OPENSEARCH_DASHBOARDS_USER}
+      OPENSEARCH_PASSWORD: ${OPENSEARCH_DASHBOARDS_PASSWORD}
+      OPENSEARCH_SSL_VERIFICATIONMODE: full
+      OPENSEARCH_SSL_CERTIFICATEAUTHORITIES: '["/certs/ca.crt"]'
+      # Served under a subpath by nginx.
+      SERVER_BASEPATH: /dashboards
+      SERVER_REWRITEBASEPATH: "true"
+    healthcheck:
+      # SERVER_BASEPATH moves every route, /api/status included — the base
+      # file's probe of /api/status returns 404 here and reports a working
+      # container as unhealthy. (Same trap as Keycloak's health endpoint under
+      # KC_HTTP_RELATIVE_PATH.)
+      test: ["CMD", "curl", "-f", "http://localhost:5601/dashboards/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    volumes:
+      - ./infrastructure/docker/certs/ca/ca.crt:/certs/ca.crt:ro
+    depends_on:
+      opensearch-node:
+        condition: service_healthy
     networks:
       - backend
 
-#TODO
+##### SeaweedFS — backend-only, no host publish
+  master:
+    networks:
+      - backend
+  volume:
+    networks:
+      - backend
+  filer:
+    # Without this the filer's leveldb metadata lives in the container layer
+    # and is lost the moment the container is recreated.
+    volumes:
+      - seaweedfs-filer:/data
+    networks:
+      - backend
+  s3:
+    networks:
+      - backend
+  webdav:
+    networks:
+      - backend

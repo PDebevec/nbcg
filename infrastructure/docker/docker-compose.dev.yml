@@ -1,59 +1,30 @@
-##### DEVELOPEMNT #####
+name: dev-nbcg
+
+
+##### DEVELOPMENT #####
 networks:
   backend:
     driver: bridge
 
 services:
-##### TEMP ##### TODO: move to prod
-  # backend:
-  #   build:
-  #     context: "backend/"
-  #     dockerfile: dockerfile
-  #   env_file:
-  #     - backend/.env
-  #   ports:
-  #     - "3000:3000"
-  #   volumes:
-  #     - "./lib-data:/lib-data"
-  #   networks:
-  #     - backend
-  #   depends_on:
-  #     - db
-
-  tika:
-    build:
-      context: ./infrastructure/docker/tika
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    ports:
-      - 9998:9998
-    environment:
-      - JAVA_OPTS=-Xms256m -Xmx2g
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9998/tika"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-
 ##### POSTGRES #####
   db:
     ports:
-      - "${EXTERNAL_POSTGRES}:${INTERNAL_POSTGRES}"
+      - "${POSTGRES_PORT}:${POSTGRES_PORT_INTERNAL}"
     networks:
       - backend
 
 ##### REDIS #####
   redis:
     ports:
-      - "${EXTERNAL_REDIS}:${INTERNAL_REDIS}"
+      - "${REDIS_PORT}:${REDIS_PORT_INTERNAL}"
     networks:
       - backend
 
 ##### PGADMIN #####
   pgadmin:
     ports:
-      - "${EXTERNAL_PGADMIN}:${INTERNAL_HTTP}"
+      - "${PGADMIN_PORT}:${PGADMIN_PORT_INTERNAL}"
     environment:
       - PGADMIN_CONFIG_SERVER_MODE=False
       - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
@@ -64,8 +35,9 @@ services:
   keycloak:
     command: start-dev --import-realm
     ports:
-      - "${EXTERNAL_KEYCLOAK}:${INTERNAL_HTTPHTTP}"
+      - "${KEYCLOAK_PORT}:${KEYCLOAK_PORT_INTERNAL}"
     environment:
+      KC_HOSTNAME_PORT: ${KEYCLOAK_PORT}
       KC_HOSTNAME_STRICT_BACKCHANNEL: false
       KC_HTTP_ENABLED: true
       KC_HOSTNAME_STRICT_HTTPS: false
@@ -75,7 +47,7 @@ services:
 
   keycloak-db:
     ports:
-      - "${EXTERNAL_KEYCLOAK_DB}:${INTERNAL_POSTGRES}"
+      - "${KEYCLOAK_POSTGRES_PORT}:${KEYCLOAK_POSTGRES_PORT_INTERNAL}"
     networks:
       - backend
 
@@ -89,31 +61,48 @@ services:
     environment:
       - DISABLE_SECURITY_PLUGIN=true
     ports:
-      - ${EXTERNAL_OPENSEARCH_NODE_P1}:${INTERNAL_OPENSEARCH_NODE_P1}
-      - ${EXTERNAL_OPENSEARCH_NODE_P2}:${INTERNAL_OPENSEARCH_NODE_P2}
+      - "${OPENSEARCH_NODE_P1}:${OPENSEARCH_NODE_P1_INTERNAL}"
+      - "${OPENSEARCH_NODE_P2}:${OPENSEARCH_NODE_P2_INTERNAL}"
     networks:
       - backend
     restart: unless-stopped
 
   opensearch-dashboards:
     ports:
-      - ${EXTERNAL_OPENSEARCH_DASHBOARDS}:${INTERNAL_OPENSEARCH_DASHBOARDS}
+      - "${OPENSEARCH_DASHBOARDS}:${OPENSEARCH_DASHBOARDS_INTERNAL}"
     networks:
       - backend
 
 ##### SeaweedFS
   master:
+    ports:
+      - "${SEAWEEDFS_MASTER_P1}:${SEAWEEDFS_MASTER_P1_INTERNAL}"
+      - "${SEAWEEDFS_MASTER_P2}:${SEAWEEDFS_MASTER_P2_INTERNAL}"
+      - "${SEAWEEDFS_MASTER_P3}:${SEAWEEDFS_MASTER_P3_INTERNAL}"
     networks:
       - backend
   volume:
+    ports:
+      - "${SEAWEEDFS_VOLUME_P1}:${SEAWEEDFS_VOLUME_P1_INTERNAL}"
+      - "${SEAWEEDFS_VOLUME_P2}:${SEAWEEDFS_VOLUME_P2_INTERNAL}"
+      - "${SEAWEEDFS_VOLUME_P3}:${SEAWEEDFS_VOLUME_P3_INTERNAL}"
     networks:
       - backend
   filer:
+    ports:
+      - "${SEAWEEDFS_FILER_P1}:${SEAWEEDFS_FILER_P1_INTERNAL}"
+      - "${SEAWEEDFS_FILER_P2}:${SEAWEEDFS_FILER_P2_INTERNAL}"
+      - "${SEAWEEDFS_FILER_P3}:${SEAWEEDFS_FILER_P3_INTERNAL}"
     networks:
       - backend
   s3:
+    ports:
+      - "${SEAWEEDFS_S3_P1}:${SEAWEEDFS_S3_P1_INTERNAL}"
+      - "${SEAWEEDFS_S3_P2}:${SEAWEEDFS_S3_P2_INTERNAL}"
     networks:
       - backend
   webdav:
+    ports:
+      - "${SEAWEEDFS_WEBDAV}:${SEAWEEDFS_WEBDAV_INTERNAL}"
     networks:
       - backend
