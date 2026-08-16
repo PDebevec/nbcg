@@ -60,6 +60,7 @@
       "path": "./frontend",
       "vars": {
         "VITE_KEYCLOAK_URL": "${KEYCLOAK_URL}",
+        "VITE_KEYCLOAK_BASE_PATH": "${KEYCLOAK_BASE_PATH}",
         "VITE_KEYCLOAK_REALM": "${KEYCLOAK_REALM}",
         "VITE_KEYCLOAK_CLIENT_ID": "nbcg-web",
         "VITE_KEYCLOAK_API_CLIENT_ID": "nbcg-api"

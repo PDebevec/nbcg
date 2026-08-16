@@ -111,7 +111,22 @@ function handleSessionExpired() {
 // issued access tokens, so the same token authorizes the NestJS backend.
 // ---------------------------------------------------------------------------
 
-const url = import.meta.env.VITE_KEYCLOAK_URL;
+// In prod, Keycloak is reachable under the SAME origin as this app (nginx
+// proxies /auth/ path-based, on every hostname in available_hostnames). A
+// build-time-baked absolute URL would pin the app to whichever hostname was
+// canonical at build time — fine when browsed from that hostname, but the
+// Keycloak adapter's 3rd-party-cookie-check and login-status iframes load
+// cross-origin for every OTHER configured hostname, which their own
+// X-Frame-Options: SAMEORIGIN then refuses to display, breaking init()
+// entirely ("Timeout when waiting for 3rd party check iframe message").
+// Deriving the origin at runtime from the page itself keeps every iframe
+// same-origin no matter which hostname the browser used.
+//
+// Dev has no such shared origin — Keycloak runs on its own port, never
+// behind nginx — so it keeps the absolute URL baked in by the CLI.
+const url = import.meta.env.PROD
+  ? `${window.location.origin}${import.meta.env.VITE_KEYCLOAK_BASE_PATH ?? '/auth'}`
+  : import.meta.env.VITE_KEYCLOAK_URL;
 const realm = import.meta.env.VITE_KEYCLOAK_REALM;
 const clientId = import.meta.env.VITE_KEYCLOAK_CLIENT_ID;
 
