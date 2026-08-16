@@ -115,10 +115,22 @@ thing published, and everything else is reachable only from inside the network.
                     └────┼───────────────────────────┬┼──────────────────────┘
                          │                           ││
                     ┌────┴───── backend network (internal: true, NO egress) ─┴──┐
-                    │  keycloak   db   keycloak-db   redis   opensearch-node    │
-                    │  pgsync     pgadmin   dashboards   seaweedfs (master…)    │
+                    │  db   redis   opensearch-node   pgsync                    │
+                    │  pgadmin   dashboards   seaweedfs (master, volume)        │
+                    └───────────────────────────────────────────────────────────┘
+                         │
+                    ┌────┴────── auth network (internal: true, NO egress) ──────┐
+                    │  nginx   keycloak   keycloak-db                           │
                     └───────────────────────────────────────────────────────────┘
 ```
+
+`keycloak` sits on its own `auth` network with only `nginx` and `keycloak-db`
+— not on `backend` with everything else. Keycloak trusts `X-Forwarded-Host` to
+resolve its own hostname per request (see `KC_HOSTNAME_STRICT` below), so
+anything able to reach it directly could forge that header; keeping it off the
+crowded `backend` network is what makes trusting that header safe.
+`keycloak-db` sits on both — `keycloak` needs it, and pgAdmin still manages it
+from `backend`.
 
 Routing is by path on a single origin, which is what the application already
 assumes — `frontend/src/boot/axios.ts` uses a relative `baseURL` of `/api`, and
@@ -131,6 +143,12 @@ prod rather than load-bearing.
 | `/api/` | `backend:3000` — the prefix is **not** stripped, because the backend sets `setGlobalPrefix('api')` |
 | `/auth/` | `keycloak:8080` — Keycloak serves itself under that path via `KC_HTTP_RELATIVE_PATH` |
 | `/pgadmin/`, `/dashboards/` | **provisional**, behind HTTP basic auth — see Known gaps |
+
+nginx also rejects any request whose `Host` header isn't one of
+`available_hostnames` before it reaches anything else (the catch-all `server {
+listen 443 ssl default_server; return 444; }` block in
+`nginx.conf.template`, mirrored on port 80) — that allowlist is what makes
+Keycloak's per-request hostname resolution safe to trust in the first place.
 
 ### Dev and prod do not share state
 
@@ -238,11 +256,24 @@ alone — and fails loudly, naming the expected paths, if they're missing.
 This is the part that is easy to get wrong, and it fails as "every token is
 rejected" rather than as anything that looks like a configuration problem.
 
-The backend validates tokens against `${KEYCLOAK_URL}` — both the `issuer` it
-checks and the `jwksUri` it fetches
+The backend fetches its `jwksUri` from `${KEYCLOAK_URL}` — always the
+canonical hostname, since that is just a reachability concern for the
+container, not something a browser ever sees
 ([`backend/src/core/auth/keycloak.strategy.ts`](../backend/src/core/auth/keycloak.strategy.ts)).
 In prod that is the **public** HTTPS URL, which a container on an internal
 network can neither resolve nor trust.
+
+The `issuer` it validates against is different: `${KEYCLOAK_ISSUERS}`, one
+full issuer URL per `available_hostnames` entry, not just the canonical one.
+Keycloak resolves its own hostname per request now
+(`KC_HOSTNAME_STRICT: false`, trusting `X-Forwarded-Host`) instead of always
+stamping tokens with one fixed hostname, so a login from *any* configured
+hostname produces a token whose `issuer` this list actually contains. This is
+only safe because nginx rejects any request whose Host header isn't in
+`available_hostnames` before it ever reaches Keycloak (the catch-all `443`
+server block in `nginx.conf.template`) — without that, a spoofed Host header
+could make Keycloak issue tokens, or password-reset links, for a domain an
+attacker chose. Don't relax that nginx block without also reconsidering this.
 
 So nginx is given a **network alias equal to `PUBLIC_HOSTNAME`**, and the CA is
 mounted into the backend as `NODE_EXTRA_CA_CERTS`. The backend then resolves the
@@ -408,24 +439,28 @@ template. It is described as a **reset** rather than a removal because
 `ensureMasterConfig()` recreates it on the next read anyway — "absent" is not a
 state this CLI can be in.
 
-- **`available_hostnames`** — the single place hostnames are configured. The
-  **first entry is canonical**: everything single-valued uses it, everything
-  list-valued uses all of them. Put the host you actually browse to first.
+- **`available_hostnames`** — the single place hostnames are configured, and
+  every entry is a fully working way to reach the app — login included, not
+  just browsing. The **first entry is still canonical** for the handful of
+  things that must be exactly one value (the backend's own reachability path
+  to Keycloak; see below), but nothing browser-facing is pinned to it anymore.
 
   | Derived | From |
   |---|---|
   | `ALLOWED_HOSTNAMES` | all, comma separated |
   | `CORS_ORIGIN` (backend splits on commas) | all, as origins |
-  | `KEYCLOAK_URL` (frontend + backend + `KC_HOSTNAME`) | the canonical one |
+  | `KEYCLOAK_URL` (backend's `jwksUri`; frontend build fallback in dev) | the canonical one |
+  | `KEYCLOAK_ISSUERS` (backend's token `issuer` check, JSON array) | all, as `${origin}${KEYCLOAK_BASE_PATH}/realms/${KEYCLOAK_REALM}` |
   | the realm's `nbcg-web` `redirectUris` / `webOrigins` | all, as origins |
 
   An origin is `http://<host>:${FRONTEND_PORT}` in dev and `https://<host>` in
-  prod, where nginx terminates TLS on 443.
-
-  Getting these four out of step is what makes Keycloak fail in ways that look
-  like a frontend bug — `KEYCLOAK_URL` is the token *issuer* as well as the
-  address the browser is redirected to, so the frontend, the backend and the
-  realm must all agree on it. Adding a host here is now the whole change.
+  prod, where nginx terminates TLS on 443. In prod the frontend itself never
+  bakes in one hostname either — it derives Keycloak's URL from
+  `window.location.origin` at runtime
+  ([`frontend/src/services/keycloak.ts`](../frontend/src/services/keycloak.ts)),
+  which is what makes the whole chain — frontend, Keycloak, backend — follow
+  whichever hostname the browser actually used instead of forcing everyone
+  back to the canonical one mid-login.
 
   `CORS_ORIGIN` and `KEYCLOAK_URL` are **derived unless pinned**: set either in
   `env/.env.<env>` and that value wins. The check reads the source `.env` files,
@@ -521,10 +556,10 @@ summarise as `N/N running · N healthy · …`.
 
 ## Known gaps
 
-- **No real domain or certificates yet.** `available_hostnames` is still
-  `localhost` / `127.0.0.1` and the CA is our own. Both are one setting and one
-  file swap away — see Certificates above — but nothing has been exercised
-  against a public name.
+- **No real certificate yet.** `available_hostnames` now lists real
+  hostnames, but the CA is still our own self-signed one — real browsers will
+  warn until a real certificate is dropped in (`nginx_external: true` — see
+  Certificates above).
 - **Admin-UI routing is provisional.** `/pgadmin/` and `/dashboards/` are behind
   HTTP basic auth over TLS, which is the security-relevant part, but serving
   either correctly under a subpath needs more of their own configuration than is
@@ -534,17 +569,12 @@ summarise as `N/N running · N healthy · …`.
 - **Keycloak's `resetPasswordAllowed` is on, but `smtpServer` is `{}`** — the
   password-reset flow will fail at the point of sending mail. Configure SMTP in
   the realm or turn the feature off.
-- **SeaweedFS `filer`, `s3` and `webdav` may be unused.** The backend talks only
-  to `master` and `volume`
-  ([`seaweedfs.service.ts`](../backend/src/core/seaweedfs/seaweedfs.service.ts)),
-  and `SEAWEEDFS_S3_SECRET` is generated but read by nothing. `filer` now has a
-  volume so its metadata survives a recreate; dropping the three services
-  outright is worth considering instead.
 - **The backend logs every query** (`log: ['query', …]` in
   [`prisma.service.ts`](../backend/src/core/prisma/prisma.service.ts)), which is
   very noisy for production.
 - **Volumes are plain docker volumes.** `config.template.yml` describes a ZFS
   dataset (`zfs.base`) for prod data; nothing implements that yet.
-- **Backups are untouched.** `scripts/backup.sh` still names volumes that do not
-  exist (`minio_data`, `postgres_data` — the real ones are `nbcg_postgres-data`
-  and friends) and uses an unset `COMPOSE_FILE`, so it cannot currently run.
+- **There is no backup mechanism.** `scripts/backup.sh`/`restore.sh` were
+  removed when the CLI was rewritten and never rebuilt — `RESTIC_REPO`/
+  `RESTIC_PASSWORD` (`.env.prod`) and the Makefile's `cron-backup`/
+  `cron-restore` targets currently point at nothing.

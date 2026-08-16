@@ -50,19 +50,48 @@ http {
     gzip_min_length 1024;
 
     # ---------------------------------------------------------------------
-    # HTTP: redirect everything to HTTPS.
+    # HTTP: redirect everything to HTTPS. Same catch-all/allowlist shape as
+    # the 443 blocks below — an unrecognized Host header is dropped rather
+    # than reflected into the redirect's Location.
     # ---------------------------------------------------------------------
     server {
         listen 80 default_server;
         server_name _;
+        return 444;
+    }
+
+    server {
+        listen 80;
+        server_name $(ALLOWED_HOSTNAMES_SPACED);
         return 301 https://$host$request_uri;
+    }
+
+    # ---------------------------------------------------------------------
+    # HTTPS: catch-all for any Host header that isn't in available_hostnames.
+    #
+    # Keycloak trusts X-Forwarded-Host to build its own URLs (dynamic
+    # hostname mode — needed so the login flow works from any configured
+    # hostname, not just one fixed one). That is only safe if nothing but a
+    # genuinely configured hostname can ever reach it: without this block,
+    # `default_server` alone accepts every Host header, and a spoofed one
+    # would make Keycloak issue tokens/reset-password links for a domain the
+    # attacker chose. This block is what makes trusting X-Forwarded-Host
+    # downstream safe — it must stay ahead of the real server block below,
+    # which is why it carries `default_server` instead.
+    # ---------------------------------------------------------------------
+    server {
+        listen 443 ssl default_server;
+        server_name _;
+        ssl_certificate     /etc/nginx/certs/server.crt;
+        ssl_certificate_key /etc/nginx/certs/server.key;
+        return 444;
     }
 
     # ---------------------------------------------------------------------
     # HTTPS
     # ---------------------------------------------------------------------
     server {
-        listen 443 ssl default_server;
+        listen 443 ssl;
         http2 on;
         server_name $(ALLOWED_HOSTNAMES_SPACED);
 

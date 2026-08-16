@@ -15,12 +15,6 @@
     "SEAWEEDFS_VOLUME_P1": { "internal": 8080, "external": 8083 },
     "SEAWEEDFS_VOLUME_P2": { "internal": 18080, "external": 18083 },
     "SEAWEEDFS_VOLUME_P3": { "internal": 9325, "external": 9325 },
-    "SEAWEEDFS_FILER_P1": { "internal": 8888, "external": 8888 },
-    "SEAWEEDFS_FILER_P2": { "internal": 18888, "external": 18888 },
-    "SEAWEEDFS_FILER_P3": { "internal": 9326, "external": 9326 },
-    "SEAWEEDFS_S3_P1": { "internal": 8333, "external": 8333 },
-    "SEAWEEDFS_S3_P2": { "internal": 9327, "external": 9327 },
-    "SEAWEEDFS_WEBDAV": { "internal": 7333, "external": 7333 },
     "BACKEND_PORT": { "internal": 3000, "external": 3000 },
     "HTTP_PORT": { "internal": 80, "external": 80 },
     "HTTPS_PORT": { "internal": 443, "external": 443 }
@@ -46,8 +40,7 @@
     "OPENSEARCH_INITIAL_ADMIN_PASSWORD",
     "OPENSEARCH_APP_PASSWORD",
     "OPENSEARCH_DASHBOARDS_PASSWORD",
-    "ADMIN_UI_PASSWORD",
-    "SEAWEEDFS_S3_SECRET"
+    "ADMIN_UI_PASSWORD"
   ],
   "conf_templates": [
     { "template": "docker/pgadmin/servers.conf.json", "output": "docker/pgadmin/servers.json" },
@@ -76,6 +69,7 @@
         "REDIS_HOST": "${REDIS_HOSTNAME}",
         "REDIS_PORT": "${REDIS_PORT}",
         "KEYCLOAK_URL": "${KEYCLOAK_URL}",
+        "KEYCLOAK_ISSUERS": "${KEYCLOAK_ISSUERS}",
         "KEYCLOAK_REALM": "${KEYCLOAK_REALM}",
         "KEYCLOAK_CLIENT_ID": "nbcg-api",
         "OPENSEARCH_URL": "${OPENSEARCH_URL}",

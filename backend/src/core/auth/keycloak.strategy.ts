@@ -23,6 +23,31 @@ function downloadCookieExtractor(req: Request): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
+/**
+ * Keycloak resolves its own hostname per-request (KC_HOSTNAME_STRICT: false
+ * in docker-compose.prod.yml) so login works from any hostname in
+ * available_hostnames, not just one fixed one — which means the `iss` claim
+ * on a token varies with whichever hostname the user logged in through.
+ * KEYCLOAK_ISSUERS carries the whole allowed list (one per hostname), JSON
+ * -encoded by infrastructure/scripts/init-env.js the same way
+ * KEYCLOAK_WEB_ORIGINS is. Falls back to the single KEYCLOAK_URL-based
+ * issuer if unset, so a deployment that never regenerated its .env after
+ * this change fails loudly on a real request rather than accepting nothing.
+ */
+function resolveKeycloakIssuers(): string[] {
+  const realmIssuer = `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}`;
+  if (!process.env.KEYCLOAK_ISSUERS) return [realmIssuer];
+  try {
+    const parsed: unknown = JSON.parse(process.env.KEYCLOAK_ISSUERS);
+    if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'string') && parsed.length > 0) {
+      return parsed;
+    }
+  } catch {
+    // fall through to the single-issuer default below
+  }
+  return [realmIssuer];
+}
+
 @Injectable()
 export class KeycloakJwtStrategy extends PassportStrategy(Strategy) {
   constructor() {
@@ -32,7 +57,7 @@ export class KeycloakJwtStrategy extends PassportStrategy(Strategy) {
         downloadCookieExtractor,
       ]),
       audience: process.env.KEYCLOAK_CLIENT_ID,
-      issuer: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}`,
+      issuer: resolveKeycloakIssuers(),
       algorithms: ['RS256'],
       secretOrKeyProvider: jwksRsa.passportJwtSecret({
         cache: true,

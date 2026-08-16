@@ -172,6 +172,24 @@ function deriveKeycloakUrl(env, canonicalHost, portVars, pinned) {
 }
 
 /**
+ * Every valid token issuer — one per available_hostnames entry, not just the
+ * canonical one. Keycloak resolves its own hostname per-request now
+ * (KC_HOSTNAME_STRICT: false in docker-compose.prod.yml) instead of always
+ * stamping tokens with canonicalHost, so a login from ANY configured
+ * hostname needs to pass KeycloakJwtStrategy's issuer check — which is why
+ * that check validates against this whole list, not a single URL.
+ */
+function deriveKeycloakIssuers(env, hostnames, portVars, pinned) {
+  const realm = pinned.KEYCLOAK_REALM
+  return hostnames.map(host => {
+    const base = env === "prod"
+      ? `https://${host}${pinned.KEYCLOAK_BASE_PATH || ""}`
+      : `http://${host}:${portVars.KEYCLOAK_PORT_EXTERNAL}`
+    return `${base}/realms/${realm}`
+  })
+}
+
+/**
  * In prod the OpenSearch security plugin is on: TLS plus a real account. The
  * credentials ride in the URL because the client reads them from there
  * (BaseConnectionPool decodes url.username/url.password), which keeps the
@@ -213,6 +231,7 @@ export async function applyMasterConfig(env = "dev") {
   const portVars = derivePortVars(masterConfig, env)
   const { hostnames, canonicalHost, origins } = deriveOrigins(masterConfig, env, rootEnv.FRONTEND_PORT)
   const keycloakUrl = deriveKeycloakUrl(env, canonicalHost, portVars, pinned)
+  const keycloakIssuers = deriveKeycloakIssuers(env, hostnames, portVars, pinned)
   const opensearchUrl = deriveOpensearchUrl(env, rootEnv, portVars)
 
   const merged = {
@@ -226,7 +245,6 @@ export async function applyMasterConfig(env = "dev") {
     OPENSEARCH_APP_USER: APP_USER,
     OPENSEARCH_DASHBOARDS_USER: DASHBOARDS_USER,
 
-    ALLOWED_HOSTNAMES: hostnames.join(","),
     // nginx's server_name takes a space-separated list, not a comma one
     ALLOWED_HOSTNAMES_SPACED: hostnames.join(" "),
     // The one hostname single-valued things use. Also the network alias the
@@ -238,6 +256,9 @@ export async function applyMasterConfig(env = "dev") {
     // an unusual deployment can still set these by hand.
     CORS_ORIGIN: pinned.CORS_ORIGIN || origins.join(","),
     KEYCLOAK_URL: pinned.KEYCLOAK_URL || keycloakUrl,
+    // JSON array consumed by the backend's KeycloakJwtStrategy — see
+    // deriveKeycloakIssuers above.
+    KEYCLOAK_ISSUERS: JSON.stringify(keycloakIssuers),
 
     // Consumed by the Keycloak realm template as complete JSON array literals,
     // so the realm's nbcg-web client accepts every hostname the rest of the

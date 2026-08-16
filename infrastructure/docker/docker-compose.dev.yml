@@ -65,7 +65,6 @@ services:
       - "${OPENSEARCH_NODE_P2}:${OPENSEARCH_NODE_P2_INTERNAL}"
     networks:
       - backend
-    restart: unless-stopped
 
   opensearch-dashboards:
     ports:
@@ -86,23 +85,5 @@ services:
       - "${SEAWEEDFS_VOLUME_P1}:${SEAWEEDFS_VOLUME_P1_INTERNAL}"
       - "${SEAWEEDFS_VOLUME_P2}:${SEAWEEDFS_VOLUME_P2_INTERNAL}"
       - "${SEAWEEDFS_VOLUME_P3}:${SEAWEEDFS_VOLUME_P3_INTERNAL}"
-    networks:
-      - backend
-  filer:
-    ports:
-      - "${SEAWEEDFS_FILER_P1}:${SEAWEEDFS_FILER_P1_INTERNAL}"
-      - "${SEAWEEDFS_FILER_P2}:${SEAWEEDFS_FILER_P2_INTERNAL}"
-      - "${SEAWEEDFS_FILER_P3}:${SEAWEEDFS_FILER_P3_INTERNAL}"
-    networks:
-      - backend
-  s3:
-    ports:
-      - "${SEAWEEDFS_S3_P1}:${SEAWEEDFS_S3_P1_INTERNAL}"
-      - "${SEAWEEDFS_S3_P2}:${SEAWEEDFS_S3_P2_INTERNAL}"
-    networks:
-      - backend
-  webdav:
-    ports:
-      - "${SEAWEEDFS_WEBDAV}:${SEAWEEDFS_WEBDAV_INTERNAL}"
     networks:
       - backend

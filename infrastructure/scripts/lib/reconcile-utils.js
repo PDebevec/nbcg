@@ -132,12 +132,16 @@ const KEYCLOAK_WEB_CLIENT_ID = 'nbcg-web';
 // Keycloak's own image ships neither curl nor wget (confirmed live: `docker
 // exec` into it fails to find either — matches docker-compose.prod.yml's own
 // healthcheck comment, which falls back to bash's /dev/tcp for exactly this
-// reason). opensearch-node is confirmed to have real curl (configureSecurity()
-// already depends on it) and, unlike keycloak/backend/frontend, starts
-// independently of everything this exists to fix — so it stays reachable even
-// while keycloak itself is unhealthy. It's just the HTTP vehicle; nothing here
-// is OpenSearch-specific.
-const HTTP_VEHICLE = 'opensearch-node';
+// reason). Since keycloak now sits on its own `auth` network (isolated from
+// everything except nginx and keycloak-db — see docker-compose.prod.yml — so
+// nothing else can forge X-Forwarded-Host to it), the vehicle has to be
+// something on THAT network. nginx is confirmed to have real curl (the -perl
+// image tag) and is the only other thing on `auth`; keycloak-db has neither
+// curl nor wget. reconcileKeycloakClient() only ever runs once isUp('keycloak')
+// is already true, and nginx's own depends_on requires exactly that same
+// condition before it starts — so by the time this code runs, nginx has
+// already had its chance to come up.
+const HTTP_VEHICLE = 'nginx';
 
 async function keycloakCurl(script, env = {}) {
   return execInContainer(HTTP_VEHICLE, ['sh', '-c', script], {

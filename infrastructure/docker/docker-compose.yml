@@ -1,5 +1,16 @@
 name: nbcg
 
+# Shared by every service below: bounds each container's own stdout capture so
+# a noisy/crash-looping container can't fill the host disk. Doesn't apply to
+# nginx (prod-only, defined in docker-compose.prod.yml) — it writes directly
+# to files on the nginx-logs volume, which this driver-level setting can't
+# touch; that needs its own solution (stdout symlink or a logrotate sidecar).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 volumes:
 ##### POSTGRES
   postgres-data:
@@ -33,10 +44,13 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    logging: *default-logging
 
 ##### PGADMIN #####
   pgadmin:
     image: dpage/pgadmin4:9.12.0
+    restart: unless-stopped
+    logging: *default-logging
     volumes:
      - ./infrastructure/docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
      - pgadmin-data:/var/lib/pgadmin
@@ -62,6 +76,7 @@ services:
   redis:
     image: redis:8.6.1
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - redis-data:/data
     healthcheck:
@@ -74,6 +89,7 @@ services:
   keycloak-db:
     image: postgres:18.3
     restart: unless-stopped
+    logging: *default-logging
     shm_size: 128mb
     environment:
       POSTGRES_PASSWORD: ${KEYCLOAK_POSTGRES_PASSWORD}
@@ -92,6 +108,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.5.4
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - ./infrastructure/docker/keycloak/nbcg-realm.json:/opt/keycloak/data/import/nbcg-realm.json
     depends_on:
@@ -120,8 +137,14 @@ services:
 
 ##### PGSYNC #####
   pgsync:
-    image: toluaina1/pgsync:latest
+    # Pinned by digest, not tag: upstream has never published a version-
+    # numbered tag, only `latest` — and it moves (confirmed: the tag pointed
+    # at a different image than this digest as of this pin). A digest is
+    # actually more reproducible than the version tags used elsewhere in this
+    # file, just less human-readable.
+    image: toluaina1/pgsync@sha256:3dad547f2f428db79302fa807bc3ea438186a2ff63b364f52ed6a29420f1b547
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - REDIS_CHECKPOINT=true
       - REDIS_HOST=redis
@@ -143,6 +166,13 @@ services:
 ##### OPENSEARCH #####
   opensearch-node:
     image: opensearchproject/opensearch:3.5.0
+    restart: unless-stopped
+    logging: *default-logging
+    # Heap is capped at 512m below (OPENSEARCH_JAVA_OPTS); this bounds the
+    # container's total memory (heap + Lucene off-heap + filesystem cache) so
+    # a runaway doesn't take down the whole host — ~3x heap is the usual
+    # headroom rule of thumb for this JVM/heap size.
+    mem_limit: 1500m
     environment:
       - cluster.name=opensearch-cluster
       - node.name=opensearch-node
@@ -169,6 +199,8 @@ services:
 
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:3.5.0
+    restart: unless-stopped
+    logging: *default-logging
     depends_on:
      - opensearch-node
     environment:
@@ -182,9 +214,14 @@ services:
       start_period: 30s
 
 ##### SEAWEEDFS #####
+# Only master + volume: the backend talks exclusively to those two (its own
+# low-level "needle" API — assign an id, then upload/download/delete by id).
+# filer/s3/webdav were a separate, optional gateway layer nothing in this
+# codebase ever called; removed entirely (see infrastructure/README.md).
   master:
     image: chrislusf/seaweedfs:4.23
     restart: unless-stopped
+    logging: *default-logging
     command: 'master -ip=master -ip.bind=0.0.0.0 -metricsPort=9324'
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:9333/cluster/status"]
@@ -197,6 +234,7 @@ services:
     volumes:
       - seaweedfs-data:/data
     restart: unless-stopped
+    logging: *default-logging
     command: 'volume -ip=volume -master="master:9333" -ip.bind=0.0.0.0 -port=8080 -metricsPort=9325'
     depends_on:
       master:
@@ -207,48 +245,3 @@ services:
       timeout: 10s
       retries: 5
       start_period: 20s
-  filer:
-    image: chrislusf/seaweedfs:4.23
-    restart: unless-stopped
-    command: 'filer -ip=filer -master="master:9333" -ip.bind=0.0.0.0 -metricsPort=9326 -maxMB=4096'
-    tty: true
-    stdin_open: true
-    depends_on:
-      master:
-        condition: service_healthy
-      volume:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8888/"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 20s
-  s3:
-    image: chrislusf/seaweedfs:4.23
-    restart: unless-stopped
-    command: 's3 -filer="filer:8888" -ip.bind=0.0.0.0 -metricsPort=9327'
-    depends_on:
-      master:
-        condition: service_healthy
-      volume:
-        condition: service_healthy
-      filer:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8333/"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 20s
-  webdav:
-    image: chrislusf/seaweedfs:4.23
-    restart: unless-stopped
-    command: 'webdav -filer="filer:8888"'
-    depends_on:
-      master:
-        condition: service_healthy
-      volume:
-        condition: service_healthy
-      filer:
-        condition: service_healthy

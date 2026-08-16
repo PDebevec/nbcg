@@ -17,8 +17,15 @@ name: nbcg
 #     backend      reached by nginx; needs egress for COBISS/IZUM
 #
 #   backend network (internal: true, NO egress)
-#     everything else: db, keycloak-db, keycloak, redis, opensearch,
-#     pgsync, pgadmin, dashboards, seaweedfs
+#     db, redis, opensearch, pgsync, pgadmin, dashboards, seaweedfs,
+#     keycloak-db (also on `auth`, below — pgAdmin still manages it here)
+#
+#   auth network (internal: true, NO egress) — nginx + keycloak + keycloak-db
+#     ONLY. Keycloak trusts X-Forwarded-Host from whoever connects to it
+#     (KC_HOSTNAME_STRICT: false + KC_PROXY_HEADERS below), so it must not
+#     share a network with anything that isn't nginx — otherwise any of the
+#     other `backend` services could dial it directly, bypassing nginx's
+#     Host-header allowlist entirely and forging its self-referencing URLs.
 #
 # TLS terminates at nginx. Inside the compose network services speak plain
 # HTTP, except OpenSearch, whose security plugin requires TLS.
@@ -34,13 +41,13 @@ networks:
   backend:
     driver: bridge
     internal: true
+  auth:
+    driver: bridge
+    internal: true
 
 volumes:
 ##### NGINX
   nginx-logs:
-##### SEAWEEDFS — filer metadata (leveldb); prod-only because dev does not
-##### keep the filer's state across recreates
-  seaweedfs-filer:
 
 services:
 ##### NGINX #####
@@ -60,8 +67,12 @@ services:
         condition: service_healthy
     healthcheck:
       # This image does ship curl (the -perl tag is the full Debian image).
-      # -k because the certificate is signed by our own CA.
-      test: ["CMD", "curl", "-kf", "https://localhost/"]
+      # -k because the certificate is signed by our own CA. -H sets the Host
+      # header explicitly: nginx now rejects any Host not in
+      # available_hostnames (see nginx.conf.template's catch-all 443 block),
+      # and "localhost" alone isn't one of them, so this must send a real one
+      # or the healthcheck fails even though nginx is fine.
+      test: ["CMD", "curl", "-kf", "-H", "Host: ${PUBLIC_HOSTNAME}", "https://localhost/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -73,6 +84,7 @@ services:
       backend:
         aliases:
           - "${PUBLIC_HOSTNAME}"
+      auth: {}
     ports:
       - "${HTTP_PORT_EXTERNAL}:${HTTP_PORT_INTERNAL}"
       - "${HTTPS_PORT_EXTERNAL}:${HTTPS_PORT_INTERNAL}"
@@ -143,11 +155,22 @@ services:
       retries: 5
       start_period: 30s
     environment:
-      # The public URL, derived from available_hostnames. It is the token
-      # ISSUER as well as the address the browser is redirected to, so the
-      # frontend, the backend and this must all agree — which they do by all
-      # reading the same variable.
-      KC_HOSTNAME: ${KEYCLOAK_URL}
+      # No fixed KC_HOSTNAME: available_hostnames can list more than one
+      # public address (e.g. an IP and a DNS name), and a single fixed
+      # hostname makes Keycloak issue every self-referencing URL — including
+      # the login-page redirect — against ONE of them regardless of which one
+      # the browser is actually using, which is what sent users to the wrong
+      # address mid-login. KC_HOSTNAME_STRICT: false + KC_PROXY_HEADERS below
+      # make Keycloak derive its hostname per-request from X-Forwarded-Host
+      # instead, so it always matches whatever the browser used.
+      #
+      # This is safe ONLY because nginx.conf.template rejects any request
+      # whose Host header isn't one of available_hostnames before it ever
+      # reaches here (see the catch-all 443 server block) — without that,
+      # a spoofed Host header could make Keycloak issue tokens/reset-password
+      # links for a domain the attacker chose. Trust X-Forwarded-Host nowhere
+      # else this way.
+      KC_HOSTNAME_STRICT: false
       # nginx terminates TLS and proxies here over plain HTTP. That is the
       # documented reverse-proxy setup and it is why Keycloak needs no
       # certificate of its own.
@@ -155,13 +178,17 @@ services:
       KC_PROXY_HEADERS: xforwarded
       # Serve under /auth so nginx can proxy without rewriting paths.
       KC_HTTP_RELATIVE_PATH: /auth
-      # No KC_HOSTNAME_STRICT_BACKCHANNEL: it is a hostname v1 option that
-      # Keycloak 26 warns about on every start. Under v2 the backchannel
-      # defaults to the same KC_HOSTNAME above, which is exactly right here —
-      # the backend reaches Keycloak through nginx on that very URL.
+      # No KC_HOSTNAME_STRICT_BACKCHANNEL / KC_HOSTNAME_BACKCHANNEL_DYNAMIC:
+      # the backend reaches Keycloak through nginx using KEYCLOAK_URL, a
+      # fixed internal address — it never needs Keycloak's dynamically
+      # resolved hostname, only a reachable one.
       KC_LOG_LEVEL: info
+    # `auth` only — not `backend` — is what makes trusting X-Forwarded-Host
+    # above safe: nginx is the only thing on this network besides Keycloak
+    # itself and keycloak-db. See the `auth` network's comment near the top
+    # of this file.
     networks:
-      - backend
+      - auth
 
 ##### PGADMIN — not published to the host; reached through nginx at /pgadmin/
   pgadmin:
@@ -184,19 +211,17 @@ services:
   redis:
     networks:
       - backend
-    healthcheck:
-        test: ["CMD", "redis-cli", "ping"]
-        interval: 30s
-        timeout: 10s
-        retries: 3
 
   db:
     networks:
       - backend
 
   keycloak-db:
+    # backend: so pgAdmin can still manage it. auth: so keycloak (moved off
+    # `backend`, see above) can still reach its own database.
     networks:
       - backend
+      - auth
 
 ##### PGSYNC #####
   pgsync:
@@ -296,18 +321,5 @@ services:
     networks:
       - backend
   volume:
-    networks:
-      - backend
-  filer:
-    # Without this the filer's leveldb metadata lives in the container layer
-    # and is lost the moment the container is recreated.
-    volumes:
-      - seaweedfs-filer:/data
-    networks:
-      - backend
-  s3:
-    networks:
-      - backend
-  webdav:
     networks:
       - backend
