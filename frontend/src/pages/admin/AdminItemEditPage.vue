@@ -27,6 +27,7 @@
           <q-tab name="form" icon="edit" :label="t('admin.edit.tabForm')" />
           <q-tab name="json" icon="data_object" :label="t('admin.edit.tabJson')" />
           <q-tab v-if="!isNew" name="files" icon="attach_file" :label="t('admin.edit.tabFiles')" />
+          <q-tab v-if="!isNew" name="history" icon="history" :label="t('admin.edit.tabHistory')" />
         </q-tabs>
         <q-separator />
 
@@ -216,6 +217,11 @@
             </q-list>
             <div v-else class="text-library-muted q-pa-md text-center">{{ t('admin.edit.noFiles') }}</div>
           </q-tab-panel>
+
+          <!-- HISTORY -->
+          <q-tab-panel v-if="!isNew" name="history">
+            <HistoryTimeline :item-id="itemId!" />
+          </q-tab-panel>
         </q-tab-panels>
 
         <q-separator />
@@ -265,6 +271,7 @@ import {
 } from 'src/api/admin';
 import VisibilityBadge from 'src/components/admin/VisibilityBadge.vue';
 import TextExtractionIndicator from 'src/components/admin/TextExtractionIndicator.vue';
+import HistoryTimeline from 'src/components/admin/HistoryTimeline.vue';
 
 const { t } = useI18n();
 const route = useRoute();

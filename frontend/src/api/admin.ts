@@ -98,6 +98,164 @@ export async function downloadFile(fileId: string, filename: string): Promise<vo
 }
 
 // ---------------------------------------------------------------------------
+// History + statistics — mirrors backend items.controller.ts / stats.controller.ts
+// All four endpoints share the /admin guard (records:view:hidden + drafts:view:hidden).
+// ---------------------------------------------------------------------------
+
+export type ChangeAction =
+  | 'CREATE'
+  | 'UPDATE'
+  | 'PUBLISH'
+  | 'UNPUBLISH'
+  | 'VISIBILITY_CHANGE'
+  | 'FILE_ADDED'
+  | 'FILE_REMOVED'
+  | 'RELATION_ADDED'
+  | 'RELATION_REMOVED'
+  | 'DELETE';
+
+export type MetricKind = 'VIEW' | 'DOWNLOAD';
+
+export interface FieldChange {
+  /** Metadata path (`title`, `authors[0].familyName`) or a synthetic one (`files[<id>]`, `children[<id>]`, `visibilityStatus`, `itemType`). */
+  path: string;
+  before: unknown;
+  after: unknown;
+}
+
+export interface ItemRevision {
+  id: string;
+  itemId: string;
+  /** Item version AFTER the change. Two revisions can share one (file/relation writes don't bump it) — never key or order by it. */
+  version: number;
+  action: ChangeAction;
+  /** null for CREATE and DELETE. */
+  changes: FieldChange[] | null;
+  /** Raw Keycloak sub, or the literal "system" for COBISS imports. */
+  userId: string;
+  /** Display-name snapshot, written at the time of the change. */
+  userName: string;
+  createdAt: string;
+}
+
+export interface ItemHistory {
+  itemId: string;
+  total: number;
+  limit: number;
+  offset: number;
+  revisions: ItemRevision[];
+}
+
+/** Days with no activity are absent from a series, not zero — charts must fill the gaps. */
+export interface DayCount {
+  day: string;
+  count: number;
+}
+
+/** Inclusive UTC day window, YYYY-MM-DD. Echoed back so a caller relying on defaults knows what it got. */
+export interface StatsRange {
+  from: string;
+  to: string;
+}
+
+export interface StatsOverview {
+  range: StatsRange;
+  /** Current snapshot — ignores the date range. */
+  totals: ItemStats;
+  activity: {
+    totals: { created: number; published: number; updated: number; deleted: number };
+    created: DayCount[];
+    published: DayCount[];
+    updated: DayCount[];
+    deleted: DayCount[];
+  };
+  usage: {
+    totals: { views: number; downloads: number };
+    views: DayCount[];
+    downloads: DayCount[];
+  };
+}
+
+export interface UserTotals {
+  userId: string;
+  /** The user's name *now*, resolved from the directory (not the snapshot). */
+  displayName: string;
+  created: number;
+  published: number;
+  /** Everything else — metadata edits, visibility flips, file and relation writes. */
+  edited: number;
+  deleted: number;
+  total: number;
+}
+
+export interface UserStats {
+  range: StatsRange;
+  limit: number;
+  users: UserTotals[];
+}
+
+export interface TopItem {
+  itemId: string;
+  /** null when the item has since been deleted — the counts are still real. */
+  title: string | null;
+  itemType: ItemType | null;
+  count: number;
+}
+
+export interface TopFile {
+  fileId: string;
+  itemId: string;
+  /** null when the attachment has since been deleted. */
+  filename: string | null;
+  count: number;
+}
+
+export interface TopItems {
+  range: StatsRange;
+  limit: number;
+  mostViewed: TopItem[];
+  mostDownloaded: TopItem[];
+  /** Only populated for DOWNLOAD (or when `metric` is omitted). */
+  topFiles: TopFile[];
+}
+
+export async function getItemHistory(
+  itemId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<ItemHistory> {
+  const { data } = await api.get<ItemHistory>(`/items/${itemId}/history`, { params });
+  return data;
+}
+
+/** An out-of-range request (from > to, wider than 366 days, bad format) is a 400, not an empty result. */
+export async function getStatsOverview(params?: {
+  from?: string;
+  to?: string;
+}): Promise<StatsOverview> {
+  const { data } = await api.get<StatsOverview>('/stats/overview', { params });
+  return data;
+}
+
+export async function getUserStats(params?: {
+  from?: string;
+  to?: string;
+  limit?: number;
+}): Promise<UserStats> {
+  const { data } = await api.get<UserStats>('/stats/users', { params });
+  return data;
+}
+
+export async function getTopItems(params?: {
+  from?: string;
+  to?: string;
+  metric?: MetricKind;
+  limit?: number;
+}): Promise<TopItems> {
+  const { data } = await api.get<TopItems>('/stats/items/top', { params });
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // Import — mirrors backend cobiss-import.controller.ts / import.controller.ts
 // ---------------------------------------------------------------------------
 

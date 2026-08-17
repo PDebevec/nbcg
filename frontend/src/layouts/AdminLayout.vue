@@ -59,6 +59,10 @@
           <q-item-section avatar><q-icon name="cloud_download" /></q-item-section>
           <q-item-section>{{ t('admin.nav.import') }}</q-item-section>
         </q-item>
+        <q-item clickable v-ripple to="/admin/stats" active-class="drawer-item--active">
+          <q-item-section avatar><q-icon name="insights" /></q-item-section>
+          <q-item-section>{{ t('admin.nav.stats') }}</q-item-section>
+        </q-item>
       </q-list>
     </q-drawer>
 

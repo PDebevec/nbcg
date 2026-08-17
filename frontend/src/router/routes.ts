@@ -51,6 +51,9 @@ const routes: RouteRecordRaw[] = [
       },
       { path: 'items/new', component: () => import('pages/admin/AdminItemEditPage.vue') },
       { path: 'items/:id', component: () => import('pages/admin/AdminItemEditPage.vue') },
+      // Same guard as the dashboard — the /admin meta scopes are exactly the
+      // backend's bar for the stats endpoints.
+      { path: 'stats', component: () => import('pages/admin/AdminStatsPage.vue') },
       {
         path: 'import',
         component: () => import('pages/admin/AdminImportPage.vue'),
