@@ -4,7 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ChangeAction, ItemType, VisibilityStatus } from '../../../generated/prisma/enums';
+import {
+  ChangeAction,
+  ItemType,
+  TaskAction,
+  TaskKind,
+  TaskStatus,
+  VisibilityStatus,
+} from '../../../generated/prisma/enums';
 import { EDITABLE_BASE_METADATA_SHAPE } from '../../core/types/metadata.types';
 import type { FieldChange } from '../../core/types/revision.types';
 import { DOMAIN_RECORD_SHAPE, FieldValidator } from '../import/cobiss/cobiss-util/cobiss.types';
@@ -12,6 +19,7 @@ import type { Actor } from '../../core/auth/actor.type';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { RevisionsService } from '../../core/revisions/revisions.service';
 import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
+import { TaskHistoryService } from '../../core/task-history/task-history.service';
 import { diffMetadata } from '../../shared/util/diff-metadata';
 import { generateDeterministicId } from '../../shared/util/generateUuidFromCobissId';
 
@@ -43,6 +51,7 @@ export class ItemsService {
     private readonly prisma: PrismaService,
     private readonly seaweedfs: SeaweedfsService,
     private readonly revisions: RevisionsService,
+    private readonly taskHistory: TaskHistoryService,
   ) {}
 
   async stats(): Promise<{
@@ -282,6 +291,18 @@ export class ItemsService {
         where: { OR: [{ parentId: { in: ids } }, { childId: { in: ids } }] },
       });
 
+      // Live tasks die with the item: one pointing at a deleted item is
+      // unactionable noise in someone's inbox forever, and deleting them keeps
+      // the invariant that every task points at a real item, so no read path
+      // needs a missing-item branch.
+      //
+      // `task_history` deliberately does NOT die with it. It is the audit
+      // record, it has no FK to block or cascade, and its rows carry `itemId`
+      // so "what happened around this record" stays answerable once both the
+      // task and the item are gone — which is the whole reason the log is a
+      // separate table. Same call, and the same reasoning, as item_revisions.
+      await tx.task.deleteMany({ where: { itemId: { in: ids } } });
+
       const fromDrafts = ids.filter((id) => draftIds.has(id));
       const fromRecords = ids.filter((id) => recordIds.has(id));
 
@@ -475,6 +496,53 @@ export class ItemsService {
         })),
         tx,
       );
+
+      // A published item's review task is done, however it got published. This
+      // endpoint is also reachable via bulk publish, import and admin action, so
+      // the task list cannot rely on anyone going through the task itself — an
+      // observer here is the correctness mechanism, and a task-driven publish
+      // endpoint would be ergonomics on top rather than a replacement.
+      //
+      // RETURNED is included deliberately: if the item went out anyway, the goal
+      // was reached and the task should not linger with the cataloguer.
+      //
+      // FIX_METADATA and GENERAL are untouched — publishing is not evidence that
+      // a metadata fix was made, and there is no signal that would tell us.
+      //
+      // Not symmetric: RECORD -> DRAFT does NOT reopen completed tasks. That
+      // would be spooky action at a distance months later; file a new task.
+      if (targetState === ItemType.RECORD) {
+        const closing = await tx.task.findMany({
+          where: {
+            itemId: { in: ids },
+            kind: TaskKind.REVIEW_PUBLISH,
+            status: { in: [TaskStatus.OPEN, TaskStatus.IN_PROGRESS, TaskStatus.RETURNED] },
+          },
+          select: { id: true, itemId: true, status: true },
+        });
+
+        if (closing.length > 0) {
+          await tx.task.updateMany({
+            where: { id: { in: closing.map((t) => t.id) } },
+            data: { status: TaskStatus.COMPLETED, completedAt: now },
+          });
+          // So a task never appears to close by itself. Attributed to the real
+          // publisher rather than to `system`: "closed by Ana publishing it" is
+          // more use than "closed by system", and a human genuinely did it.
+          await this.taskHistory.record(
+            closing.map((t) => ({
+              taskId: t.id,
+              itemId: t.itemId,
+              action: TaskAction.CLOSED_ON_PUBLISH,
+              changes: [
+                { path: 'status', before: t.status, after: TaskStatus.COMPLETED },
+              ],
+              actor,
+            })),
+            tx,
+          );
+        }
+      }
 
       return result;
     });

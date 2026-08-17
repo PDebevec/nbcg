@@ -77,3 +77,36 @@ export const MetricKind = {
 } as const
 
 export type MetricKind = (typeof MetricKind)[keyof typeof MetricKind]
+
+
+export const TaskStatus = {
+  OPEN: 'OPEN',
+  IN_PROGRESS: 'IN_PROGRESS',
+  RETURNED: 'RETURNED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED'
+} as const
+
+export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus]
+
+
+export const TaskKind = {
+  REVIEW_PUBLISH: 'REVIEW_PUBLISH',
+  FIX_METADATA: 'FIX_METADATA',
+  GENERAL: 'GENERAL'
+} as const
+
+export type TaskKind = (typeof TaskKind)[keyof typeof TaskKind]
+
+
+export const TaskAction = {
+  CREATED: 'CREATED',
+  ASSIGNED: 'ASSIGNED',
+  STATUS_CHANGED: 'STATUS_CHANGED',
+  RETURNED: 'RETURNED',
+  COMMENTED: 'COMMENTED',
+  UPDATED: 'UPDATED',
+  CLOSED_ON_PUBLISH: 'CLOSED_ON_PUBLISH'
+} as const
+
+export type TaskAction = (typeof TaskAction)[keyof typeof TaskAction]

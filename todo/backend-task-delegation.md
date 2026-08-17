@@ -1,17 +1,36 @@
 # Backend: Task Delegation (assign work between cataloguers and publishers)
 
-## Status: TODO — but its main prerequisite is now BUILT
+## Status: DONE — 2026-08-16
 
-> **[User Directory + Attribution Snapshots](backend-user-directory-sync.md) shipped
-> on 2026-08-13.** That was the hard half of this task and it is done: names are
-> persisted, the Keycloak Admin API client exists, and there is a synced
-> `user_profiles` table with a `canPublish` flag. What remains here is the task
-> model itself.
+> **Built.** This document is kept for the *why*: the two Keycloak traps, the
+> terminology inversion, and the reasoning behind the id-only item reference. For
+> what was actually built and in what order, see
+> [the implementation plan](backend-task-delegation-plan.md); for how to call it,
+> see `backend/BACKEND_REFERENCE.md`.
 >
-> **Three things in this document are now out of date and are corrected inline
-> below:** the "there is no User table" premise, the `UserProfile` sketch, and
-> `GET /api/tasks/assignable-users` — which should not be built. Use
-> `GET /api/users?capability=publish`.
+> Its prerequisite,
+> [User Directory + Attribution Snapshots](backend-user-directory-sync.md),
+> shipped on 2026-08-13.
+>
+> **Four things in this document were wrong or incomplete and are corrected
+> inline below:**
+>
+> 1. **`TaskKind` exists** — decided in conversation and never written here. The
+>    guard rail below ("assigning a review/publish task to a non-publisher is a
+>    400") is unenforceable without it, because `title`/`description` are free
+>    text. Shipped as `REVIEW_PUBLISH` / `FIX_METADATA` / `GENERAL`.
+> 2. **The guard is keyed on `(kind, status)`, not `kind`.** The kind-only rule
+>    stated below breaks the return flow: a returned `REVIEW_PUBLISH` task sits
+>    with a cataloguer who must *fix* it, and would be rejected with a 400.
+> 3. **`WorkTask` needs a second index.** Only `@@index([assignedToUserId, status])`
+>    is listed, but `?createdBy=me` is an advertised filter and would seq-scan.
+> 4. **`assertAuthenticated` is the wrong predicate** for "being staff is the
+>    whole requirement" — it lets `reader` assign work to colleagues. Shipped as a
+>    new `assertIsStaff` (`drafts:manage` OR `records:manage`), which `/api/users`
+>    now uses too.
+>
+> Also as noted below: `GET /api/tasks/assignable-users` was **not** built. The
+> picker is `GET /api/users?capability=publish|staff&q=…`.
 
 ## Why we need it
 
@@ -110,6 +129,18 @@ No FK is possible against a polymorphic reference — same situation as
 
 ### Schema
 
+> **Superseded — kept to show the shape that was rejected.** `TaskComment` was
+> never the right object: a comment is not a kind of thing, it is one of the
+> things that can *happen* to a task. What shipped is `tasks` (current state) plus
+> an append-only `task_history` (`CREATED`/`ASSIGNED`/`STATUS_CHANGED`/
+> `RETURNED`/`COMMENTED`/`UPDATED`/`CLOSED_ON_PUBLISH`), mirroring
+> `item_revisions`. The decisive gain: **the log survives item deletion**, which
+> a cascading comments table cannot do. See
+> [the rewrite](backend-task-history-rewrite.md).
+>
+> Also missing below and added since: `TaskKind`, and a second index for the
+> advertised `?createdBy=me` filter.
+
 ```prisma
 enum TaskStatus {
   OPEN         // assigned, not picked up
@@ -190,8 +221,8 @@ tracked the current one would re-index every document a renamed person ever
 touched, nested `extractedText` included. That cost scales with the item count —
 50,000 items — and is why the name is frozen.
 
-Tasks have neither property. `work_tasks` is not pgsync-tracked and scales with
-staff activity, not the collection. So resolve both the assignee and the creator
+Tasks have neither property. `tasks` is not pgsync-tracked and scales with staff
+activity, not the collection. So resolve both the assignee and the creator
 through `resolveNames()` at read time:
 
 - A task list is bounded (`?assignedTo=me`, `status=OPEN`), so it is **one** extra
@@ -203,9 +234,15 @@ through `resolveNames()` at read time:
 The governing rule from the directory task: **snapshot for a specific row,
 directory for a group of rows.** Tasks are read as groups.
 
+> Both halves of that rule now have a table each. `tasks` resolves names live, as
+> argued here. `task_history` does the opposite and stores a `userName`
+> **snapshot**, because a log entry that changed its name when someone was
+> renamed would be a bug — the same reasoning as `ItemRevision.userName`. Two
+> tests, one rename, and the rule is asserted in both directions.
+
 #### Where the tables live
 
-`work_tasks` and `task_comments` are keyed by `itemId`, so they belong in `public`
+`tasks` and `task_history` are keyed by `itemId`, so they belong in `public`
 alongside the item model — see
 [Move `user_profiles` to a `directory` schema](backend-postgres-schema-split.md),
 which moves only the one table that has no item linkage. If that split has landed
@@ -257,16 +294,31 @@ Guard rails worth enforcing server-side, not just in the UI:
   call site re-derives it and the inverted-terminology trap cannot resurface.
   Reopen only if "may approve someone else's work" ever needs to differ from "can
   edit records" — which is a product question, not a plumbing one.
-- **Notifications** — email/in-app on assignment, or is the task list enough for v1?
-- **One open task per item, or many?** Affects whether `itemId` needs a partial
-  unique index.
+- ~~**Notifications**~~ **Decided: none in v1.** The inbox is
+  `GET /api/tasks?assignedTo=me&status=OPEN`. No SMTP exists to build on, and a
+  five-person team sitting in the same tool does not need a second channel yet.
+- ~~**One open task per item, or many?**~~ **Decided: many, no unique index.**
+  Two kinds can legitimately be open at once — a review and a metadata fix — and
+  the "has an open task" badge needs no uniqueness to work.
+- ~~**Where do the tables live?**~~ **Decided: `public`.** A separate Postgres
+  schema only earns its keep as a *grant boundary*, and no database role needs
+  one. See [the split doc](backend-postgres-schema-split.md), deferred not
+  rejected, and the reasoning in
+  [the plan](backend-task-delegation-plan.md).
+- **Task-driven publish** (`POST /api/tasks/:id/publish`) — not built. The
+  observer in `transition()` is the correctness mechanism and cannot be removed,
+  so this would be ergonomics on top. Revisit if the GUI wants a one-click
+  "approve and publish".
 
 ## Changes Needed
 
 ### Backend
 
-- [ ] Add `TaskStatus`, `WorkTask`, `TaskComment` to `schema.prisma` + migration
-      (`@db.Timestamptz(3)` throughout). **Not `UserProfile`** — it exists.
+- [x] Add `TaskStatus`, **`TaskKind`**, **`TaskAction`**, `Task` and
+      `TaskHistory` to `schema.prisma` + migration (`@db.Timestamptz(3)`
+      throughout). **Not `UserProfile`** — it exists. Shipped as
+      `20260816100606_add_work_tasks`, then reshaped the same day by
+      `20260816110044_replace_work_tasks_with_tasks_and_history`.
 - [x] ~~New `KeycloakAdminService`~~ — **built**, `src/core/keycloak/`. Cached
       token with 401 re-mint, pagination, composite role resolution,
       service-account filtering. Reuse it; do not add a second client.
@@ -279,21 +331,26 @@ Guard rails worth enforcing server-side, not just in the UI:
       startup, and `POST /api/users/sync` for a manual trigger
       (`users:manage`). `GET /api/users/sync/status` reports last run and last
       error.
-- [ ] `TasksModule` — controller, service, DTOs, the 5 remaining endpoints above.
-      Import `UsersModule` for `UsersService`.
-- [ ] Resolve assignee/creator display names in every task response via
-      `UsersService.resolveNames()` — one query per response. Do **not** add
-      snapshot name columns to `work_tasks`; see the reasoning above.
-- [ ] Cascade: deleting a draft/record should cancel or delete its open tasks —
-      no FK exists to do this automatically.
-- [ ] Add all new endpoints to `backend/test/api-test-suite.sh` (currently 308
-      tests, §16 covers the directory) including a cataloguer-vs-publisher
-      permission case and the "assign publish task to a non-publisher → 400" case.
-      The persona facts are already asserted there: `editor` and `admin` publish,
-      `cataloguer` does **not**, `reader` holds nothing relevant.
-- [ ] Also run `npx jest`. It is not wired into any build step, and the directory
-      task found it silently broken with a green `npm run build` — a type-level
-      pass proves nothing about a `Set` vs an array.
+- [x] `TasksModule` — controller, service, DTOs, the 5 remaining endpoints above.
+      Imports `UsersModule` for `UsersService`.
+- [x] New `assertIsStaff` predicate on `ResourceAccessService` — correction 4
+      above. `/api/users` moved onto it too, which made the conditional-email
+      branch dead code and deleted it.
+- [x] Resolve assignee/creator display names in every task response via
+      `UsersService.resolveNames()` — one query per response, batched across the
+      whole response. No snapshot name columns on `tasks`; `task_history` is the
+      deliberate opposite.
+- [x] Cascade: deleting a draft/record hard-deletes its **live tasks**, inside the
+      existing transaction. `task_history` deliberately survives — it is the audit
+      record, and destroying it is the failure mode it exists to prevent.
+- [x] **The observer** — not in the original list, and the real gap in it.
+      Publishing closes its `REVIEW_PUBLISH` tasks inside `transition()`, however
+      the publish happened. Without it the task list lies.
+- [x] `backend/test/api-test-suite.sh` §18 — 82 assertions. Suite now 383
+      passing. Two §16 cases inverted: `reader` gets 403 from the directory
+      rather than a filtered 200.
+- [x] `npx jest` — 54 passing, including a new
+      `tasks.service.spec.ts` covering the `(kind, status)` matrix.
 
 ### Frontend
 
@@ -308,9 +365,9 @@ Guard rails worth enforcing server-side, not just in the UI:
 
 ## Key Files
 
-- `backend/prisma/schema.prisma` — new models (`WorkTask`, `TaskComment`); `UserProfile` is already there
-- `backend/src/core/auth/resource-access.service.ts:164` — `assertCanTransition`, the publish capability
-- `backend/src/core/auth/resource-access.service.ts:37` — `assertAuthenticated`, for staff-only reads
+- `backend/src/modules/tasks/` — the module itself
+- `backend/prisma/schema.prisma` — `WorkTask` / `TaskComment`, at the bottom under the staff-workflow banner
+- `backend/src/core/auth/resource-access.service.ts` — `assertCanTransition` (the authoritative publish check) and `assertIsStaff` (the delegation bar)
 - `backend/src/core/auth/principal.type.ts` — `Principal.sub` is the user key; `displayName` is the name from the token
 - `backend/src/core/auth/actor.type.ts` — `Actor` / `actorOf()` / `SYSTEM_ACTOR`, the attribution pair
 - `backend/src/modules/users/users.service.ts:90` — `resolveNames()`, the id → current-name lookup

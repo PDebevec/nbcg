@@ -4,13 +4,20 @@ import { Transform } from 'class-transformer';
 
 export class UsersQueryDto {
   /**
-   * Filter to a capability rather than a role or group name. `publish` means
-   * `records:manage` AND `drafts:manage` — so it includes `editor` and excludes
-   * `cataloguer`, which is the inverse of how those roles sound.
+   * Filter to a capability rather than a role or group name.
+   *
+   * `publish` means `records:manage` AND `drafts:manage` — so it includes
+   * `editor` and excludes `cataloguer`, which is the inverse of how those roles
+   * sound. `staff` means `drafts:manage` OR `records:manage`: everyone who
+   * writes, so it includes cataloguers and excludes readers.
+   *
+   * The two map to the task kinds: REVIEW_PUBLISH needs `publish`, FIX_METADATA
+   * and GENERAL need `staff`. The client filter is an affordance only — the
+   * server re-derives the requirement from `kind` on every write.
    */
   @IsOptional()
-  @IsEnum(['publish'])
-  capability?: 'publish';
+  @IsEnum(['publish', 'staff'])
+  capability?: 'publish' | 'staff';
 
   /**
    * Active means enabled in Keycloak and still present at the last successful

@@ -98,3 +98,42 @@ export type ItemMetricDaily = Prisma.ItemMetricDailyModel
  * scan is popular" are both answerable.
  */
 export type FileMetricDaily = Prisma.FileMetricDailyModel
+/**
+ * Model Task
+ * Current state of a handoff between two members of staff. One row per live
+ * task; everything that ever happened to it is in TaskHistory.
+ * 
+ * `itemId` is stable across a DRAFT <-> RECORD transition (transition()
+ * preserves the id), so a task filed against a draft still points at the right
+ * thing after publication. Deliberately no stored `itemType` — it would go
+ * stale on the very transition the task exists to request. Resolve at read
+ * time, batched.
+ * 
+ * No FK on `itemId`: the reference is polymorphic across drafts and records,
+ * same situation as ItemRelation. Deletion cleanup is explicit — see
+ * items.service.ts delete().
+ * 
+ * No FK on `assignedToUserId` either. `user_profiles` is written by a daily
+ * sync, so a user who exists in Keycloak but has not been synced would have
+ * their assignment rejected by the database instead of by a 400 — and since
+ * directory rows are never hard-deleted, that rare failure would be one nobody
+ * had ever seen. Same reasoning as Draft.createdByUserId.
+ * 
+ * Names on this table resolve LIVE from the directory. This is current state:
+ * a renamed assignee showing their old name on an open task is a bug. Contrast
+ * TaskHistory.userName, which is a snapshot for exactly the opposite reason.
+ */
+export type Task = Prisma.TaskModel
+/**
+ * Model TaskHistory
+ * Append-only audit log. Never updated, never deleted — not even when the task
+ * or the item it describes is deleted. That asymmetry IS the point of the
+ * table: a live task pointing at a deleted item is unactionable noise, but the
+ * record of what people did about that item is what someone will come looking
+ * for later.
+ * 
+ * No relation to Task and no FK on either id, for the same reason ItemRevision
+ * has none: an FK would either block the delete or cascade the audit away with
+ * it.
+ */
+export type TaskHistory = Prisma.TaskHistoryModel

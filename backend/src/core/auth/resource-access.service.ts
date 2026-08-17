@@ -41,6 +41,23 @@ export class ResourceAccessService {
   }
 
   /**
+   * Assert the principal holds at least one write capability — the bar for
+   * participating in task delegation, and for reading the user directory.
+   *
+   * `@RequireScopes` is AND-only and cannot express the disjunction, and
+   * `assertAuthenticated` is too weak here: `reader` holds only `records:view:*`
+   * and has no business assigning work to colleagues or enumerating staff.
+   */
+  assertIsStaff(principal: Principal): void {
+    if (principal.isAnonymous) {
+      throw new UnauthorizedException();
+    }
+    if (!principal.scopes.has('drafts:manage') && !principal.scopes.has('records:manage')) {
+      throw new ForbiddenException('Requires drafts:manage or records:manage');
+    }
+  }
+
+  /**
    * §4.6 — Compute the maximum visibility set per collection for this principal.
    */
   visibilityFilter(principal: Principal): VisibilityFilter {

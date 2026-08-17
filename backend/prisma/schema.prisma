@@ -243,3 +243,129 @@ model FileMetricDaily {
   @@index([itemId, metric])
   @@map("file_metrics_daily")
 }
+
+// ---------------------------------------------------------------------------
+// Staff workflow. Not metadata: a task is a conversation between two people
+// that happens to name an item, and nothing here would be exported with the
+// collection. Deliberately in `public` anyway — see
+// todo/backend-task-delegation-plan.md for why a separate schema was rejected,
+// and what would make it worth revisiting.
+// ---------------------------------------------------------------------------
+
+enum TaskStatus {
+  OPEN // assigned, not picked up
+  IN_PROGRESS // assignee is working on it
+  RETURNED // sent back to the requester with notes
+  COMPLETED
+  CANCELLED
+}
+
+/// What kind of work is being asked for. Exists because the assignee guard rail
+/// differs by kind and free text cannot be checked: a REVIEW_PUBLISH task
+/// assigned to someone who cannot publish is unfinishable by construction,
+/// while a GENERAL "have a look at this" is fine for any colleague who writes.
+enum TaskKind {
+  REVIEW_PUBLISH // "this is ready, please publish it"
+  FIX_METADATA // "the author field is wrong"
+  GENERAL // anything else, passed to any colleague
+}
+
+/// What happened to a task. Pick the MOST SPECIFIC action that describes the
+/// actor's intent: a return is RETURNED, not STATUS_CHANGED plus ASSIGNED.
+///
+/// One user action produces exactly one row. A return moves status and assignee
+/// together — the API enforces that they travel in one atomic PATCH — so
+/// splitting it would record two events that never separately happened.
+enum TaskAction {
+  CREATED
+  ASSIGNED // handed to someone else without a status change
+  STATUS_CHANGED // picked up, completed by hand, cancelled, reopened
+  RETURNED // sent back with notes — the workflow's whole point
+  COMMENTED // a note, no state change
+  UPDATED // title, description, dueAt or kind edited
+  CLOSED_ON_PUBLISH // the observer in transition()
+}
+
+/// Current state of a handoff between two members of staff. One row per live
+/// task; everything that ever happened to it is in TaskHistory.
+///
+/// `itemId` is stable across a DRAFT <-> RECORD transition (transition()
+/// preserves the id), so a task filed against a draft still points at the right
+/// thing after publication. Deliberately no stored `itemType` — it would go
+/// stale on the very transition the task exists to request. Resolve at read
+/// time, batched.
+///
+/// No FK on `itemId`: the reference is polymorphic across drafts and records,
+/// same situation as ItemRelation. Deletion cleanup is explicit — see
+/// items.service.ts delete().
+///
+/// No FK on `assignedToUserId` either. `user_profiles` is written by a daily
+/// sync, so a user who exists in Keycloak but has not been synced would have
+/// their assignment rejected by the database instead of by a 400 — and since
+/// directory rows are never hard-deleted, that rare failure would be one nobody
+/// had ever seen. Same reasoning as Draft.createdByUserId.
+///
+/// Names on this table resolve LIVE from the directory. This is current state:
+/// a renamed assignee showing their old name on an open task is a bug. Contrast
+/// TaskHistory.userName, which is a snapshot for exactly the opposite reason.
+model Task {
+  id               String     @id @default(cuid())
+  itemId           String
+  kind             TaskKind   @default(GENERAL)
+  title            String
+  description      String?
+  status           TaskStatus @default(OPEN)
+  /// Keycloak sub.
+  assignedToUserId String
+  createdByUserId  String
+  dueAt            DateTime?  @db.Timestamptz(3)
+  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
+  completedAt      DateTime?  @db.Timestamptz(3)
+
+  @@index([assignedToUserId, status])
+  @@index([createdByUserId, status])
+  @@index([itemId])
+  @@map("tasks")
+}
+
+/// Append-only audit log. Never updated, never deleted — not even when the task
+/// or the item it describes is deleted. That asymmetry IS the point of the
+/// table: a live task pointing at a deleted item is unactionable noise, but the
+/// record of what people did about that item is what someone will come looking
+/// for later.
+///
+/// No relation to Task and no FK on either id, for the same reason ItemRevision
+/// has none: an FK would either block the delete or cascade the audit away with
+/// it.
+model TaskHistory {
+  id      String     @id @default(cuid())
+  taskId  String
+  /// Denormalised from the task at write time so "what happened around item Y"
+  /// survives the deletion of both the task and the item. NOT updated if a task
+  /// were ever repointed at another item — nothing supports doing that, and
+  /// nothing should, because the log would become incoherent.
+  itemId  String
+  action  TaskAction
+  /// What a human reads: the return reason, the comment body. Its own column
+  /// rather than a key in `changes` because two actions use it and it should be
+  /// greppable.
+  note    String?
+  /// [FieldChangeList] — before/after for whatever moved, same shape as
+  /// item_revisions.changes.
+  changes Json?
+  /// Keycloak sub of whoever did it. The real person even for
+  /// CLOSED_ON_PUBLISH: "closed by Ana publishing it" is more use than "closed
+  /// by system".
+  userId  String
+  /// SNAPSHOT of the display name, captured at write time and never updated —
+  /// same rule as ItemRevision.userName. Aggregates must group by `userId`
+  /// alone, or a renamed person splits into two rows.
+  userName String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([taskId, createdAt])
+  @@index([itemId, createdAt])
+  @@index([userId, createdAt])
+  @@map("task_history")
+}

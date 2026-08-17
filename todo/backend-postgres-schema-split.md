@@ -1,6 +1,42 @@
 # Backend: Move `user_profiles` into its own `directory` Schema
 
-## Status: PLANNING
+## Status: DEFERRED — not rejected
+
+Everything below is live-verified and stays valid. What changed is the timing.
+
+**Why it is deferred.** A Postgres schema is a namespacing-and-permissions
+mechanism, and the only thing that makes one earn its keep here is the grant
+boundary under "Upside" — a role that reads the catalogue and not the staff
+directory. No such role exists or is planned. Without it the split buys
+tidiness and charges a permanent tax: `@@schema` on every model and enum
+forever (cheap, fails loudly at build) and **every raw query against
+`directory` must qualify or fail at runtime** (not cheap — the codebase has 8
+`$queryRaw`/`$executeRawUnsafe` sites, and "open tasks per person" is an obvious
+future one).
+
+**Why deferring costs nothing.** `ALTER TABLE … SET SCHEMA` is catalogue-only —
+instant at any row count, per fact 5. The annotations are the same annotations
+whenever they happen. No window is closing, so there is no reason to pay before
+the benefit exists.
+
+The count is **19** as of 2026-08-16 (10 models, 9 enums) — it was 15 when this
+was written, and task delegation added two models and two enums. That growth is
+the argument, not against it: the tax is per-model-forever, so it is paid on
+every future model whether or not that model has anything to do with the
+directory. Recount before quoting the figure.
+
+**The trigger to reopen this:** anyone needs a database connection that must not
+see staff names and emails. Per-schema `ALTER DEFAULT PRIVILEGES` is then the
+right tool and per-table `REVOKE` is not, because a new staff table added later
+would silently inherit the grant.
+
+**When it happens, three tables move, not one.** [Task
+Delegation](backend-task-history-rewrite.md) puts `tasks` and `task_history` in
+`public` for now, but they are staff workflow by the same argument as
+`user_profiles` — none of the three would be exported with the collection. Move
+all three together and add `directory.` to the raw-SQL inventory below.
+
+---
 
 Narrowed from an earlier draft that also moved `item_revisions`,
 `item_metrics_daily` and `file_metrics_daily`. **Those stay in `public`.** Only

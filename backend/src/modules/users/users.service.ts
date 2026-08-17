@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../../../generated/prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
-import type { Principal } from '../../core/auth/principal.type';
 import { SYSTEM_USER_ID, SYSTEM_USER_NAME, UNKNOWN_USER_NAME } from '../../shared/util/display-name';
 import type { UsersQueryDto } from './dto/users-query.dto';
 
@@ -18,8 +18,13 @@ export interface UserProfileView {
   isActive: boolean;
   enabled: boolean;
   deletedAt: Date | null;
-  /** Staff-only — see {@link UsersService.canSeeContactDetails}. */
-  email?: string | null;
+  /**
+   * Unconditional. The endpoint is gated on `assertIsStaff`, so everyone who can
+   * reach it is internal staff who can see each other in Keycloak anyway — the
+   * conditional-email branch this replaced was dead weight every call site still
+   * had to reason about.
+   */
+  email: string | null;
 }
 
 /**
@@ -30,31 +35,41 @@ export interface UserProfileView {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Email is withheld below the same bar that gates attribution
-   * (`drafts:manage` or `records:manage`). Seeing *who exists* is normal for any
-   * authenticated user of an internal tool — a picker needs it. Seeing how to
-   * contact them is a step further, and nothing in the app needs it below that
-   * bar.
-   */
-  private canSeeContactDetails(principal: Principal): boolean {
-    return principal.scopes.has('drafts:manage') || principal.scopes.has('records:manage');
-  }
-
-  async list(dto: UsersQueryDto, principal: Principal): Promise<{ total: number; users: UserProfileView[] }> {
+  async list(dto: UsersQueryDto): Promise<{ total: number; users: UserProfileView[] }> {
     const active = dto.active ?? true;
-    const where = {
-      ...(dto.capability === 'publish' ? { canPublish: true } : {}),
-      ...(active ? { enabled: true, deletedAt: null } : {}),
-      ...(dto.q?.trim()
-        ? {
-            OR: [
-              { displayName: { contains: dto.q.trim(), mode: 'insensitive' as const } },
-              { username: { contains: dto.q.trim(), mode: 'insensitive' as const } },
-              { email: { contains: dto.q.trim(), mode: 'insensitive' as const } },
-            ],
-          }
-        : {}),
+    const q = dto.q?.trim();
+
+    // An AND array rather than spread fragments. Nothing was broken by the
+    // spread — `canPublish` and the `q` OR are different keys and got ANDed
+    // correctly — but `capability=staff` also wants an OR, and a second OR key
+    // would have overwritten the first instead of combining. Filter to the
+    // capability, then search within it; any number of fragments now compose.
+    const where: Prisma.UserProfileWhereInput = {
+      AND: [
+        ...(dto.capability === 'publish' ? [{ canPublish: true }] : []),
+        ...(dto.capability === 'staff'
+          ? [
+              {
+                OR: [
+                  { scopes: { has: 'drafts:manage' } },
+                  { scopes: { has: 'records:manage' } },
+                ],
+              },
+            ]
+          : []),
+        ...(active ? [{ enabled: true, deletedAt: null }] : []),
+        ...(q
+          ? [
+              {
+                OR: [
+                  { displayName: { contains: q, mode: 'insensitive' as const } },
+                  { username: { contains: q, mode: 'insensitive' as const } },
+                  { email: { contains: q, mode: 'insensitive' as const } },
+                ],
+              },
+            ]
+          : []),
+      ],
     };
 
     const [total, rows] = await Promise.all([
@@ -66,14 +81,43 @@ export class UsersService {
       }),
     ]);
 
-    const withEmail = this.canSeeContactDetails(principal);
-    return { total, users: rows.map((r) => toView(r, withEmail)) };
+    return { total, users: rows.map(toView) };
   }
 
-  async get(userId: string, principal: Principal): Promise<UserProfileView> {
+  async get(userId: string): Promise<UserProfileView> {
     const row = await this.prisma.userProfile.findUnique({ where: { userId } });
     if (!row) throw new NotFoundException(`User not found in the directory: ${userId}`);
-    return toView(row, this.canSeeContactDetails(principal));
+    return toView(row);
+  }
+
+  /**
+   * Assignability facts for one user, for the task assignee guard.
+   *
+   * `null` means the directory has never seen this id — treat as unassignable
+   * rather than as "no capabilities", because the two want different messages.
+   *
+   * ADVISORY ONLY. Everything here comes from a directory that is up to one sync
+   * interval (24h) stale, so it can reject an assignment the assignee's own
+   * token would in fact permit; `POST /api/users/sync` fixes that instantly.
+   * Never gate a real permission on this — the authoritative publish check is
+   * `ResourceAccessService.assertCanTransition()`, reading the JWT.
+   */
+  async assignability(
+    userId: string,
+  ): Promise<{ isActive: boolean; canPublish: boolean; canWrite: boolean } | null> {
+    const row = await this.prisma.userProfile.findUnique({
+      where: { userId },
+      select: { canPublish: true, enabled: true, deletedAt: true, scopes: true },
+    });
+    if (!row) return null;
+
+    return {
+      isActive: row.enabled && row.deletedAt === null,
+      canPublish: row.canPublish,
+      // Read off the raw `scopes` column, which is exactly what it was stored
+      // for: "a future capability question needs no migration and no resync".
+      canWrite: row.scopes.includes('drafts:manage') || row.scopes.includes('records:manage'),
+    };
   }
 
   /**
@@ -116,7 +160,7 @@ interface UserProfileRow {
   email: string | null;
 }
 
-function toView(row: UserProfileRow, withEmail: boolean): UserProfileView {
+function toView(row: UserProfileRow): UserProfileView {
   return {
     userId: row.userId,
     username: row.username,
@@ -125,6 +169,6 @@ function toView(row: UserProfileRow, withEmail: boolean): UserProfileView {
     isActive: row.enabled && row.deletedAt === null,
     enabled: row.enabled,
     deletedAt: row.deletedAt,
-    ...(withEmail ? { email: row.email } : {}),
+    email: row.email,
   };
 }

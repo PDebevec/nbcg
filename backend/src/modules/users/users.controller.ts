@@ -15,9 +15,14 @@ import { UsersService } from './users.service';
  * task delegation, and "filter search by cataloguer" and "who can publish this"
  * want the same list.
  *
- * Reads are open to any authenticated principal — seeing who else works here is
- * normal for an internal tool. Writing is not an endpoint at all: the sync job is
- * the only writer, and `POST /users/sync` only asks it to run.
+ * Reads require at least one write capability (`assertIsStaff`), not merely
+ * authentication. The directory exists to serve the task-delegation picker, and
+ * only people who can be given or can hand out work need it — a `reader` gets a
+ * 403. That is also why `email` is returned unconditionally: everyone who can
+ * reach this endpoint is internal staff who can see each other in Keycloak.
+ *
+ * Writing is not an endpoint at all: the sync job is the only writer, and
+ * `POST /users/sync` only asks it to run.
  */
 @Controller('users')
 export class UsersController {
@@ -47,13 +52,13 @@ export class UsersController {
 
   @Get()
   list(@GetPrincipal() principal: Principal, @Query() dto: UsersQueryDto) {
-    this.access.assertAuthenticated(principal);
-    return this.users.list(dto, principal);
+    this.access.assertIsStaff(principal);
+    return this.users.list(dto);
   }
 
   @Get(':id')
   get(@GetPrincipal() principal: Principal, @Param('id') id: string) {
-    this.access.assertAuthenticated(principal);
-    return this.users.get(id, principal);
+    this.access.assertIsStaff(principal);
+    return this.users.get(id);
   }
 }

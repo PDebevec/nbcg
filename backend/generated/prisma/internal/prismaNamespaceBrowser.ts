@@ -58,7 +58,9 @@ export const ModelName = {
   ItemRevision: 'ItemRevision',
   UserProfile: 'UserProfile',
   ItemMetricDaily: 'ItemMetricDaily',
-  FileMetricDaily: 'FileMetricDaily'
+  FileMetricDaily: 'FileMetricDaily',
+  Task: 'Task',
+  TaskHistory: 'TaskHistory'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -188,6 +190,39 @@ export const FileMetricDailyScalarFieldEnum = {
 } as const
 
 export type FileMetricDailyScalarFieldEnum = (typeof FileMetricDailyScalarFieldEnum)[keyof typeof FileMetricDailyScalarFieldEnum]
+
+
+export const TaskScalarFieldEnum = {
+  id: 'id',
+  itemId: 'itemId',
+  kind: 'kind',
+  title: 'title',
+  description: 'description',
+  status: 'status',
+  assignedToUserId: 'assignedToUserId',
+  createdByUserId: 'createdByUserId',
+  dueAt: 'dueAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  completedAt: 'completedAt'
+} as const
+
+export type TaskScalarFieldEnum = (typeof TaskScalarFieldEnum)[keyof typeof TaskScalarFieldEnum]
+
+
+export const TaskHistoryScalarFieldEnum = {
+  id: 'id',
+  taskId: 'taskId',
+  itemId: 'itemId',
+  action: 'action',
+  note: 'note',
+  changes: 'changes',
+  userId: 'userId',
+  userName: 'userName',
+  createdAt: 'createdAt'
+} as const
+
+export type TaskHistoryScalarFieldEnum = (typeof TaskHistoryScalarFieldEnum)[keyof typeof TaskHistoryScalarFieldEnum]
 
 
 export const SortOrder = {
