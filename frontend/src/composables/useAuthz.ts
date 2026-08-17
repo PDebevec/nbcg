@@ -24,6 +24,18 @@ export function useAuthz() {
   const canManageDrafts = computed(() => hasScope('drafts:manage'));
   const canTransition = computed(() => canManageRecords.value && canManageDrafts.value);
   const canImport = computed(() => hasScope('import:execute'));
+  // Mirrors the backend attribution bar exactly; if they ever disagree the
+  // backend wins, because it strips the field from the response.
+  const canSeeAttribution = computed(() => canManageDrafts.value || canManageRecords.value);
+  const canManageUsers = computed(() => hasScope('users:manage'));
 
-  return { canAccessAdmin, canManageRecords, canManageDrafts, canTransition, canImport };
+  return {
+    canAccessAdmin,
+    canManageRecords,
+    canManageDrafts,
+    canTransition,
+    canImport,
+    canSeeAttribution,
+    canManageUsers,
+  };
 }

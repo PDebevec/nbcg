@@ -84,6 +84,15 @@ export class SearchQueryDto {
   @IsString()
   cobissId?: string;
 
+  /**
+   * Exact filter on `createdByUserId`. A user id, not a name: the snapshot name
+   * is frozen on purpose, so filtering by name would miss renamed users. Not
+   * always a UUID (system imports use a sentinel id), hence plain IsString.
+   */
+  @IsOptional()
+  @IsString()
+  createdBy?: string;
+
   // ── Response shape ──
 
   /** Comma-separated field names to include in the response. If omitted, all fields are returned. `id` is always included. */

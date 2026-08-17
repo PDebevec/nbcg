@@ -133,9 +133,10 @@ export interface FileAttachment {
   createdAt: string;
 }
 
-export interface ItemRelationChild {
-  childId: string;
-  childType: 'DRAFT' | 'RECORD';
+/** One row per parent of this item (pgsync labels the item_relations node `parent_relations`). */
+export interface ParentRelation {
+  parentId: string;
+  parentType: 'DRAFT' | 'RECORD';
 }
 
 export interface IndexedRecord {
@@ -147,8 +148,11 @@ export interface IndexedRecord {
   updatedAt: string;
   createdByUserId: string;
   updatedByUserId: string;
+  /** Display-name snapshot. Absent unless the caller holds drafts:manage or records:manage. */
+  createdByName?: string;
+  updatedByName?: string;
   file_attachments: FileAttachment[];
-  item_relations: ItemRelationChild[];
+  parent_relations: ParentRelation[];
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +181,13 @@ export interface SearchParams {
   isbn?: string;
   issn?: string;
   cobissId?: string;
-  /** Comma-separated field names for _source.includes; `id` is always returned */
+  /** Exact filter on createdByUserId (the picker resolves a person to their UUID and sends that) */
+  createdBy?: string;
+  /**
+   * Comma-separated field names for _source.includes; `id` is always returned.
+   * Allowlisted server-side — unknown names are dropped silently, and attribution
+   * fields are only returned to principals holding drafts:manage / records:manage.
+   */
   fields?: string;
   sort?: 'relevance' | 'newest';
 }

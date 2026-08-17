@@ -1,6 +1,6 @@
 # Frontend: Catch Up With Attribution + the User Directory
 
-## Status: TODO
+## Status: DONE (2026-08-17)
 
 Reacts to [User Directory + Attribution Snapshots](backend-user-directory-sync.md),
 which shipped 2026-08-13. The backend now persists and serves human names; the
@@ -105,11 +105,14 @@ withheld.
 ## Changes Needed
 
 ### API layer
-- [ ] `src/api/search.ts` — add optional `createdByName` / `updatedByName` to
-      `IndexedRecord`; fix `item_relations` → `parent_relations`.
-- [ ] `src/api/search.ts` — comment `SearchParams.fields` as allowlisted
+- [x] `src/api/search.ts` — add optional `createdByName` / `updatedByName` to
+      `IndexedRecord`; fix `item_relations` → `parent_relations`. (The element
+      shape was wrong too: the index carries `parentId`/`parentType` — one row
+      per **parent** — not `childId`/`childType`. Verified against
+      `infrastructure/docker/pgsync/schema.json`.)
+- [x] `src/api/search.ts` — comment `SearchParams.fields` as allowlisted
       server-side, with unknown names dropped silently.
-- [ ] New `src/api/users.ts`:
+- [x] New `src/api/users.ts`:
       ```ts
       export interface UserProfile {
         userId: string; username: string; displayName: string;
@@ -126,24 +129,24 @@ withheld.
       `listUsers` returns `{ total, users }`, not a bare array.
 
 ### Auth helper
-- [ ] A `canSeeAttribution` computed off `auth.roles`
+- [x] A `canSeeAttribution` computed off `auth.roles`
       (`drafts:manage` **or** `records:manage`) next to the existing helpers, so
       three call sites do not each re-derive it. It mirrors the backend rule
       exactly; if they ever disagree the backend wins, because it strips the field.
 
 ### UI
-- [ ] "Created by" column in `AdminItemsPage.vue` (columns array around
+- [x] "Created by" column in `AdminItemsPage.vue` (columns array around
       `src/pages/admin/AdminItemsPage.vue:220`), shown only when
       `canSeeAttribution`. Renders `createdByName` directly off the hit.
-- [ ] Creator filter on the admin items list: a user picker fed by
-      `GET /api/users`, sending `createdByUserId`. **Needs a backend `createdBy`
-      search param** — see Open questions.
-- [ ] Admin sync control on `AdminDashboardPage.vue`: a "Refresh user directory"
+- [x] Creator filter on the admin items list: a user picker fed by
+      `GET /api/users`, sending `createdByUserId`. The backend `createdBy`
+      param was added as part of this task — see Open questions.
+- [x] Admin sync control on `AdminDashboardPage.vue`: a "Refresh user directory"
       button (`POST /api/users/sync`) plus last-run / last-error from
       `GET /api/users/sync/status`. Visible only with `users:manage`. Worth having
       because a sync failing silently for a week is otherwise invisible until the
       picker is mysteriously empty.
-- [ ] i18n strings in **both** `en-US` and `me` — every new label.
+- [x] i18n strings in **both** `en-US` and `me` — every new label.
 
 ### Follow-on, tracked elsewhere
 - [ ] Assignee picker — [Task Delegation](backend-task-delegation.md) frontend
@@ -155,11 +158,13 @@ withheld.
 ## Open questions
 
 - **Sorting and filtering by creator need backend params that do not exist yet.**
-  The index now supports both (`createdByName` is a `keyword`, `createdByUserId`
+  ~~The index now supports both (`createdByName` is a `keyword`, `createdByUserId`
   already was), but `SearchQueryDto` has no `createdBy` filter and `sort` only
-  accepts `relevance | newest`. Adding `?createdBy=<uuid>` and
-  `sort=creator` is a small backend change — decide whether it belongs here or in
-  a backend task before building the filter UI.
+  accepts `relevance | newest`.~~ **Resolved 2026-08-17:** `?createdBy=<userId>`
+  was added here (a `term` filter on `createdByUserId` in `SearchQueryDto` +
+  `search.service.ts`) because the filter UI is unbuildable without it and the
+  change is two lines. `sort=creator` was **not** added — no UI consumes it yet;
+  add it with the first consumer.
 - **Should the public catalogue ever show a creator?** Currently impossible: the
   backend strips names below the staff bar, so this is an admin-only feature by
   construction. Changing that is a backend policy decision, not a frontend one.

@@ -44,6 +44,34 @@
             <template #prepend><q-icon name="search" /></template>
           </q-input>
 
+          <q-select
+            v-if="canSeeAttribution"
+            v-model="creatorFilter"
+            :options="creatorOptions"
+            :loading="creatorsLoading"
+            option-value="userId"
+            option-label="displayName"
+            dense
+            outlined
+            clearable
+            use-input
+            input-debounce="300"
+            hide-selected
+            fill-input
+            :label="t('admin.items.creatorFilter')"
+            class="creator-filter q-ml-sm"
+            @filter="filterCreators"
+          >
+            <template #prepend><q-icon name="person" /></template>
+            <template #no-option>
+              <q-item>
+                <q-item-section class="text-library-muted">
+                  {{ t('admin.items.creatorFilterEmpty') }}
+                </q-item-section>
+              </q-item>
+            </template>
+          </q-select>
+
           <q-space />
 
           <!-- Bulk actions -->
@@ -163,6 +191,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useQuasar, type QTableColumn, type QTableProps } from 'quasar';
 import { searchItems, type IndexedRecord, type TextExtractionStatus } from 'src/api/search';
+import { listUsers, type UserProfile } from 'src/api/users';
 import TextExtractionIndicator from 'src/components/admin/TextExtractionIndicator.vue';
 import {
   conflictCurrentVersion,
@@ -180,7 +209,7 @@ const props = defineProps<{ collection: 'records' | 'drafts' }>();
 
 const { t } = useI18n();
 const $q = useQuasar();
-const { canTransition } = useAuthz();
+const { canTransition, canSeeAttribution } = useAuthz();
 
 interface Row {
   id: string;
@@ -192,6 +221,8 @@ interface Row {
   updatedAt: string;
   version: number;
   extraction: TextExtractionStatus | null;
+  /** Empty for a fresh item until the CDC-lagged index catches up — render nothing, not "Unknown" */
+  createdBy: string;
 }
 
 // Worst PDF extraction status for the row indicator; null when there are no PDFs
@@ -210,6 +241,32 @@ const rows = ref<Row[]>([]);
 const selected = ref<Row[]>([]);
 const loading = ref(false);
 const searchText = ref('');
+
+// ── Creator filter ──
+// Filters on the userId, never the name: the name snapshot is frozen on
+// purpose, so a name filter would break on renames. The list is fetched fresh
+// every time the picker opens/filters — see src/api/users.ts on why no cache.
+const creatorFilter = ref<UserProfile | null>(null);
+const creatorOptions = ref<UserProfile[]>([]);
+const creatorsLoading = ref(false);
+
+const filterCreators = (
+  input: string,
+  doneFn: (callback: () => void) => void,
+  abortFn: () => void,
+) => {
+  creatorsLoading.value = true;
+  listUsers(input.trim() ? { q: input.trim() } : {})
+    .then((result) => {
+      doneFn(() => {
+        creatorOptions.value = result.users;
+      });
+    })
+    .catch(() => abortFn())
+    .finally(() => {
+      creatorsLoading.value = false;
+    });
+};
 const pagination = ref({
   page: 1,
   rowsPerPage: 20,
@@ -228,6 +285,16 @@ const columns = computed<QTableColumn<Row>[]>(() => [
     field: 'visibilityStatus',
     align: 'left',
   },
+  ...(canSeeAttribution.value
+    ? [
+        {
+          name: 'createdBy',
+          label: t('admin.items.columns.createdBy'),
+          field: 'createdBy',
+          align: 'left',
+        } satisfies QTableColumn<Row>,
+      ]
+    : []),
   {
     name: 'updatedAt',
     label: t('admin.items.columns.updated'),
@@ -250,6 +317,7 @@ function toRow(source: IndexedRecord): Row {
     updatedAt: source.updatedAt,
     version: source.version ?? 0,
     extraction: aggregateExtraction(source),
+    createdBy: source.createdByName ?? '',
   };
 }
 
@@ -271,8 +339,11 @@ async function fetchPage(page: number, limit: number) {
         'version',
         'file_attachments.fileType',
         'file_attachments.textExtractionStatus',
+        // Served only to drafts:manage / records:manage; stripped silently otherwise
+        'createdByName',
       ].join(','),
       ...(searchText.value ? { q: searchText.value } : {}),
+      ...(creatorFilter.value ? { createdBy: creatorFilter.value.userId } : {}),
     });
     rows.value = result.hits.map((h) => toRow(h.source));
     pagination.value.page = result.page;
@@ -296,11 +367,13 @@ function refreshSoon() {
 }
 
 watch(searchText, () => void fetchPage(1, pagination.value.rowsPerPage));
+watch(creatorFilter, () => void fetchPage(1, pagination.value.rowsPerPage));
 watch(
   () => props.collection,
   () => {
     selected.value = [];
     searchText.value = '';
+    creatorFilter.value = null;
     void fetchPage(1, pagination.value.rowsPerPage);
   },
 );
@@ -394,6 +467,9 @@ async function bulkSetVisibility(status: VisibilityStatus) {
 .items-table
   background: $surface
   border-radius: $radius
+
+.creator-filter
+  min-width: 220px
 
 .title-link
   color: $primary

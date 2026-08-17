@@ -255,6 +255,11 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
     filter.push({ term: { 'metadata.cobissId': dto.cobissId } });
   }
 
+  // ── createdBy: exact creator filter (keyword) ──
+  if (dto.createdBy) {
+    filter.push({ term: { createdByUserId: dto.createdBy } });
+  }
+
   // ── fullText: nested search in extracted PDF text ──
   if (dto.fullText?.trim()) {
     must.push({

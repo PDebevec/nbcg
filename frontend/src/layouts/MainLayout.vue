@@ -397,17 +397,6 @@ const headerLinks = navLinks.filter((l) => l.to !== '/napredna-pretraga');
   .nav-menu-btn
     display: inline-flex
 
-.page-transition-enter-active,
-.page-transition-leave-active
-  transition: opacity 0.18s ease, transform 0.18s ease
-
-.page-transition-enter-from
-  opacity: 0
-  transform: translateY(10px)
-
-.page-transition-leave-to
-  opacity: 0
-  transform: translateY(-6px)
 
 // FOOTER
 .app-footer
