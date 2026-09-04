@@ -1,7 +1,8 @@
 import { state } from "./scripts/lib/state.js"
 import { runMenu } from "./scripts/lib/cli-util.js"
-import { handleApps, handleClearENV, handleDocker, handleSetup } from "./scripts/cli-handle.js"
+import { handleApps, handleClearENV, handleConfig, handleDocker, handleSetup } from "./scripts/cli-handle.js"
 import { existingPaths, describeArtifacts } from "./scripts/lib/clear-utils.js"
+import { configMatchesTemplate } from "./scripts/lib/config-utils.js"
 import { consoleLog } from "./scripts/lib/logger.js"
 
 // Seed state from process.env.ENV once, if state doesn't already know the env
@@ -41,6 +42,12 @@ export async function mainMenu() {
           disabledReason: env !== "dev" ? "dev environment only" : "run the App env files step first",
           submenu: true,
           run: handleApps
+        },
+        {
+          name: "Config (master.config.json)",
+          hint: configMatchesTemplate() ? "" : "differs from template",
+          submenu: true,
+          run: handleConfig
         },
         // Never gated — this is the escape hatch when things are broken
         { name: "Clear Environment", submenu: true, run: handleClearENV },

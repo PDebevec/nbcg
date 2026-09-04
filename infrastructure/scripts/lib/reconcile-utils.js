@@ -124,11 +124,15 @@ export async function reconcileProdCredentials() {
   }
 
   if (isUp('opensearch-node')) await configureSecurity();
-  if (isUp('keycloak')) await reconcileKeycloakClient(rootEnv);
+  if (isUp('keycloak')) {
+    await reconcileKeycloakClient(rootEnv);
+    await reconcileKeycloakWorkerSecret(rootEnv);
+  }
 }
 
 const KEYCLOAK_REALM = 'nbcg';
 const KEYCLOAK_WEB_CLIENT_ID = 'nbcg-web';
+const KEYCLOAK_WORKER_CLIENT_ID = 'nbcg-worker';
 // Keycloak's own image ships neither curl nor wget (confirmed live: `docker
 // exec` into it fails to find either — matches docker-compose.prod.yml's own
 // healthcheck comment, which falls back to bash's /dev/tcp for exactly this
@@ -176,35 +180,12 @@ async function keycloakCurl(script, env = {}) {
  * this file.
  */
 async function reconcileKeycloakClient(rootEnv) {
-  const adminUser = rootEnv.KEYCLOAK_ADMIN;
-  const adminPassword = rootEnv.KEYCLOAK_ADMIN_PASSWORD;
-  const keycloakUrl = rootEnv.KEYCLOAK_URL;
-  if (!adminUser || !adminPassword || !keycloakUrl) return; // env step never ran for prod yet
-
-  const basePath = new URL(keycloakUrl).pathname.replace(/\/$/, '');
-  const base = `http://keycloak:${rootEnv.KEYCLOAK_PORT_INTERNAL}${basePath}`;
+  const auth = await keycloakAdminAuth(rootEnv);
+  if (!auth) return; // env step never ran for prod yet
+  const { base, token } = auth;
 
   const desiredRedirects = JSON.parse(rootEnv.KEYCLOAK_WEB_REDIRECT_URIS || '[]');
   const desiredOrigins = JSON.parse(rootEnv.KEYCLOAK_WEB_ORIGINS || '[]');
-
-  const tokenOut = await keycloakCurl(
-    `curl -s -X POST "${base}/realms/master/protocol/openid-connect/token" ` +
-    `-d grant_type=password -d client_id=admin-cli ` +
-    `--data-urlencode "username=$KC_ADMIN_USER" --data-urlencode "password=$KC_ADMIN_PASS"`,
-    { KC_ADMIN_USER: adminUser, KC_ADMIN_PASS: adminPassword },
-  );
-
-  let token;
-  try { token = JSON.parse(tokenOut).access_token; } catch { /* falls through to the throw below */ }
-  if (!token) {
-    throw new UsageError(
-      `Could not authenticate to Keycloak's admin API as "${adminUser}". ` +
-      `If KEYCLOAK_ADMIN_PASSWORD was regenerated after Keycloak's master realm ` +
-      `admin was already created, this cannot self-heal — Keycloak only ever applies ` +
-      `KC_BOOTSTRAP_ADMIN_PASSWORD once, on first boot. Reset it manually (kcadm.sh, ` +
-      `or clear the keycloak-data volume for a fresh bootstrap).`
-    );
-  }
 
   const clientsOut = await keycloakCurl(
     `curl -s "${base}/admin/realms/${KEYCLOAK_REALM}/clients?clientId=${KEYCLOAK_WEB_CLIENT_ID}" ` +
@@ -239,6 +220,102 @@ async function reconcileKeycloakClient(rootEnv) {
   }
 
   consoleLog('INFO', `keycloak: "${KEYCLOAK_WEB_CLIENT_ID}" redirectUris/webOrigins synced with the current .env`);
+}
+
+/**
+ * Authenticates to Keycloak's admin API as the realm admin (master realm,
+ * admin-cli grant) and returns the base URL + bearer token to use for
+ * subsequent /admin/realms/{realm}/... calls, or null if the "env" step
+ * hasn't run yet for prod (no admin credentials/URL to authenticate with).
+ * Shared by every reconciler below that needs to call the admin API.
+ */
+async function keycloakAdminAuth(rootEnv) {
+  const adminUser = rootEnv.KEYCLOAK_ADMIN;
+  const adminPassword = rootEnv.KEYCLOAK_ADMIN_PASSWORD;
+  const keycloakUrl = rootEnv.KEYCLOAK_URL;
+  if (!adminUser || !adminPassword || !keycloakUrl) return null;
+
+  const basePath = new URL(keycloakUrl).pathname.replace(/\/$/, '');
+  const base = `http://keycloak:${rootEnv.KEYCLOAK_PORT_INTERNAL}${basePath}`;
+
+  const tokenOut = await keycloakCurl(
+    `curl -s -X POST "${base}/realms/master/protocol/openid-connect/token" ` +
+    `-d grant_type=password -d client_id=admin-cli ` +
+    `--data-urlencode "username=$KC_ADMIN_USER" --data-urlencode "password=$KC_ADMIN_PASS"`,
+    { KC_ADMIN_USER: adminUser, KC_ADMIN_PASS: adminPassword },
+  );
+
+  let token;
+  try { token = JSON.parse(tokenOut).access_token; } catch { /* falls through to the throw below */ }
+  if (!token) {
+    throw new UsageError(
+      `Could not authenticate to Keycloak's admin API as "${adminUser}". ` +
+      `If KEYCLOAK_ADMIN_PASSWORD was regenerated after Keycloak's master realm ` +
+      `admin was already created, this cannot self-heal — Keycloak only ever applies ` +
+      `KC_BOOTSTRAP_ADMIN_PASSWORD once, on first boot. Reset it manually (kcadm.sh, ` +
+      `or clear the keycloak-data volume for a fresh bootstrap).`
+    );
+  }
+
+  return { base, token };
+}
+
+/**
+ * Pushes the generated KEYCLOAK_WORKER_CLIENT_SECRET into the already-running
+ * `nbcg-worker` client via the admin API.
+ *
+ * This is what closes the gap on an already-provisioned realm:
+ * nbcg-realm.conf.json's `$(KEYCLOAK_WORKER_CLIENT_SECRET)` template only
+ * ever reaches Keycloak on a fresh --import-realm — an existing realm skips
+ * reimport entirely (see reconcileKeycloakClient()'s doc comment above for
+ * why overwriting it isn't a safe alternative), so without this, a
+ * newly-generated secret would never reach a deployment that was already
+ * running before this key existed.
+ *
+ * Unlike reconcileKeycloakClient()'s redirectUris/webOrigins sync, this is a
+ * blind apply rather than compare-then-update: Keycloak's GET client
+ * representation never includes the secret value (by design — it's only
+ * readable via a separate endpoint), so there's nothing to diff against
+ * without an extra round trip. PUTting the value the client already has is a
+ * harmless no-op, so this runs unconditionally, same as
+ * reconcilePostgresPassword() below.
+ */
+async function reconcileKeycloakWorkerSecret(rootEnv) {
+  const secret = rootEnv.KEYCLOAK_WORKER_CLIENT_SECRET;
+  if (!secret) return; // env step hasn't generated it yet (pre-existing .secrets.prod.json from before this key existed)
+
+  const auth = await keycloakAdminAuth(rootEnv);
+  if (!auth) return;
+  const { base, token } = auth;
+
+  const clientsOut = await keycloakCurl(
+    `curl -s "${base}/admin/realms/${KEYCLOAK_REALM}/clients?clientId=${KEYCLOAK_WORKER_CLIENT_ID}" ` +
+    `-H "Authorization: Bearer $KC_TOKEN"`,
+    { KC_TOKEN: token },
+  );
+
+  let client;
+  try { client = JSON.parse(clientsOut)[0]; } catch { /* client stays undefined */ }
+  if (!client) {
+    throw new Error(`Keycloak admin API: client "${KEYCLOAK_WORKER_CLIENT_ID}" not found in realm "${KEYCLOAK_REALM}"`);
+  }
+
+  const updated = { ...client, secret };
+  const clientB64 = Buffer.from(JSON.stringify(updated), 'utf8').toString('base64');
+
+  const putStatus = (await keycloakCurl(
+    `echo "$KC_CLIENT_B64" | base64 -d > /tmp/nbcg-worker-client.json && ` +
+    `curl -s -o /dev/null -w '%{http_code}' -X PUT "${base}/admin/realms/${KEYCLOAK_REALM}/clients/${client.id}" ` +
+    `-H "Authorization: Bearer $KC_TOKEN" -H 'Content-Type: application/json' ` +
+    `--data-binary @/tmp/nbcg-worker-client.json; rm -f /tmp/nbcg-worker-client.json`,
+    { KC_TOKEN: token, KC_CLIENT_B64: clientB64 },
+  )).trim();
+
+  if (!putStatus.startsWith('2')) {
+    throw new Error(`Keycloak admin API: updating client "${KEYCLOAK_WORKER_CLIENT_ID}" failed (HTTP ${putStatus})`);
+  }
+
+  consoleLog('INFO', `keycloak: "${KEYCLOAK_WORKER_CLIENT_ID}" secret reconciled with the current .env`);
 }
 
 /**

@@ -40,7 +40,8 @@
     "OPENSEARCH_INITIAL_ADMIN_PASSWORD",
     "OPENSEARCH_APP_PASSWORD",
     "OPENSEARCH_DASHBOARDS_PASSWORD",
-    "ADMIN_UI_PASSWORD"
+    "ADMIN_UI_PASSWORD",
+    "KEYCLOAK_WORKER_CLIENT_SECRET"
   ],
   "conf_templates": [
     { "template": "docker/pgadmin/servers.conf.json", "output": "docker/pgadmin/servers.json" },
@@ -72,6 +73,7 @@
         "KEYCLOAK_ISSUERS": "${KEYCLOAK_ISSUERS}",
         "KEYCLOAK_REALM": "${KEYCLOAK_REALM}",
         "KEYCLOAK_CLIENT_ID": "nbcg-api",
+        "KEYCLOAK_WORKER_CLIENT_SECRET": "${KEYCLOAK_WORKER_CLIENT_SECRET}",
         "OPENSEARCH_URL": "${OPENSEARCH_URL}",
         "SEAWEEDFS_MASTER": "http://${SEAWEEDFS_MASTER_HOSTNAME}:${SEAWEEDFS_MASTER_P1}",
         "SEAWEEDFS_VOLUME": "http://${SEAWEEDFS_VOLUME_HOSTNAME}:${SEAWEEDFS_VOLUME_P1}",

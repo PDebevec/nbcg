@@ -1,4 +1,5 @@
-import { initDocker, getAppConfig } from "./init-env.js"
+import fs from "node:fs"
+import { getAppConfig, SECRETS_PATH } from "./init-env.js"
 import { runMigrations, runHealthChecks } from "./lib/db-utils.js"
 import { configureSecurity } from "./lib/opensearch-utils.js"
 import { state } from "./lib/state.js"
@@ -8,7 +9,7 @@ import {
 } from "./lib/cli-util.js"
 import { checkRequirements } from "./requirements.js"
 import {
-  SETUP_STEPS, getApplicableSteps, getUnmetDeps, executeStep, getStepTitle
+  SETUP_STEPS, getStep, getApplicableSteps, getUnmetDeps, executeStep, getStepTitle
 } from "./lib/steps.js"
 import {
   stopContainers, restartContainers, buildContainers,
@@ -19,6 +20,7 @@ import {
 import { runSetupCommands, startApp, stopApp, restartApp, listApps, viewLogs } from "./lib/app-utils.js"
 import { CLEAR_TARGETS, describeArtifacts, describeClearTarget } from "./lib/clear-utils.js"
 import { startStack } from "./lib/reconcile-utils.js"
+import { configMatchesTemplate, findMissingKeys, findExtraKeys, mergeTemplateDefaults } from "./lib/config-utils.js"
 
 const currentEnv = () => state.current.environment || ""
 const isProd = () => currentEnv() === "prod"
@@ -64,8 +66,10 @@ export async function handleSetup() {
           }
         },
         { separator: "─".repeat(46) },
-        // Steps with unmet dependencies stay visible but disabled, so the
-        // shape of the pipeline is legible instead of items appearing later
+        // Steps with unmet dependencies stay visible and selectable (not
+        // disabled outright) — the dispatcher's `--force` already allows
+        // running a step out of order, so this mirrors that instead of being
+        // strictly more restrictive; it just asks for confirmation first.
         ...steps.map(step => {
           const unmet = getUnmetDeps(step, env, state)
           const done = state.isStepDone(step.key)
@@ -74,12 +78,27 @@ export async function handleSetup() {
           const status = done ? (unmet.length > 0 ? "stale" : "done") : (unmet.length > 0 ? "" : "ready")
           return {
             name: `${done ? "✓" : " "} ${getStepTitle(step, env)}`,
-            hint: status,
-            disabled: unmet.length > 0,
-            disabledReason: `needs: ${unmet.join(", ")}`,
+            hint: unmet.length > 0 ? `needs: ${unmet.join(", ")}` : status,
             run: async () => {
+              if (unmet.length > 0) {
+                const ok = await promptConfirm(
+                  `"${step.label}" needs these first: ${unmet.join(", ")}. Run it anyway?`,
+                  false
+                )
+                if (!ok) return { message: "cancelled", noop: true }
+              }
               const stepEnv = step.key === "env" ? await promptEnvSelection() : env
-              await executeStep(step, stepEnv)
+              // --rotate (prod "env" step only): mints fresh secrets instead
+              // of reusing the stored ones. Only offered when there is
+              // something already stored to rotate away from.
+              const canRotate = step.key === "env" && stepEnv === "prod" && fs.existsSync(SECRETS_PATH)
+              const rotate = canRotate && await promptConfirm(
+                "Generate fresh secrets instead of reusing the ones already stored? " +
+                "Existing database/OpenSearch volumes were initialised with the old ones " +
+                "and will reject them until those volumes are cleared too.",
+                false
+              )
+              await executeStep(step, stepEnv, { rotate })
               return `${step.key} complete`
             }
           }
@@ -156,9 +175,12 @@ export async function handleDocker(setupState = "") {
           name: "Setup Docker Files",
           hint: "copy compose files",
           run: async () => {
-            await initDocker(currentEnv() || "dev")
-            state.setStep("dockerFilesCopied", true)
-            state.setDocker("initialized", true)
+            // Goes through executeStep() rather than calling initDocker()
+            // directly, so this stays in sync with the Setup Menu's copy of
+            // the same step: state.recordStep() history and
+            // invalidateDependents() (staling appImages if something
+            // upstream changed) both fire either way.
+            await executeStep(getStep("dockerFilesCopied"), currentEnv() || "dev")
             services = null
             invalidate()
             return "compose files copied to repo root"
@@ -385,6 +407,63 @@ export async function handleApps() {
             }
             for (const p of fresh) console.log(`  ${p.name}: ${p.pm2_env?.status ?? "unknown"} (pid ${p.pid ?? "-"})`)
             return `${fresh.length} process${fresh.length === 1 ? "" : "es"}`
+          }
+        },
+      ]
+    }
+  })
+}
+
+/**
+ * //////////
+ * CONFIG MENU (master.config.json vs template)
+ * //////////
+ * Reachable from the Main Menu directly, not nested under Setup: the
+ * prerequisite check that gates Setup Menu itself fails outright when
+ * master.config.json is missing keys the template defines (see
+ * requirements.js), which would otherwise strand you with no menu path to
+ * the one thing (`config merge`) that fixes it — previously CLI-only via
+ * `make config A=diff|merge`.
+ */
+export async function handleConfig() {
+  await runMenu({
+    title: "CONFIG (master.config.json vs template)",
+    status: () => [configMatchesTemplate() ? "matches template" : "differs from template"],
+    build: () => {
+      const missing = findMissingKeys()
+      const extra = findExtraKeys()
+
+      return [
+        {
+          name: "View diff",
+          pause: true,
+          run: async () => {
+            if (missing.length === 0 && extra.length === 0) {
+              console.log("  master.config.json matches the template.")
+              return { message: "no differences", noop: true }
+            }
+            if (missing.length > 0) {
+              console.log(`\n  Missing ${missing.length} setting(s) the template defines:`)
+              for (const key of missing) console.log(`    - ${key}`)
+            }
+            if (extra.length > 0) {
+              console.log(`\n  ${extra.length} setting(s) present that the template does not define:`)
+              for (const key of extra) console.log(`    + ${key}`)
+              console.log(`  (your own additions, or leftovers from a removed setting — a merge never deletes)`)
+            }
+            return `${missing.length} missing, ${extra.length} extra`
+          }
+        },
+        {
+          name: "Merge template defaults",
+          hint: missing.length > 0 ? `${missing.length} to add` : "nothing to merge",
+          disabled: missing.length === 0,
+          disabledReason: "master.config.json already matches the template",
+          pause: true,
+          run: async () => {
+            const { added } = mergeTemplateDefaults()
+            for (const key of added) console.log(`  added ${key}`)
+            return `${added.length} setting(s) merged — re-run the affected setup steps to apply them`
           }
         },
       ]

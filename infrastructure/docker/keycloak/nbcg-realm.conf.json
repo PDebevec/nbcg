@@ -26,7 +26,7 @@
   "oauth2DeviceCodeLifespan": 600,
   "oauth2DevicePollingInterval": 5,
   "enabled": true,
-  "sslRequired": "external",
+  "sslRequired": "$(KEYCLOAK_SSL_REQUIRED)",
   "registrationAllowed": false,
   "registrationEmailAsUsername": false,
   "rememberMe": true,
@@ -34,9 +34,9 @@
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
-  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername(undefined) and passwordHistory(3)",
+  "passwordPolicy": "$(KEYCLOAK_PASSWORD_POLICY)",
   "editUsernameAllowed": false,
-  "bruteForceProtected": true,
+  "bruteForceProtected": $(KEYCLOAK_BRUTE_FORCE_PROTECTED),
   "permanentLockout": false,
   "maxTemporaryLockouts": 0,
   "bruteForceStrategy": "MULTIPLE",
@@ -689,7 +689,8 @@
           "records:manage"
         ],
         "realm-management": [
-          "view-users"
+          "view-users",
+          "view-clients"
         ]
       },
       "notBefore": 0,
@@ -1030,7 +1031,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "**********",
+      "secret": "$(KEYCLOAK_WORKER_CLIENT_SECRET)",
       "redirectUris": [],
       "webOrigins": [],
       "notBefore": 0,

@@ -153,10 +153,23 @@ function deriveOrigins(masterConfig, env, frontendPort) {
       `Put a real hostname first in master.config.json (a /etc/hosts entry on the host is enough for testing).`
     )
 
-  const frontendOrigin = host => env === "prod" ? `https://${host}` : `http://${host}:${frontendPort}`
-  const origins = hostnames.map(frontendOrigin)
+  // In dev, loopback is always reachable regardless of which LAN address
+  // happens to be configured (or currently up) as the canonical host — so it
+  // is treated as an always-valid *additional* origin/issuer, on top of
+  // whatever is in available_hostnames, rather than a replacement for it.
+  // Without this, whichever host you didn't just use to derive KEYCLOAK_URL
+  // fails token/redirect-uri validation: browse via the LAN IP while it's
+  // pinned to localhost (or vice versa) and Keycloak issues/accepts a token
+  // for a host the backend doesn't recognise as a valid issuer. Dev has no
+  // nginx in front (docker-compose.dev.yml defines no nginx service), so
+  // there is no Host-header-spoofing surface this could weaken — that
+  // protection only matters, and only exists, in prod.
+  const derivedHostnames = env === "prod" ? hostnames : [...new Set([...hostnames, "localhost", "127.0.0.1"])]
 
-  return { hostnames, canonicalHost, origins }
+  const frontendOrigin = host => env === "prod" ? `https://${host}` : `http://${host}:${frontendPort}`
+  const origins = derivedHostnames.map(frontendOrigin)
+
+  return { hostnames, canonicalHost, origins, issuerHostnames: derivedHostnames }
 }
 
 /**
@@ -172,8 +185,9 @@ function deriveKeycloakUrl(env, canonicalHost, portVars, pinned) {
 }
 
 /**
- * Every valid token issuer — one per available_hostnames entry, not just the
- * canonical one. Keycloak resolves its own hostname per-request now
+ * Every valid token issuer — one per available_hostnames entry (plus, in dev,
+ * the always-on loopback names — see deriveOrigins()'s issuerHostnames), not
+ * just the canonical one. Keycloak resolves its own hostname per-request now
  * (KC_HOSTNAME_STRICT: false in docker-compose.prod.yml) instead of always
  * stamping tokens with canonicalHost, so a login from ANY configured
  * hostname needs to pass KeycloakJwtStrategy's issuer check — which is why
@@ -229,9 +243,9 @@ export async function applyMasterConfig(env = "dev") {
   }
 
   const portVars = derivePortVars(masterConfig, env)
-  const { hostnames, canonicalHost, origins } = deriveOrigins(masterConfig, env, rootEnv.FRONTEND_PORT)
+  const { hostnames, canonicalHost, origins, issuerHostnames } = deriveOrigins(masterConfig, env, rootEnv.FRONTEND_PORT)
   const keycloakUrl = deriveKeycloakUrl(env, canonicalHost, portVars, pinned)
-  const keycloakIssuers = deriveKeycloakIssuers(env, hostnames, portVars, pinned)
+  const keycloakIssuers = deriveKeycloakIssuers(env, issuerHostnames, portVars, pinned)
   const opensearchUrl = deriveOpensearchUrl(env, rootEnv, portVars)
 
   const merged = {
