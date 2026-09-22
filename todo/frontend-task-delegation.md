@@ -1,6 +1,34 @@
 # Frontend: Task Delegation
 
-## Status: TODO — backend is DONE and live
+## Status: DONE — 2026-09-22
+
+> **Built as specified below**, plus one addition and three small deviations:
+>
+> - **Added:** a "waiting on me" card on `AdminDashboardPage.vue` listing up
+>   to five active tasks assigned to the current user, with a link to the
+>   inbox. There are no notifications, so this is the one place a person
+>   notices that something is waiting for them.
+> - **`auth.userId`** (the Keycloak `sub`) was added to `services/keycloak.ts`
+>   so the detail page can mirror the backend's "assignee, creator or
+>   `records:manage`" rule for showing the action buttons. UI shaping only.
+> - **The inbox fetches once with `limit=200` and pages client-side**, because
+>   the endpoint takes one `status` and "active" is three of them
+>   (`OPEN`/`IN_PROGRESS`/`RETURNED`). A banner says so if `total` exceeds the
+>   page. Same reason the badge makes three `?itemIds=` calls, one per active
+>   status, in parallel.
+> - **The item task-history tab lives in `ItemTaskHistory.vue`** (loading +
+>   paging, mirroring `HistoryTimeline.vue`), with `TaskHistoryList.vue` kept
+>   purely presentational so the task detail (oldest first, appended on
+>   comment) and the audit view (newest first, paged) share one renderer.
+>
+> Files: `api/tasks.ts`, `components/admin/{AssigneePicker,CreateTaskDialog,TaskHistoryList,ItemTaskHistory,TaskStatusBadge}.vue`,
+> `pages/admin/{AdminTasksPage,AdminTaskDetailPage}.vue`; edits to
+> `api/users.ts`, `composables/useAuthz.ts`, `services/keycloak.ts`,
+> `router/routes.ts`, `layouts/AdminLayout.vue`, `AdminItemEditPage.vue`,
+> `AdminItemsPage.vue`, `AdminDashboardPage.vue`, both i18n files.
+>
+> Verified with `vue-tsc`, `eslint` and `quasar build`; not yet exercised
+> against a running backend.
 
 Reacts to [Task Delegation](backend-task-delegation-plan.md) and
 [the `tasks` + `task_history` rewrite](backend-task-history-rewrite.md), both

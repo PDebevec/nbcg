@@ -9,6 +9,8 @@ import { i18n } from 'src/boot/i18n';
 
 interface AuthState {
   authenticated: boolean;
+  /** Keycloak `sub` — the key tasks and attribution use for "is this me?". */
+  userId: string | undefined;
   username: string | undefined;
   email: string | undefined;
   fullName: string | undefined;
@@ -17,6 +19,7 @@ interface AuthState {
 
 const state = reactive<AuthState>({
   authenticated: false,
+  userId: undefined,
   username: undefined,
   email: undefined,
   fullName: undefined,
@@ -48,11 +51,12 @@ function syncTokenCookie() {
 
 function syncState() {
   const profile = keycloak.tokenParsed as
-    | { preferred_username?: string; email?: string; name?: string }
+    | { sub?: string; preferred_username?: string; email?: string; name?: string }
     | undefined;
   const apiClientId = import.meta.env.VITE_KEYCLOAK_API_CLIENT_ID;
 
   state.authenticated = !!keycloak.authenticated;
+  state.userId = profile?.sub;
   state.username = profile?.preferred_username;
   state.email = profile?.email;
   state.fullName = profile?.name;

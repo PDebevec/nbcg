@@ -125,6 +125,15 @@
             <router-link :to="`/admin/items/${cellProps.row.id}`" class="title-link">
               {{ cellProps.value || '—' }}
             </router-link>
+            <q-icon
+              v-if="openTaskIds.has(cellProps.row.id)"
+              name="assignment_late"
+              color="warning"
+              size="18px"
+              class="q-ml-xs"
+            >
+              <q-tooltip>{{ t('admin.items.openTask') }}</q-tooltip>
+            </q-icon>
           </q-td>
         </template>
 
@@ -192,6 +201,7 @@ import { useI18n } from 'vue-i18n';
 import { useQuasar, type QTableColumn, type QTableProps } from 'quasar';
 import { searchItems, type IndexedRecord, type TextExtractionStatus } from 'src/api/search';
 import { listUsers, type UserProfile } from 'src/api/users';
+import { ACTIVE_TASK_STATUSES, listTasks } from 'src/api/tasks';
 import TextExtractionIndicator from 'src/components/admin/TextExtractionIndicator.vue';
 import {
   conflictCurrentVersion,
@@ -209,7 +219,7 @@ const props = defineProps<{ collection: 'records' | 'drafts' }>();
 
 const { t } = useI18n();
 const $q = useQuasar();
-const { canTransition, canSeeAttribution } = useAuthz();
+const { canTransition, canSeeAttribution, isStaff } = useAuthz();
 
 interface Row {
   id: string;
@@ -349,10 +359,36 @@ async function fetchPage(page: number, limit: number) {
     pagination.value.page = result.page;
     pagination.value.rowsPerPage = result.limit;
     pagination.value.rowsNumber = result.total;
+    void loadOpenTaskBadges(rows.value.map((r) => r.id));
   } catch {
     $q.notify({ type: 'negative', message: t('admin.items.loadFailed') });
   } finally {
     loading.value = false;
+  }
+}
+
+// ── "Has an open task" badge ──
+// One extra request per page, not per row, and never a search facet: there is
+// no openTaskCount on items (it would re-index the document on every task
+// change), so the badge only decorates a page already fetched. Publishing
+// closes review tasks server-side, and refreshSoon() re-runs this afterwards.
+const openTaskIds = ref(new Set<string>());
+
+async function loadOpenTaskBadges(ids: string[]) {
+  if (!isStaff.value || ids.length === 0) {
+    openTaskIds.value = new Set();
+    return;
+  }
+  try {
+    const results = await Promise.all(
+      ACTIVE_TASK_STATUSES.map((status) =>
+        listTasks({ itemIds: ids.slice(0, 200).join(','), status, limit: 200 }),
+      ),
+    );
+    openTaskIds.value = new Set(results.flatMap((r) => r.tasks.map((task) => task.itemId)));
+  } catch {
+    // Decoration only — a failed badge lookup must not break the list.
+    openTaskIds.value = new Set();
   }
 }
 

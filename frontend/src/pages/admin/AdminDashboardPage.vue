@@ -24,6 +24,58 @@
         </div>
       </div>
 
+      <!-- Tasks waiting on me. There are no notifications, so this is the one
+           place a person notices that something is waiting for them. -->
+      <template v-if="isStaff">
+        <h2 class="text-subtitle1 text-weight-bold q-mt-xl q-mb-md">
+          {{ t('admin.dashboard.myTasks') }}
+        </h2>
+        <q-card flat bordered class="tasks-card">
+          <q-card-section class="row items-center q-gutter-md">
+            <div class="col">
+              <div v-if="myTasks === null" class="text-body2 text-library-muted">
+                <q-skeleton type="text" width="200px" />
+              </div>
+              <div v-else-if="myTasks.length === 0" class="text-body2 text-library-muted">
+                {{ t('admin.dashboard.myTasksNone') }}
+              </div>
+              <template v-else>
+                <div class="text-body2 q-mb-sm">
+                  {{ t('admin.dashboard.myTasksCount', { count: myTasks.length }) }}
+                </div>
+                <q-list dense>
+                  <q-item
+                    v-for="task in myTasks.slice(0, 5)"
+                    :key="task.id"
+                    clickable
+                    :to="`/admin/tasks/${task.id}`"
+                    class="rounded-borders"
+                  >
+                    <q-item-section>
+                      <q-item-label>{{ task.title }}</q-item-label>
+                      <q-item-label caption>
+                        {{ t(`admin.tasks.kinds.${task.kind}`) }} · {{ task.createdByName }}
+                      </q-item-label>
+                    </q-item-section>
+                    <q-item-section side>
+                      <TaskStatusBadge :status="task.status" />
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </template>
+            </div>
+            <q-btn
+              outline
+              no-caps
+              color="primary"
+              icon="assignment"
+              :label="t('admin.dashboard.openInbox')"
+              to="/admin/tasks?scope=mine"
+            />
+          </q-card-section>
+        </q-card>
+      </template>
+
       <h2 class="text-subtitle1 text-weight-bold q-mt-xl q-mb-md">
         {{ t('admin.dashboard.quickActions') }}
       </h2>
@@ -113,15 +165,32 @@ import { useI18n } from 'vue-i18n';
 import { useQuasar } from 'quasar';
 import { getItemStats, type ItemStats } from 'src/api/admin';
 import { getUserSyncStatus, triggerUserSync, type UserSyncStatus } from 'src/api/users';
+import { ACTIVE_TASK_STATUSES, listTasks, type Task } from 'src/api/tasks';
 import { useAuthz } from 'src/composables/useAuthz';
 import StatsCard from 'src/components/admin/StatsCard.vue';
+import TaskStatusBadge from 'src/components/admin/TaskStatusBadge.vue';
 
 const { t } = useI18n();
 const $q = useQuasar();
-const { canManageRecords, canManageDrafts, canImport, canManageUsers } = useAuthz();
+const { canManageRecords, canManageDrafts, canImport, canManageUsers, isStaff } = useAuthz();
 
 const stats = ref<ItemStats | null>(null);
 const loading = ref(true);
+
+// ── Tasks waiting on me ──
+
+/** null while loading; the active subset of what is assigned to me. */
+const myTasks = ref<Task[] | null>(null);
+
+async function loadMyTasks() {
+  try {
+    const result = await listTasks({ assignedTo: 'me', limit: 200 });
+    myTasks.value = result.tasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.status));
+  } catch {
+    myTasks.value = [];
+    $q.notify({ type: 'negative', message: t('admin.dashboard.myTasksFailed') });
+  }
+}
 
 // ── User directory sync ──
 
@@ -165,6 +234,7 @@ onBeforeUnmount(() => clearTimeout(syncPollTimer));
 
 onMounted(async () => {
   if (canManageUsers.value) void loadSyncStatus();
+  if (isStaff.value) void loadMyTasks();
   try {
     stats.value = await getItemStats();
   } catch {
@@ -180,7 +250,8 @@ onMounted(async () => {
   max-width: 1280px
   margin: 0 auto
 
-.users-card
+.users-card,
+.tasks-card
   background: $surface
   border-radius: $radius
 </style>

@@ -16,6 +16,15 @@ export function hasAllScopes(...scopes: string[]): boolean {
   return scopes.every((s) => auth.roles.includes(s));
 }
 
+/**
+ * The router guard (`meta.scopes`) is AND-only, so a "holds at least one of"
+ * rule can only be expressed here, for showing/hiding controls. The API's 403
+ * remains the authority.
+ */
+export function hasAnyScope(...scopes: string[]): boolean {
+  return scopes.some((s) => auth.roles.includes(s));
+}
+
 export function useAuthz() {
   const canAccessAdmin = computed(() =>
     hasAllScopes('drafts:view:hidden', 'records:view:hidden'),
@@ -28,6 +37,9 @@ export function useAuthz() {
   // backend wins, because it strips the field from the response.
   const canSeeAttribution = computed(() => canManageDrafts.value || canManageRecords.value);
   const canManageUsers = computed(() => hasScope('users:manage'));
+  // The bar for task delegation and the user directory: at least one write
+  // capability. The same rule as canSeeAttribution, named for what it gates.
+  const isStaff = computed(() => hasAnyScope('drafts:manage', 'records:manage'));
 
   return {
     canAccessAdmin,
@@ -37,5 +49,6 @@ export function useAuthz() {
     canImport,
     canSeeAttribution,
     canManageUsers,
+    isStaff,
   };
 }

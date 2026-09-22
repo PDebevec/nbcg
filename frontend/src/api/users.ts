@@ -21,9 +21,12 @@ export interface UserProfile {
   isActive: boolean;
   enabled: boolean;
   deletedAt: string | null;
-  /** Staff-only — absent below drafts:manage / records:manage. */
-  email?: string | null;
+  /** Always present: the endpoint is staff-only, so there is no conditional branch. */
+  email: string | null;
 }
+
+/** What a picker needs to show and send — lets a prefill (a task's `returnTo`, the current assignee) skip a directory read. */
+export type PickedUser = Pick<UserProfile, 'userId' | 'displayName'>;
 
 export interface UserListResult {
   total: number;
@@ -47,9 +50,17 @@ export interface UserSyncStatus {
   profileCount: number;
 }
 
+/**
+ * The whole endpoint is staff-only (403 below drafts:manage / records:manage).
+ * Never call it from a page a reader can reach.
+ */
 export async function listUsers(params?: {
-  /** `publish` = records:manage AND drafts:manage */
-  capability?: 'publish';
+  /**
+   * `publish` = records:manage AND drafts:manage (can publish).
+   * `staff` = records:manage OR drafts:manage (can write).
+   * Composes with `q`: filters to the capability, then searches within it.
+   */
+  capability?: 'publish' | 'staff';
   /** Defaults to true server-side — a picker showing departed staff is a bug */
   active?: boolean;
   /** Case-insensitive substring over display name, username and email */

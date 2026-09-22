@@ -3,9 +3,8 @@
 ## Frontend
 
 - [Collection View Types](frontend-collection-views.md) — type-based collection rendering (PLANNING)
-- [Change History + Statistics GUI](frontend-statistics-and-history.md) — item revision timeline + admin statistics screens; backend and endpoints done, GUI design open (TODO)
-- [Attribution + User Directory catch-up](frontend-user-directory-and-attribution.md) — render `createdByName` off the row, add a `users.ts` API client, creator filter and admin sync button; two type fixes in `search.ts` (TODO)
-- [**Task Delegation**](frontend-task-delegation.md) — backend is done and live. "Assign for review" (kind → capability-aware searchable picker), a "My tasks" inbox, task detail rendering the append-only log, return-with-notes in one atomic PATCH, an open-task badge from `?itemIds=`, and an item task-history tab. Every endpoint captured live; includes the traps (snapshot vs live names, the AND-only router guard, the `(kind, status)` picker rule). ~12.5–14.5h (TODO)
+- [Attribution + User Directory catch-up](frontend-user-directory-and-attribution.md) — `createdByName` off the row, `users.ts` API client, creator filter and admin sync button; two type fixes in `search.ts` (**DONE** 2026-08-17)
+- [Task Delegation](frontend-task-delegation.md) — "Assign task" dialog (kind → capability-aware searchable picker), a "My tasks" inbox, task detail rendering the append-only log, return-with-notes in one atomic PATCH, an open-task badge from `?itemIds=`, an item task-history tab, and a "waiting on me" card on the dashboard (**DONE** 2026-09-22)
 
 ## Backend
 

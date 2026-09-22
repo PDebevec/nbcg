@@ -59,6 +59,16 @@
           <q-item-section avatar><q-icon name="cloud_download" /></q-item-section>
           <q-item-section>{{ t('admin.nav.import') }}</q-item-section>
         </q-item>
+        <q-item
+          v-if="isStaff"
+          clickable
+          v-ripple
+          to="/admin/tasks"
+          active-class="drawer-item--active"
+        >
+          <q-item-section avatar><q-icon name="assignment" /></q-item-section>
+          <q-item-section>{{ t('admin.nav.tasks') }}</q-item-section>
+        </q-item>
         <q-item clickable v-ripple to="/admin/stats" active-class="drawer-item--active">
           <q-item-section avatar><q-icon name="insights" /></q-item-section>
           <q-item-section>{{ t('admin.nav.stats') }}</q-item-section>
@@ -80,7 +90,7 @@ import { auth } from 'src/services/keycloak';
 import { useAuthz } from 'src/composables/useAuthz';
 
 const { t } = useI18n();
-const { canManageRecords, canManageDrafts, canImport } = useAuthz();
+const { canManageRecords, canManageDrafts, canImport, isStaff } = useAuthz();
 </script>
 
 <style scoped lang="sass">

@@ -54,6 +54,12 @@ const routes: RouteRecordRaw[] = [
       // Same guard as the dashboard — the /admin meta scopes are exactly the
       // backend's bar for the stats endpoints.
       { path: 'stats', component: () => import('pages/admin/AdminStatsPage.vue') },
+      // Deliberately no extra meta.scopes: the API's bar is drafts:manage OR
+      // records:manage, and the guard is AND-only, so listing both here would
+      // lock out the cataloguer — the feature's main user. /admin's own guard
+      // already excludes readers; the API's 403 is the authority.
+      { path: 'tasks', component: () => import('pages/admin/AdminTasksPage.vue') },
+      { path: 'tasks/:id', component: () => import('pages/admin/AdminTaskDetailPage.vue') },
       {
         path: 'import',
         component: () => import('pages/admin/AdminImportPage.vue'),

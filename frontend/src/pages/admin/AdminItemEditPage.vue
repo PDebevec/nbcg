@@ -7,6 +7,16 @@
           {{ isNew ? t('admin.edit.newTitle') : t('admin.edit.title') }}
         </h1>
         <q-space />
+        <q-btn
+          v-if="!isNew && !loading && !loadError && isStaff"
+          outline
+          no-caps
+          color="primary"
+          icon="assignment_ind"
+          :label="t('admin.edit.assignTask')"
+          class="q-mr-md"
+          @click="assignOpen = true"
+        />
         <VisibilityBadge v-if="!loading" :status="visibilityStatus" />
       </div>
 
@@ -28,6 +38,12 @@
           <q-tab name="json" icon="data_object" :label="t('admin.edit.tabJson')" />
           <q-tab v-if="!isNew" name="files" icon="attach_file" :label="t('admin.edit.tabFiles')" />
           <q-tab v-if="!isNew" name="history" icon="history" :label="t('admin.edit.tabHistory')" />
+          <q-tab
+            v-if="!isNew && isStaff"
+            name="tasks"
+            icon="assignment"
+            :label="t('admin.edit.tabTasks')"
+          />
         </q-tabs>
         <q-separator />
 
@@ -222,6 +238,11 @@
           <q-tab-panel v-if="!isNew" name="history">
             <HistoryTimeline :item-id="itemId!" />
           </q-tab-panel>
+
+          <!-- TASKS: what happened around this record, across every task ever filed -->
+          <q-tab-panel v-if="!isNew && isStaff" name="tasks">
+            <ItemTaskHistory :item-id="itemId!" :refresh-key="tasksRefreshKey" />
+          </q-tab-panel>
         </q-tab-panels>
 
         <q-separator />
@@ -239,6 +260,14 @@
         </q-card-actions>
       </q-card>
     </div>
+
+    <CreateTaskDialog
+      v-if="!isNew"
+      v-model="assignOpen"
+      :item-id="itemId!"
+      :item-type="itemType"
+      @created="tasksRefreshKey++"
+    />
   </q-page>
 </template>
 
@@ -269,17 +298,28 @@ import {
   type ItemType,
   type VisibilityStatus,
 } from 'src/api/admin';
+import { useAuthz } from 'src/composables/useAuthz';
 import VisibilityBadge from 'src/components/admin/VisibilityBadge.vue';
 import TextExtractionIndicator from 'src/components/admin/TextExtractionIndicator.vue';
 import HistoryTimeline from 'src/components/admin/HistoryTimeline.vue';
+import ItemTaskHistory from 'src/components/admin/ItemTaskHistory.vue';
+import CreateTaskDialog from 'src/components/admin/CreateTaskDialog.vue';
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const $q = useQuasar();
+const { isStaff } = useAuthz();
 
 const itemId = computed(() => route.params.id as string | undefined);
 const isNew = computed(() => !itemId.value);
+
+// ── Task delegation ──
+// Which collection the item lives in, from the search hit's index name; picks
+// the default task kind (a draft is usually "ready for review").
+const itemType = ref<ItemType | null>(null);
+const assignOpen = ref(false);
+const tasksRefreshKey = ref(0);
 const targetState = computed<ItemType>(() =>
   (route.query.type as string) === 'RECORD' ? 'RECORD' : 'DRAFT',
 );
@@ -485,6 +525,7 @@ onMounted(async () => {
   try {
     const hit = await getItem(itemId.value!);
     applyServerState(hit.source);
+    itemType.value = hit.index === 'records' ? 'RECORD' : hit.index === 'drafts' ? 'DRAFT' : null;
     files.value = await listFiles(itemId.value!);
   } catch {
     loadError.value = true;
