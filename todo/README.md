@@ -5,6 +5,7 @@
 - [Collection View Types](frontend-collection-views.md) — type-based collection rendering (PLANNING)
 - [Attribution + User Directory catch-up](frontend-user-directory-and-attribution.md) — `createdByName` off the row, `users.ts` API client, creator filter and admin sync button; two type fixes in `search.ts` (**DONE** 2026-08-17)
 - [Admin nice-to-have improvements](frontend-admin-nice-to-have.md) — 16 small workflow improvements that came up during the admin redesign (unsaved-changes guard, publish in the editor, review queue, URL filters, bulk assign …); each one needs a yes/no before it joins the redesign (DECISION PENDING)
+- [Material-type-driven field visibility](frontend-material-type-field-visibility.md) — material type becomes the first field of the editor and decides which sections show; the rest folds into "Other fields". Static map now, switch to the schema's `relevantForTypes` after the backend task (TODO)
 - [Task Delegation](frontend-task-delegation.md) — "Assign task" dialog (kind → capability-aware searchable picker), a "My tasks" inbox, task detail rendering the append-only log, return-with-notes in one atomic PATCH, an open-task badge from `?itemIds=`, an item task-history tab, and a "waiting on me" card on the dashboard (**DONE** 2026-09-22)
 
 ## Backend
