@@ -66,7 +66,7 @@
 
           <!-- TITLE BLOCK -->
           <div class="q-mb-lg">
-            <div class="header-kicker q-mb-xs">{{ meta.materialType?.en }}</div>
+            <div v-if="meta.materialType" class="header-kicker q-mb-xs">{{ codeLabel(meta.materialType) }}</div>
             <h1 class="text-h4 text-weight-bold text-library-ink q-my-none q-mb-sm">
               {{ meta.title }}
             </h1>
@@ -77,18 +77,22 @@
               {{ meta.firstResponsibility }}
             </div>
             <div class="row q-gutter-sm q-mt-sm">
-              <q-badge v-if="meta.publicationDate1" outline color="primary">
-                {{ meta.publicationDate1 }}
+              <q-badge v-if="yearLine" outline color="primary">
+                {{ yearLine }}
               </q-badge>
               <q-badge
                 v-for="lang in meta.language"
                 :key="lang.code"
                 outline color="primary"
               >
-                {{ lang.en }}
+                {{ codeLabel(lang) }}
               </q-badge>
-              <q-badge v-if="meta.publication?.country" outline color="primary">
-                {{ meta.publication.country }}
+              <q-badge
+                v-for="c in meta.country"
+                :key="c.code"
+                outline color="primary"
+              >
+                {{ codeLabel(c) }}
               </q-badge>
             </div>
           </div>
@@ -111,63 +115,79 @@
 
             <!-- MAIN METADATA -->
             <q-tab-panel name="main" class="q-pa-none">
-              <p v-if="meta.summaryNote" class="text-body2 text-library-muted q-mb-md meta-list">
-                {{ meta.summaryNote }}
-              </p>
               <q-list dense separator class="meta-list">
                 <detail-row v-if="meta.title" :label="t('record.fields.title')" :value="meta.title" />
                 <detail-row v-if="meta.subtitle" :label="t('record.fields.subtitle')" :value="meta.subtitle" />
                 <detail-row v-if="meta.firstResponsibility" :label="t('record.fields.responsibility')" :value="meta.firstResponsibility" />
                 <detail-row v-if="authorsLine" :label="t('record.authors')" :value="authorsLine" />
-                <detail-row v-if="meta.publicationDate1" :label="t('record.fields.year')" :value="meta.publicationDate1" />
+                <detail-row v-if="yearLine" :label="t('record.fields.year')" :value="yearLine" />
                 <detail-row v-if="meta.publication?.publisher" :label="t('record.fields.publisher')" :value="meta.publication.publisher" />
                 <detail-row v-if="meta.publication?.place" :label="t('record.fields.place')" :value="meta.publication.place" />
                 <detail-row v-if="languagesLine" :label="t('record.fields.language')" :value="languagesLine" />
-                <detail-row v-if="meta.materialType?.en" :label="t('record.fields.materialType')" :value="meta.materialType.en" />
-                <detail-row v-if="meta.physicalDescription?.extent" :label="t('record.fields.extent')" :value="meta.physicalDescription.extent" />
+                <detail-row v-if="meta.materialType" :label="t('record.fields.materialType')" :value="codeLabel(meta.materialType)" />
+                <detail-row v-if="meta.physicalDescription" :label="t('record.fields.extent')" :value="meta.physicalDescription" />
               </q-list>
             </q-tab-panel>
 
             <!-- ALL METADATA -->
             <q-tab-panel name="all" class="q-pa-none">
 
-              <div v-if="meta.summaryNote" class="q-mb-lg meta-list">
-                <div class="section-label q-mb-sm">{{ t('record.abstract') }}</div>
-                <p class="text-body2 text-library-muted q-ma-none">{{ meta.summaryNote }}</p>
-              </div>
-
               <div class="section-label q-mb-sm">{{ t('record.bibliographic') }}</div>
               <q-list dense separator class="meta-list q-mb-lg">
                 <detail-row v-if="meta.title" :label="t('record.fields.title')" :value="meta.title" />
+                <detail-row v-if="meta.titleMediumDesignation" :label="t('record.fields.mediumDesignation')" :value="meta.titleMediumDesignation" />
                 <detail-row v-if="meta.subtitle" :label="t('record.fields.subtitle')" :value="meta.subtitle" />
-                <detail-row v-if="meta.parallelTitle" :label="t('record.fields.parallelTitle')" :value="meta.parallelTitle" />
+                <detail-row v-if="meta.parallelTitle?.length" :label="t('record.fields.parallelTitle')" :value="meta.parallelTitle.join(' = ')" />
+                <detail-row v-if="meta.titleInOtherScript?.length" :label="t('record.fields.titleInOtherScript')" :value="meta.titleInOtherScript.join(' = ')" />
+                <detail-row v-if="meta.titleByAnotherAuthor" :label="t('record.fields.titleByAnotherAuthor')" :value="meta.titleByAnotherAuthor" />
                 <detail-row v-if="meta.firstResponsibility" :label="t('record.fields.responsibility')" :value="meta.firstResponsibility" />
-                <detail-row v-if="meta.subsequentResponsibility" :label="t('record.fields.addResponsibility')" :value="meta.subsequentResponsibility" />
+                <detail-row v-if="meta.subsequentResponsibility?.length" :label="t('record.fields.addResponsibility')" :value="meta.subsequentResponsibility.join('; ')" />
                 <detail-row v-if="meta.edition" :label="t('record.fields.edition')" :value="meta.edition" />
                 <detail-row v-if="meta.publication?.publisher" :label="t('record.fields.publisher')" :value="meta.publication.publisher" />
                 <detail-row v-if="meta.publication?.place" :label="t('record.fields.place')" :value="meta.publication.place" />
-                <detail-row v-if="meta.publicationDate1" :label="t('record.fields.year')" :value="meta.publicationDate1" />
+                <detail-row v-if="yearLine" :label="t('record.fields.year')" :value="yearLine" />
+                <detail-row v-if="meta.publicationDate2" :label="t('record.fields.publicationDate2')" :value="meta.publicationDate2" />
+                <detail-row v-if="meta.publication?.placeOfManufacture" :label="t('record.fields.placeOfManufacture')" :value="meta.publication.placeOfManufacture" />
+                <detail-row v-if="meta.publication?.manufacturerName" :label="t('record.fields.manufacturer')" :value="meta.publication.manufacturerName" />
                 <detail-row v-if="languagesLine" :label="t('record.fields.language')" :value="languagesLine" />
-                <detail-row v-if="meta.physicalDescription?.extent" :label="t('record.fields.extent')" :value="meta.physicalDescription.extent" />
-                <detail-row v-if="meta.physicalDescription?.dimensions" :label="t('record.fields.dimensions')" :value="meta.physicalDescription.dimensions" />
+                <detail-row v-if="originalLanguagesLine" :label="t('record.fields.originalLanguage')" :value="originalLanguagesLine" />
+                <detail-row v-if="translationLanguagesLine" :label="t('record.fields.translationLanguages')" :value="translationLanguagesLine" />
+                <detail-row v-if="countriesLine" :label="t('record.fields.country')" :value="countriesLine" />
+                <detail-row v-if="meta.physicalDescription" :label="t('record.fields.extent')" :value="meta.physicalDescription" />
+                <detail-row v-if="meta.otherPhysicalDetails" :label="t('record.fields.otherPhysicalDetails')" :value="meta.otherPhysicalDetails" />
+                <detail-row v-if="meta.dimensions" :label="t('record.fields.dimensions')" :value="meta.dimensions" />
+                <detail-row v-if="meta.cartographicMathematicalData" :label="t('record.fields.cartographic')" :value="meta.cartographicMathematicalData" />
+                <detail-row v-if="meta.numberingAndDates" :label="t('record.fields.numbering')" :value="meta.numberingAndDates" />
+                <detail-row v-if="meta.musicEditionStatement" :label="t('record.fields.musicEdition')" :value="meta.musicEditionStatement" />
                 <detail-row v-if="meta.isbn?.length" :label="t('record.fields.isbn')" :value="meta.isbn.join(', ')" />
                 <detail-row v-if="meta.issn?.length" :label="t('record.fields.issn')" :value="meta.issn.join(', ')" />
+                <detail-row v-if="meta.ismn?.length" :label="t('record.fields.ismn')" :value="meta.ismn.join(', ')" />
                 <detail-row v-if="meta.cobissId" :label="t('record.fields.cobissId')" :value="meta.cobissId" />
               </q-list>
 
-              <div v-if="meta.authors?.length" class="q-mb-lg">
+              <div v-if="meta.authors?.length || meta.corporateBodies?.length" class="q-mb-lg">
                 <div class="section-label q-mb-sm">{{ t('record.authors') }}</div>
                 <div class="row q-gutter-sm">
                   <q-chip
                     v-for="(author, i) in meta.authors"
-                    :key="i"
+                    :key="'p' + i"
                     icon="person"
                     color="primary"
                     text-color="white"
                     size="sm"
                   >
-                    {{ [author.familyName, author.firstName].filter(Boolean).join(', ') }}
-                    <span v-if="author.role?.en" class="q-ml-xs" style="opacity:0.75">({{ author.role.en }})</span>
+                    {{ authorName(author) }}
+                    <span v-if="author.role" class="q-ml-xs" style="opacity:0.75">({{ codeLabel(author.role) }})</span>
+                  </q-chip>
+                  <q-chip
+                    v-for="(body, i) in meta.corporateBodies"
+                    :key="'c' + i"
+                    icon="business"
+                    color="primary"
+                    text-color="white"
+                    size="sm"
+                  >
+                    {{ body.name }}
                   </q-chip>
                 </div>
               </div>
@@ -183,6 +203,8 @@
                 <div class="section-label q-mb-sm">{{ t('record.series') }}</div>
                 <q-list dense class="meta-list">
                   <detail-row :label="t('record.fields.seriesTitle')" :value="meta.seriesTitle" />
+                  <detail-row v-if="meta.seriesSubtitle" :label="t('record.fields.seriesSubtitle')" :value="meta.seriesSubtitle" />
+                  <detail-row v-if="meta.seriesResponsibility" :label="t('record.fields.seriesResponsibility')" :value="meta.seriesResponsibility" />
                   <detail-row v-if="meta.seriesIssn" :label="t('record.fields.seriesIssn')" :value="meta.seriesIssn" />
                   <detail-row v-if="meta.seriesVolume" :label="t('record.fields.volume')" :value="meta.seriesVolume" />
                 </q-list>
@@ -191,31 +213,24 @@
               <div class="q-mb-lg">
                 <div class="section-label q-mb-sm">{{ t('record.classification') }}</div>
                 <q-list dense separator class="meta-list">
-                  <detail-row v-if="meta.materialType?.en" :label="t('record.fields.materialType')" :value="meta.materialType.en" />
-                  <detail-row v-if="meta.bibliographicLevel?.en" :label="t('record.fields.bibLevel')" :value="meta.bibliographicLevel.en" />
+                  <detail-row v-if="meta.materialType" :label="t('record.fields.materialType')" :value="codeLabel(meta.materialType)" />
+                  <detail-row v-if="meta.recordType" :label="t('record.fields.recordType')" :value="codeLabel(meta.recordType)" />
+                  <detail-row v-if="meta.bibliographicLevel" :label="t('record.fields.bibLevel')" :value="codeLabel(meta.bibliographicLevel)" />
                   <detail-row v-if="meta.documentTypology" :label="t('record.fields.docTypology')" :value="meta.documentTypology" />
+                  <detail-row v-if="illustrationsLine" :label="t('record.fields.illustrations')" :value="illustrationsLine" />
+                  <detail-row v-if="contentTypesLine" :label="t('record.fields.contentTypes')" :value="contentTypesLine" />
+                  <detail-row v-if="meta.textualMaterialCodes?.literaryForm" :label="t('record.fields.literaryForm')" :value="codeLabel(meta.textualMaterialCodes.literaryForm)" />
+                  <detail-row v-if="meta.textualMaterialCodes?.biographyCode" :label="t('record.fields.biography')" :value="codeLabel(meta.textualMaterialCodes.biographyCode)" />
                 </q-list>
+              </div>
 
-                <div v-if="meta.udc?.length" class="q-mt-sm">
-                  <div class="field-label q-mb-xs">{{ t('record.udc') }}</div>
-                  <div class="row q-gutter-xs">
-                    <q-chip v-for="u in meta.udc" :key="u" dense outline color="library-muted" size="sm">{{ u }}</q-chip>
-                  </div>
-                </div>
-
-                <div v-if="meta.subjects?.length" class="q-mt-sm">
-                  <div class="field-label q-mb-xs">{{ t('record.subjects') }}</div>
-                  <div class="row q-gutter-xs">
-                    <q-chip v-for="s in meta.subjects" :key="s" dense outline color="primary" size="sm">{{ s }}</q-chip>
-                  </div>
-                </div>
-
-                <div v-if="meta.keywords?.length" class="q-mt-sm">
-                  <div class="field-label q-mb-xs">{{ t('record.keywords') }}</div>
-                  <div class="row q-gutter-xs">
-                    <q-chip v-for="k in meta.keywords" :key="k" dense outline color="secondary" size="sm">{{ k }}</q-chip>
-                  </div>
-                </div>
+              <div v-if="meta.electronicLocation?.length" class="q-mb-lg meta-list">
+                <div class="section-label q-mb-sm">{{ t('record.links') }}</div>
+                <ul class="q-ma-none q-pl-md">
+                  <li v-for="(loc, i) in meta.electronicLocation" :key="i" class="text-body2">
+                    <a :href="loc.url" target="_blank" rel="noopener" class="text-primary">{{ loc.url }}</a>
+                  </li>
+                </ul>
               </div>
 
               <div v-if="files.length" class="q-mb-lg">
@@ -289,12 +304,21 @@ import { ref, computed, onMounted, defineComponent, h } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useQuasar, copyToClipboard } from 'quasar';
-import { getItem, type SearchHit, type RecordMetadata, type FileAttachment } from 'src/api/search';
+import {
+  getItem,
+  type Author,
+  type ResolvedCode,
+  type SearchHit,
+  type RecordMetadata,
+  type FileAttachment,
+} from 'src/api/search';
 import { inlineUrl, downloadUrl, fileIcon, formatBytes } from 'src/utils/fileAttachments';
+import { useCodeLabel } from 'src/composables/useCodeLabel';
 import FileViewer from 'src/components/FileViewer.vue';
 
 const { t } = useI18n();
 const $q = useQuasar();
+const { codeLabel } = useCodeLabel();
 
 // ---------------------------------------------------------------------------
 // Inline helper component to keep template DRY
@@ -320,13 +344,26 @@ const meta = computed<RecordMetadata>(() => item.value?.source.metadata as Recor
 
 const metaTab = ref<'main' | 'all'>('main');
 
-const authorsLine = computed(() =>
-  meta.value.authors
-    ?.map((a) => [a.familyName, a.firstName].filter(Boolean).join(', '))
-    .join('; ') ?? '',
-);
+function authorName(a: Author): string {
+  const family = [a.prefix, a.familyName].filter(Boolean).join(' ');
+  const given = [a.firstName, a.romanNumerals].filter(Boolean).join(' ');
+  const name = [family, given].filter(Boolean).join(', ');
+  return a.dates ? `${name} (${a.dates})` : name;
+}
 
-const languagesLine = computed(() => meta.value.language?.map((l) => l.en).join(', ') ?? '');
+const authorsLine = computed(() => meta.value.authors?.map(authorName).join('; ') ?? '');
+
+const codesLine = (codes: ResolvedCode[] | undefined) => codes?.map(codeLabel).join(', ') ?? '';
+
+const languagesLine = computed(() => codesLine(meta.value.language));
+const originalLanguagesLine = computed(() => codesLine(meta.value.originalLanguage));
+const translationLanguagesLine = computed(() => codesLine(meta.value.translationLanguages));
+const countriesLine = computed(() => codesLine(meta.value.country));
+const illustrationsLine = computed(() => codesLine(meta.value.textualMaterialCodes?.illustrationCodes));
+const contentTypesLine = computed(() => codesLine(meta.value.textualMaterialCodes?.contentTypeCodes));
+
+// 210/d is the year as printed; 100/c the coded one. Prefer the printed form.
+const yearLine = computed(() => meta.value.publication?.year || meta.value.publicationDate1 || '');
 
 const files = computed<FileAttachment[]>(() => item.value?.source.file_attachments ?? []);
 

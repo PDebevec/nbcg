@@ -26,12 +26,14 @@ import { generateDeterministicId } from '../../shared/util/generateUuidFromCobis
 // Derived at module load from the type shapes — automatically stays in sync
 // with DomainRecord and BaseMetadata. Maps key → sanitizer function.
 // Unknown keys are dropped; known keys with wrong types throw 400.
+// A known key sent as `null` means "unset this field": PATCH merges over the
+// stored blob, so without it a cleared field would silently keep its old value.
 const METADATA_VALIDATORS = new Map<string, FieldValidator>([
   ...Object.entries(EDITABLE_BASE_METADATA_SHAPE),
   ...Object.entries(DOMAIN_RECORD_SHAPE),
 ]);
 
-// Required metadata field validators.
+// Required metadata field validators. `null` (unset) never passes for these.
 // Add entries here to enforce more required fields without changing service logic.
 const REQUIRED_METADATA_VALIDATORS: Array<{
   key: string;
@@ -40,10 +42,17 @@ const REQUIRED_METADATA_VALIDATORS: Array<{
 }> = [
   {
     key: 'title',
-    validate: (v) => typeof v !== 'string' || v.trim().length > 0,
+    validate: (v) => typeof v === 'string' && v.trim().length > 0,
     message: 'title must not be empty',
   },
 ];
+
+// Set at creation and baked into the item's id; a later edit must not move it.
+const IMMUTABLE_METADATA_KEYS = ['cobissId'] as const;
+
+function stripNulls(metadata: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(metadata).filter(([, v]) => v !== null));
+}
 
 @Injectable()
 export class ItemsService {
@@ -83,10 +92,11 @@ export class ItemsService {
     rawMetadata: Record<string, unknown> | undefined,
     actor: Actor,
   ) {
-    const sanitizedMetadata = this.sanitizeMetadata(rawMetadata ?? {});
+    // On create there is nothing to unset, so a `null` is just an absent field.
+    const sanitizedMetadata = stripNulls(this.sanitizeMetadata(rawMetadata ?? {}));
 
     for (const { key, validate, message } of REQUIRED_METADATA_VALIDATORS) {
-      if (!sanitizedMetadata[key] || !validate(sanitizedMetadata[key])) {
+      if (!validate(sanitizedMetadata[key])) {
         throw new BadRequestException(message);
       }
     }
@@ -214,6 +224,14 @@ export class ItemsService {
     const existingMetadata =
       (existing.metadata as unknown as Record<string, unknown>) ?? {};
 
+    if (metadataUpdate) {
+      for (const key of IMMUTABLE_METADATA_KEYS) {
+        if (key in metadataUpdate && metadataUpdate[key] !== (existingMetadata[key] ?? null)) {
+          throw new BadRequestException(`${key} cannot be changed after creation`);
+        }
+      }
+    }
+
     const data: Record<string, unknown> = {
       updatedByUserId: actor.userId,
       updatedByName: actor.userName,
@@ -221,7 +239,9 @@ export class ItemsService {
     };
     if (visibilityStatus) data.visibilityStatus = visibilityStatus;
     if (hasMetadataChanges) {
-      data.metadata = { ...existingMetadata, ...metadataUpdate };
+      // Shallow merge, then drop every key the caller nulled: that is how a
+      // field gets cleared through PATCH.
+      data.metadata = stripNulls({ ...existingMetadata, ...metadataUpdate });
     }
 
     const changes: FieldChange[] = hasMetadataChanges
@@ -555,6 +575,10 @@ export class ItemsService {
     for (const [k, v] of Object.entries(rawMetadata)) {
       const sanitize = METADATA_VALIDATORS.get(k);
       if (!sanitize) continue; // unknown field — silently drop
+      if (v === null) {
+        entries.push([k, null]); // explicit unset — resolved by the caller
+        continue;
+      }
       try {
         entries.push([k, sanitize(v)]);
       } catch (e) {

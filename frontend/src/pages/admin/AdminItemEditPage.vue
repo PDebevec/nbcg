@@ -53,16 +53,14 @@
             <div v-if="loading" class="q-pa-lg">
               <q-skeleton type="text" v-for="i in 6" :key="i" class="q-mb-md" />
             </div>
-            <div v-else class="row q-col-gutter-md">
-              <div class="col-12 col-md-8">
-                <q-input
-                  v-model="form.title"
-                  outlined
-                  :label="t('admin.edit.fields.title') + ' *'"
-                  :rules="[(v) => !!v?.trim() || t('admin.edit.titleRequired')]"
-                />
-              </div>
-              <div class="col-12 col-md-4">
+            <ItemMetadataForm
+              v-else
+              v-model="form"
+              :code-lists="codeLists"
+              :code-lists-failed="codeListsFailed"
+              :is-new="isNew"
+            >
+              <template #visibility>
                 <q-select
                   v-model="visibilityStatus"
                   outlined
@@ -71,88 +69,8 @@
                   map-options
                   :label="t('admin.items.columns.visibility')"
                 />
-              </div>
-
-              <div class="col-12 col-md-6">
-                <q-input v-model="form.subtitle" outlined :label="t('admin.edit.fields.subtitle')" />
-              </div>
-              <div class="col-12 col-md-6">
-                <q-select
-                  :model-value="form.firstResponsibility"
-                  :options="authorOptions"
-                  outlined use-input fill-input hide-selected clearable
-                  input-debounce="300"
-                  :label="t('admin.edit.fields.author')"
-                  @filter="filterAuthor"
-                  @input-value="form.firstResponsibility = $event"
-                  @update:model-value="form.firstResponsibility = $event ?? ''"
-                />
-              </div>
-
-              <div class="col-12 col-md-4">
-                <q-select
-                  :model-value="form.publisher"
-                  :options="publisherOptions"
-                  outlined use-input fill-input hide-selected clearable
-                  input-debounce="300"
-                  :label="t('admin.edit.fields.publisher')"
-                  @filter="filterPublisher"
-                  @input-value="form.publisher = $event"
-                  @update:model-value="form.publisher = $event ?? ''"
-                />
-              </div>
-              <div class="col-12 col-md-4">
-                <q-input v-model="form.place" outlined :label="t('admin.edit.fields.place')" />
-              </div>
-              <div class="col-12 col-md-4">
-                <q-input v-model="form.year" outlined :label="t('admin.edit.fields.year')" />
-              </div>
-
-              <div class="col-12 col-md-6">
-                <q-input v-model="form.edition" outlined :label="t('admin.edit.fields.edition')" />
-              </div>
-              <div class="col-12 col-md-6">
-                <q-input v-model="form.cobissId" outlined label="COBISS ID" :readonly="!isNew" />
-              </div>
-
-              <div class="col-12 col-md-4">
-                <q-select
-                  v-model="form.materialType"
-                  :options="materialTypeOptions"
-                  :option-label="codeLabel"
-                  outlined clearable
-                  :label="t('admin.edit.fields.materialType')"
-                />
-              </div>
-              <div class="col-12 col-md-4">
-                <q-select
-                  v-model="form.language"
-                  :options="languageOptions"
-                  :option-label="codeLabel"
-                  outlined multiple use-chips
-                  :label="t('admin.edit.fields.language')"
-                />
-              </div>
-              <div class="col-12 col-md-4">
-                <q-select
-                  v-model="form.country"
-                  :options="countryOptions"
-                  :option-label="codeLabel"
-                  outlined multiple use-chips
-                  :label="t('admin.edit.fields.country')"
-                />
-              </div>
-
-              <div class="col-12">
-                <q-input
-                  v-model="form.summaryNote"
-                  outlined
-                  type="textarea"
-                  autogrow
-                  :label="t('admin.edit.fields.summary')"
-                />
-              </div>
-            </div>
+              </template>
+            </ItemMetadataForm>
           </q-tab-panel>
 
           <!-- RAW JSON -->
@@ -272,7 +190,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
@@ -281,13 +199,11 @@ import {
   suggestValues,
   type FileAttachment,
   type IndexedRecord,
-  type RecordMetadata,
-  type ResolvedCode,
 } from 'src/api/search';
-import { useCodeLabel } from 'src/composables/useCodeLabel';
 import {
   conflictCurrentVersion,
   createItem,
+  getRecordSchema,
   isVersionConflict,
   updateItem,
   listFiles,
@@ -296,6 +212,7 @@ import {
   downloadFile,
   VISIBILITY_STATUSES,
   type ItemType,
+  type MetadataPayload,
   type VisibilityStatus,
 } from 'src/api/admin';
 import { useAuthz } from 'src/composables/useAuthz';
@@ -304,6 +221,17 @@ import TextExtractionIndicator from 'src/components/admin/TextExtractionIndicato
 import HistoryTimeline from 'src/components/admin/HistoryTimeline.vue';
 import ItemTaskHistory from 'src/components/admin/ItemTaskHistory.vue';
 import CreateTaskDialog from 'src/components/admin/CreateTaskDialog.vue';
+import ItemMetadataForm from 'src/components/admin/ItemMetadataForm.vue';
+import {
+  codeListsFromSchema,
+  emptyCodeLists,
+  emptyForm,
+  formToMetadata,
+  metadataForDisplay,
+  metadataToForm,
+  type CodeLists,
+  type MetadataForm,
+} from 'src/components/admin/form/metadataForm';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -330,7 +258,8 @@ const loadError = ref(false);
 const saving = ref(false);
 const visibilityStatus = ref<VisibilityStatus>('PRIVATE');
 
-// Full metadata object as loaded (preserves fields the form doesn't expose)
+// Metadata as loaded — the base every payload is built on, so keys the form
+// does not own (collectionType, _source, children counters) pass through.
 let metadata: Record<string, unknown> = {};
 
 // Optimistic concurrency: last version we know of, plus a snapshot of the
@@ -339,95 +268,53 @@ const currentVersion = ref(0);
 let originalMetadata: Record<string, unknown> = {};
 let originalVisibility: VisibilityStatus = 'PRIVATE';
 
-// Flat form model over the most common metadata fields
-const form = reactive({
-  title: '',
-  subtitle: '',
-  firstResponsibility: '',
-  publisher: '',
-  place: '',
-  year: '',
-  edition: '',
-  cobissId: '',
-  summaryNote: '',
-  materialType: null as ResolvedCode | null,
-  language: [] as ResolvedCode[],
-  country: [] as ResolvedCode[],
-});
+// The structured form over every editable field. ItemMetadataForm binds into
+// this object directly.
+const form = ref<MetadataForm>(emptyForm());
+
+const payloadMode = computed(() => (isNew.value ? 'create' : 'update'));
+
+function buildPayload(): MetadataPayload {
+  return formToMetadata(form.value, metadata, payloadMode.value);
+}
 
 // ---------------------------------------------------------------------------
-// Suggest-driven dropdowns & autocomplete
+// Code lists (GET /schema/record) for the enum pickers. If the schema cannot
+// be loaded, fall back to the values already in use so the most common
+// dropdowns still work, and say so on the form.
 // ---------------------------------------------------------------------------
 
-const { codeLabel } = useCodeLabel();
+const codeLists = ref<CodeLists>(emptyCodeLists());
+const codeListsFailed = ref(false);
 
-const materialTypeOptions = ref<ResolvedCode[]>([]);
-const languageOptions = ref<ResolvedCode[]>([]);
-const countryOptions = ref<ResolvedCode[]>([]);
-
-async function loadEnumOptions() {
+async function loadCodeLists() {
+  try {
+    const { fields } = await getRecordSchema();
+    codeLists.value = codeListsFromSchema(fields);
+    return;
+  } catch {
+    codeListsFailed.value = true;
+  }
   try {
     const [types, langs, countries] = await Promise.all([
       suggestValues({ field: 'materialType', limit: 50 }),
       suggestValues({ field: 'language', limit: 50 }),
       suggestValues({ field: 'country', limit: 50 }),
     ]);
-    materialTypeOptions.value = types.suggestions.map((s) => s.value);
-    languageOptions.value = langs.suggestions.map((s) => s.value);
-    countryOptions.value = countries.suggestions.map((s) => s.value);
+    codeLists.value = {
+      ...emptyCodeLists(),
+      materialType: types.suggestions.map((s) => s.value),
+      language: langs.suggestions.map((s) => s.value),
+      country: countries.suggestions.map((s) => s.value),
+    };
   } catch {
-    // dropdowns stay empty
+    // dropdowns stay empty; free-text fields still work
   }
 }
 
-const publisherOptions = ref<string[]>([]);
-const authorOptions = ref<string[]>([]);
-
-type QFilterDone = (cb: () => void) => void;
-
-function filterPublisher(input: string, doneFn: QFilterDone) {
-  void (async () => {
-    let options: string[] = [];
-    try {
-      const result = await suggestValues({
-        field: 'publisher',
-        ...(input.trim() ? { q: input.trim() } : {}),
-        limit: 10,
-      });
-      options = result.suggestions.map((s) => s.value);
-    } catch {
-      options = [];
-    }
-    doneFn(() => {
-      publisherOptions.value = options;
-    });
-  })();
-}
-
-function filterAuthor(input: string, doneFn: QFilterDone) {
-  void (async () => {
-    let options: string[] = [];
-    try {
-      const result = await suggestValues({
-        field: 'author',
-        ...(input.trim() ? { q: input.trim() } : {}),
-        limit: 10,
-      });
-      options = [
-        ...new Set(
-          result.suggestions
-            .map((s) => [s.value.firstName, s.value.familyName].filter(Boolean).join(' ').trim())
-            .filter(Boolean),
-        ),
-      ];
-    } catch {
-      options = [];
-    }
-    doneFn(() => {
-      authorOptions.value = options;
-    });
-  })();
-}
+// ---------------------------------------------------------------------------
+// JSON tab
+// ---------------------------------------------------------------------------
 
 const jsonText = ref('{}');
 const jsonError = ref('');
@@ -436,42 +323,8 @@ const visibilityOptions = computed(() =>
   VISIBILITY_STATUSES.map((s) => ({ label: t(`admin.visibility.${s}`), value: s })),
 );
 
-function metadataToForm(m: Record<string, unknown>) {
-  const meta = m as Partial<RecordMetadata>;
-  form.title = meta.title ?? '';
-  form.subtitle = meta.subtitle ?? '';
-  form.firstResponsibility = meta.firstResponsibility ?? '';
-  form.publisher = meta.publication?.publisher ?? '';
-  form.place = meta.publication?.place ?? '';
-  form.year = meta.publication?.year ?? '';
-  form.edition = meta.edition ?? '';
-  form.cobissId = meta.cobissId ?? '';
-  form.summaryNote = meta.summaryNote ?? '';
-  form.materialType = meta.materialType ?? null;
-  form.language = meta.language ?? [];
-  form.country = meta.country ?? [];
-}
-
-function formToMetadata(): Record<string, unknown> {
-  const publication = {
-    ...((metadata.publication as Record<string, unknown>) ?? {}),
-    publisher: form.publisher || undefined,
-    place: form.place || undefined,
-    year: form.year || undefined,
-  };
-  return {
-    ...metadata,
-    title: form.title,
-    subtitle: form.subtitle || undefined,
-    firstResponsibility: form.firstResponsibility || undefined,
-    publication,
-    edition: form.edition || undefined,
-    ...(isNew.value && form.cobissId ? { cobissId: form.cobissId } : {}),
-    summaryNote: form.summaryNote || undefined,
-    materialType: form.materialType ?? undefined,
-    language: form.language.length ? [...form.language] : undefined,
-    country: form.country.length ? [...form.country] : undefined,
-  };
+function renderJson() {
+  jsonText.value = JSON.stringify(metadataForDisplay(buildPayload()), null, 2);
 }
 
 // Keep JSON tab and form in sync: entering the JSON tab renders the current
@@ -481,7 +334,7 @@ function formToMetadata(): Record<string, unknown> {
 let previousTab: string | number = 'form';
 function onTabChange(next: string | number) {
   if (next === 'json') {
-    jsonText.value = JSON.stringify(formToMetadata(), null, 2);
+    renderJson();
   } else if (previousTab === 'json') {
     applyJson(false);
   }
@@ -491,8 +344,10 @@ function onTabChange(next: string | number) {
 function applyJson(showError = true): boolean {
   try {
     const parsed = JSON.parse(jsonText.value) as Record<string, unknown>;
+    // A key deleted in the JSON is cleared on save: the form no longer holds
+    // it, so the payload sends `null` for it (update) or omits it (create).
     metadata = parsed;
-    metadataToForm(parsed);
+    form.value = metadataToForm(parsed);
     jsonError.value = '';
     return true;
   } catch {
@@ -515,12 +370,12 @@ function applyServerState(source: IndexedRecord) {
   currentVersion.value = source.version ?? 0;
   originalMetadata = structuredClone(metadata);
   originalVisibility = source.visibilityStatus;
-  metadataToForm(metadata);
-  if (tab.value === 'json') jsonText.value = JSON.stringify(formToMetadata(), null, 2);
+  form.value = metadataToForm(metadata);
+  if (tab.value === 'json') renderJson();
 }
 
 onMounted(async () => {
-  void loadEnumOptions();
+  void loadCodeLists();
   if (isNew.value) return;
   try {
     const hit = await getItem(itemId.value!);
@@ -540,7 +395,7 @@ onMounted(async () => {
 
 async function onSave() {
   if (tab.value === 'json' && !applyJson()) return;
-  if (!form.title.trim()) {
+  if (!form.value.title.trim()) {
     $q.notify({ type: 'negative', message: t('admin.edit.titleRequired') });
     tab.value = 'form';
     return;
@@ -548,7 +403,7 @@ async function onSave() {
 
   saving.value = true;
   try {
-    const meta = formToMetadata() as Partial<RecordMetadata>;
+    const meta = buildPayload();
     if (isNew.value) {
       await createItem({
         visibilityStatus: visibilityStatus.value,
@@ -564,7 +419,7 @@ async function onSave() {
         });
       } catch (err) {
         if (!isVersionConflict(err)) throw err;
-        await handleConflict(meta as Record<string, unknown>, err);
+        await handleConflict(meta, err);
         return;
       }
     }
@@ -586,6 +441,8 @@ async function onSave() {
 // Optimistic concurrency (409) handling
 // ---------------------------------------------------------------------------
 
+// `null` in the attempted payload means "cleared", which is the same as absent
+// on the stored side — so both normalise to null before comparing.
 function changedKeys(
   before: Record<string, unknown>,
   after: Record<string, unknown>,
@@ -611,19 +468,20 @@ async function fetchFreshItem(minVersion: number): Promise<IndexedRecord | undef
   return undefined;
 }
 
-async function handleConflict(attemptedMeta: Record<string, unknown>, err: unknown) {
+async function handleConflict(attemptedMeta: MetadataPayload, err: unknown) {
+  const attempted = attemptedMeta as Record<string, unknown>;
   const attemptedVisibility = visibilityStatus.value;
   const serverVersion = conflictCurrentVersion(err);
   const server = await fetchFreshItem(serverVersion ?? currentVersion.value + 1);
 
   if (server) {
     const serverMeta = (server.metadata as unknown as Record<string, unknown>) ?? {};
-    const userKeys = changedKeys(originalMetadata, attemptedMeta);
+    const userKeys = changedKeys(originalMetadata, attempted);
     const serverKeys = changedKeys(originalMetadata, serverMeta);
     const metadataOverlap = userKeys.some(
       (k) =>
         serverKeys.includes(k) &&
-        JSON.stringify(attemptedMeta[k] ?? null) !== JSON.stringify(serverMeta[k] ?? null),
+        JSON.stringify(attempted[k] ?? null) !== JSON.stringify(serverMeta[k] ?? null),
     );
     const visibilityOverlap =
       attemptedVisibility !== originalVisibility &&
@@ -635,11 +493,11 @@ async function handleConflict(attemptedMeta: Record<string, unknown>, err: unkno
       // trigger bumped the version): merge onto the server state and retry
       // without bothering the user.
       const mergedMeta: Record<string, unknown> = { ...serverMeta };
-      for (const k of userKeys) mergedMeta[k] = attemptedMeta[k];
+      for (const k of userKeys) mergedMeta[k] = attempted[k];
       try {
         const result = await updateItem(itemId.value!, {
           visibilityStatus: attemptedVisibility,
-          metadata: mergedMeta as Partial<RecordMetadata>,
+          metadata: mergedMeta as MetadataPayload,
           expectedVersion: server.version ?? 0,
         });
         currentVersion.value = result?.version ?? (server.version ?? 0) + 1;
@@ -672,10 +530,7 @@ async function handleConflict(attemptedMeta: Record<string, unknown>, err: unkno
 
 // Last-write-wins override: re-apply the user's attempted changes on top of
 // the freshest version we can determine.
-async function forceSave(
-  attemptedMeta: Record<string, unknown>,
-  attemptedVisibility: VisibilityStatus,
-) {
+async function forceSave(attemptedMeta: MetadataPayload, attemptedVisibility: VisibilityStatus) {
   saving.value = true;
   try {
     let expected = currentVersion.value;
@@ -685,10 +540,7 @@ async function forceSave(
     } catch {
       // fall back to the last version we know
     }
-    const payload = {
-      visibilityStatus: attemptedVisibility,
-      metadata: attemptedMeta as Partial<RecordMetadata>,
-    };
+    const payload = { visibilityStatus: attemptedVisibility, metadata: attemptedMeta };
     try {
       await updateItem(itemId.value!, { ...payload, expectedVersion: expected });
     } catch (err) {
@@ -767,7 +619,7 @@ function formatSize(bytes: number): string {
 
 <style scoped lang="sass">
 .page-body
-  max-width: 1024px
+  max-width: 1100px
   margin: 0 auto
 
 .edit-card

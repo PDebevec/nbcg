@@ -1,5 +1,5 @@
 import { api } from 'src/boot/axios';
-import type { FileAttachment, RecordMetadata } from './search';
+import type { FileAttachment, RecordMetadata, ResolvedCode } from './search';
 
 // ---------------------------------------------------------------------------
 // Shared enums (mirror backend prisma enums)
@@ -24,10 +24,17 @@ export async function getItemStats(): Promise<ItemStats> {
   return data;
 }
 
+/**
+ * Metadata as sent to the server. PATCH merges over the stored blob key by
+ * key, so a top-level key set to `null` is how a field gets cleared; `undefined`
+ * keys fall out of the JSON body and leave the stored value untouched.
+ */
+export type MetadataPayload = { [K in keyof RecordMetadata]?: RecordMetadata[K] | null };
+
 export async function createItem(params: {
   visibilityStatus: VisibilityStatus;
   targetState: ItemType;
-  metadata?: Partial<RecordMetadata>;
+  metadata?: MetadataPayload;
 }): Promise<void> {
   await api.post('/items', params);
 }
@@ -36,7 +43,7 @@ export async function updateItem(
   id: string,
   params: {
     visibilityStatus?: VisibilityStatus;
-    metadata?: Partial<RecordMetadata>;
+    metadata?: MetadataPayload;
     expectedVersion: number;
   },
 ): Promise<{ version: number } | undefined> {
@@ -63,6 +70,31 @@ export async function deleteItems(ids: string[]): Promise<void> {
 
 export async function transitionItems(ids: string[], targetState: ItemType): Promise<void> {
   await api.post('/items/transition', { ids, targetState });
+}
+
+// ---------------------------------------------------------------------------
+// Record schema — mirrors backend schema.controller.ts / schema.types.ts.
+// The single source of the code lists (languages, countries, relator codes …)
+// the editor's dropdowns offer. Cached for a day by the server.
+// ---------------------------------------------------------------------------
+
+export interface FieldDescriptor {
+  key: string;
+  type: 'string' | 'number' | 'boolean' | 'date' | 'enum' | 'array' | 'object';
+  required: boolean;
+  itemType?: 'string' | 'enum' | 'object';
+  allowedValues?: ResolvedCode[];
+  objectShape?: FieldDescriptor[];
+  group: string;
+  order: number;
+  parentInheritable: boolean;
+  issueIdentifying: boolean;
+  levels: ('main' | 'child')[];
+}
+
+export async function getRecordSchema(): Promise<{ fields: FieldDescriptor[] }> {
+  const { data } = await api.get<{ fields: FieldDescriptor[] }>('/schema/record');
+  return data;
 }
 
 // ---------------------------------------------------------------------------

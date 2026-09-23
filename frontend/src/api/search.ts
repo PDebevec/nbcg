@@ -11,91 +11,106 @@ export interface ResolvedCode {
 }
 
 // ---------------------------------------------------------------------------
-// DomainRecord — mirrors backend cobiss.types.ts (active / RED fields only)
+// DomainRecord — mirrors backend cobiss.types.ts exactly (the RED / active
+// COMARC fields). The server's DOMAIN_RECORD_SHAPE whitelist drops any key
+// that is not listed here, so a field added on one side must be added on the
+// other. Comments give the COMARC tag/subfield the value comes from.
 // ---------------------------------------------------------------------------
+
+export type Responsibility = 'primary' | 'alternative' | 'secondary';
+
+export interface Author {
+  familyName?: string; // 700-702/a
+  firstName?: string; // 700-702/b
+  prefix?: string; // 700-702/c
+  romanNumerals?: string; // 700-702/d
+  dates?: string; // 700-702/f
+  role?: ResolvedCode; // 700-702/4 relator code
+  responsibility?: Responsibility; // 700 / 701 / 702
+}
+
+export interface CorporateBody {
+  name: string; // 710-712/a
+  responsibility?: Responsibility; // 710 / 711 / 712
+}
+
+export interface ElectronicLocation {
+  url: string; // 856/u
+}
+
+export interface TextualMaterialCodes {
+  illustrationCodes?: ResolvedCode[]; // 105/a
+  contentTypeCodes?: ResolvedCode[]; // 105/b
+  conferencePublication?: boolean; // 105/c
+  festschrift?: boolean; // 105/d
+  indexIndicator?: boolean; // 105/e
+  literaryForm?: ResolvedCode; // 105/f
+  biographyCode?: ResolvedCode; // 105/g
+}
+
+export interface Publication {
+  place?: string; // 210/a
+  publisher?: string; // 210/c
+  year?: string; // 210/d
+  placeOfManufacture?: string; // 210/e
+  manufacturerName?: string; // 210/g
+}
 
 export interface DomainRecord {
   cobissId?: string;
 
   // 0XX — Identification
-  recordType?: ResolvedCode;
-  bibliographicLevel?: ResolvedCode;
-  materialType?: ResolvedCode;
-  documentTypology?: string;
-  isbn?: string[];
-  issn?: string[];
-  ismn?: string[];
+  recordType?: ResolvedCode; // 001/b
+  bibliographicLevel?: ResolvedCode; // 001/c
+  materialType?: ResolvedCode; // 001/b+c
+  documentTypology?: string; // 001/t
+  isbn?: string[]; // 010/a
+  issn?: string[]; // 011/a
+  ismn?: string[]; // 013/a
 
   // 1XX — Coded information
-  publicationDate1?: string;
-  publicationDate2?: string;
-  language?: ResolvedCode[];
-  originalLanguage?: ResolvedCode[];
-  translationLanguages?: ResolvedCode[];
-  country?: ResolvedCode[];
-  textualMaterialCodes?: {
-    illustrationCodes?: ResolvedCode[];
-    contentTypeCodes?: ResolvedCode[];
-    conferencePublication?: boolean;
-    festschrift?: boolean;
-    indexIndicator?: boolean;
-    literaryForm?: ResolvedCode;
-    biographyCode?: ResolvedCode;
-  };
+  publicationDate1?: string; // 100/c
+  publicationDate2?: string; // 100/d
+  language?: ResolvedCode[]; // 101/a
+  originalLanguage?: ResolvedCode[]; // 101/c
+  translationLanguages?: ResolvedCode[]; // 101/d
+  country?: ResolvedCode[]; // 102/a
+  textualMaterialCodes?: TextualMaterialCodes; // 105
 
   // 2XX — Descriptive information
-  title?: string;
-  subtitle?: string;
-  parallelTitle?: string;
-  firstResponsibility?: string;
-  subsequentResponsibility?: string;
-  edition?: string;
-  publication?: {
-    place?: string;
-    publisher?: string;
-    year?: string;
-    country?: string;
-  };
-  physicalDescription?: {
-    extent?: string;
-    otherPhysicalDetails?: string;
-    dimensions?: string;
-  };
+  title?: string; // 200/a
+  titleMediumDesignation?: string; // 200/b
+  titleByAnotherAuthor?: string; // 200/c
+  parallelTitle?: string[]; // 200/d
+  subtitle?: string; // 200/e
+  firstResponsibility?: string; // 200/f
+  subsequentResponsibility?: string[]; // 200/g
+  edition?: string; // 205/a
+  cartographicMathematicalData?: string; // 206/a
+  numberingAndDates?: string; // 207/a
+  musicEditionStatement?: string; // 208/a
+  publication?: Publication; // 210
+  physicalDescription?: string; // 215/a
+  otherPhysicalDetails?: string; // 215/c
+  dimensions?: string; // 215/d
+  seriesTitle?: string; // 225/a
+  seriesSubtitle?: string; // 225/e
+  seriesResponsibility?: string; // 225/f
+  seriesIssn?: string; // 225/x
+  seriesVolume?: string; // 225/v
 
   // 3XX — Notes
-  notes?: string[];
-  summaryNote?: string;
-  targetAudienceNote?: string;
+  notes?: string[]; // 300/a
 
-  // 4XX — Linking fields
-  seriesTitle?: string;
-  seriesIssn?: string;
-  seriesVolume?: string;
-
-  // 5XX — Related titles / links
-  uniformTitle?: string;
-  originalTitle?: string;
-
-  // 6XX — Subject analysis
-  udc?: string[];
-  subjects?: string[];
-  geographicSubjects?: string[];
-  keywords?: string[];
+  // 5XX — Related titles
+  titleInOtherScript?: string[]; // 518/a
 
   // 7XX — Intellectual responsibility
-  authors?: Array<{
-    familyName?: string;
-    firstName?: string;
-    role?: ResolvedCode;
-    cobissAuthorId?: string;
-  }>;
-  corporateAuthors?: Array<{
-    name?: string;
-    role?: ResolvedCode;
-  }>;
+  authors?: Author[]; // 700-702
+  corporateBodies?: CorporateBody[]; // 710-712
 
-  // 8XX — International use fields
-  unimarc?: string;
+  // 8XX — International use
+  electronicLocation?: ElectronicLocation[]; // 856
 }
 
 // ---------------------------------------------------------------------------
@@ -114,7 +129,8 @@ export interface BaseMetadata {
 // Full record metadata type
 // ---------------------------------------------------------------------------
 
-export type CobissMetadata = BaseMetadata & DomainRecord & { _source: 'cobiss' };
+/** `_source` is set by the server: 'cobiss' for imports, 'nbcg' for items created by hand. */
+export type CobissMetadata = BaseMetadata & DomainRecord & { _source: 'cobiss' | 'nbcg' };
 export type RecordMetadata = CobissMetadata;
 
 // ---------------------------------------------------------------------------
