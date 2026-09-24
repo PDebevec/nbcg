@@ -6,6 +6,7 @@ import { fetchCobissRecord } from '../cobiss/cobiss-util/cobiss-fetch';
 import { SYSTEM_ACTOR } from '../../../core/auth/actor.type';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import { RevisionsService } from '../../../core/revisions/revisions.service';
+import { PublishValidatorService } from '../../schema/publish-validator.service';
 import { generateDeterministicId } from '../../../shared/util/generateUuidFromCobissId';
 import type { CobissMetadata } from '../../../core/types/metadata.types';
 import { ChangeAction, ItemType, VisibilityStatus } from '../../../../generated/prisma/enums';
@@ -19,6 +20,7 @@ export class ImportQueueProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly revisions: RevisionsService,
+    private readonly publishValidator: PublishValidatorService,
   ) {
     super();
   }
@@ -32,6 +34,7 @@ export class ImportQueueProcessor extends WorkerHost {
       succeeded: 0,
       failed: 0,
       errors: [],
+      warnings: [],
     };
 
     await job.updateProgress(progress);
@@ -42,8 +45,9 @@ export class ImportQueueProcessor extends WorkerHost {
       await Promise.all(
         batch.map(async (id) => {
           try {
-            await this.processRecord(source, id, target, visibilityStatus);
+            const warning = await this.processRecord(source, id, target, visibilityStatus);
             progress.succeeded++;
+            if (warning) progress.warnings!.push({ id, reason: warning });
           } catch (err: any) {
             progress.failed++;
             progress.errors.push({ id, reason: err?.message ?? 'Unknown error' });
@@ -62,7 +66,7 @@ export class ImportQueueProcessor extends WorkerHost {
     id: string,
     target: ItemType,
     visibilityStatus: VisibilityStatus,
-  ): Promise<void> {
+  ): Promise<string | null> {
     switch (source) {
       case 'cobiss': return this.processCobissRecord(id, target, visibilityStatus);
       default: throw new Error(`Unknown import source: ${source}`);
@@ -73,7 +77,7 @@ export class ImportQueueProcessor extends WorkerHost {
     id: string,
     target: ItemType,
     visibilityStatus: VisibilityStatus,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const record = await fetchCobissRecord(id);
     if (!record) throw new Error(`No data returned from COBISS for id ${id}`);
 
@@ -122,6 +126,23 @@ export class ImportQueueProcessor extends WorkerHost {
         tx,
       );
     });
+
+    return target === ItemType.RECORD ? this.publishWarning(recordId, metadata) : null;
+  }
+
+  /**
+   * Imports bypass publish validation on purpose (COBISS is the catalogue of
+   * record); this says what a hand-publish would have demanded, or null. A new
+   * import has no parents yet.
+   */
+  private publishWarning(recordId: string, metadata: CobissMetadata): string | null {
+    const result = this.publishValidator.check({ id: recordId, metadata, itemState: 'NEW' }, []);
+    if (result.ok) return null;
+    const problems = [
+      ...result.missing.map((m) => `missing ${m.path}`),
+      ...result.violations.map((v) => `${v.path} breaks ${v.constraint}`),
+    ];
+    return `Imported as a record, but would not pass publish validation: ${problems.join(', ')}`;
   }
 
   /**

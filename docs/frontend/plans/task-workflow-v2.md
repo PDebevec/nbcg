@@ -140,7 +140,7 @@ must report per-item 409s; **A2** (publish inside the editor) shares the
 | action routes, `returnTarget`, `lastHandoff`, `returned` filter | service/controller (§3, §5) |
 | capabilities `drafts` / `records` in `/api/users` | guard (§2) |
 | `409 ITEM_HAS_OPEN_TASK` | migration + create (§1, §3) |
-| `/items/:id/validation`, `PUBLISH_VALIDATION_FAILED` | metadata schema v2, B6 — until it ships, the REVIEW dialog shows the warning without a checklist |
+| `/items/:id/validation`, `PUBLISH_VALIDATION_FAILED` | metadata schema v2, B6 — built 2026-09-24 (dev); response shapes in the [web schema v2 plan](metadata-schema-v2.md#what-the-backend-now-provides-2026-09-24) |
 
 ## Estimate
 

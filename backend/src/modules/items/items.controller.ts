@@ -9,6 +9,7 @@ import { CreateItemDto } from './dto/create-item.dto';
 import { DeleteItemsDto } from './dto/delete-items.dto';
 import { HistoryQueryDto } from './dto/history-query.dto';
 import { TransitionItemsDto } from './dto/transition-items.dto';
+import { ValidationQueryDto } from './dto/validation-query.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { ItemsService } from './items.service';
 
@@ -32,6 +33,17 @@ export class ItemsController {
   @RequireScopes('records:view:hidden', 'drafts:view:hidden')
   history(@Param('id') id: string, @Query() dto: HistoryQueryDto) {
     return this.itemsService.history(id, dto.limit ?? 50, dto.offset ?? 0);
+  }
+
+  // Gated like reading the item: 404 (not 403) when the caller cannot see it.
+  @Get(':id/validation')
+  async validation(
+    @GetPrincipal() principal: Principal,
+    @Param('id') id: string,
+    @Query() _dto: ValidationQueryDto,
+  ) {
+    await this.access.assertCanView(principal, id);
+    return this.itemsService.validation(id);
   }
 
   @Post()

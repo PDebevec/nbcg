@@ -2,7 +2,8 @@
  * Allowlist of fields supported by the /search/suggest endpoint.
  *
  * Each entry defines how to query and aggregate OpenSearch for that field type.
- * Adding a new suggestable field is just a new entry here.
+ * Adding a new suggestable field is just a new entry here. Every `suggest` in
+ * the schema v2 field list must name an entry (checked at startup).
  */
 
 export type SuggestFieldType = 'string' | 'resolvedCode' | 'author';
@@ -74,6 +75,36 @@ export const SUGGEST_FIELDS: Record<string, SuggestFieldConfig> = {
     type: 'string',
     matchPath: 'metadata.notes',
     keywordPath: 'metadata.notes.keyword',
+  },
+  placeOfManufacture: {
+    type: 'string',
+    matchPath: 'metadata.publication.placeOfManufacture',
+    keywordPath: 'metadata.publication.placeOfManufacture.keyword',
+  },
+  manufacturerName: {
+    type: 'string',
+    matchPath: 'metadata.publication.manufacturerName',
+    keywordPath: 'metadata.publication.manufacturerName.keyword',
+  },
+  corporateBody: {
+    type: 'string',
+    matchPath: 'metadata.corporateBodies.name',
+    keywordPath: 'metadata.corporateBodies.name.keyword',
+  },
+  keywords: {
+    type: 'string',
+    matchPath: 'metadata.keywords',
+    keywordPath: 'metadata.keywords.keyword',
+  },
+  dimensions: {
+    type: 'string',
+    matchPath: 'metadata.dimensions',
+    keywordPath: 'metadata.dimensions.keyword',
+  },
+  physicalDescription: {
+    type: 'string',
+    matchPath: 'metadata.physicalDescription',
+    keywordPath: 'metadata.physicalDescription.keyword',
   },
 
   // ── ResolvedCode fields ──

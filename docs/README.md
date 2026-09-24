@@ -41,7 +41,7 @@ English.
 
 | Plan | Parts | Status |
 |---|---|---|
-| **Metadata schema v2** — dynamic fields by material type / collection / parent, typeahead hints, searchable vocabularies, labels, publish validation · [contract](shared/plans/metadata-schema-v2.md) · [backend](backend/plans/metadata-schema-v2.md) · [web](frontend/plans/metadata-schema-v2.md) · [archive app](shared/plans/metadata-schema-v2-archive-app.md) | backend, web, archive app | PLANNED 2026-09-23 |
+| **Metadata schema v2** — dynamic fields by material type / collection / parent, typeahead hints, searchable vocabularies, labels, publish validation · [contract](shared/plans/metadata-schema-v2.md) · [backend](backend/plans/metadata-schema-v2.md) · [web](frontend/plans/metadata-schema-v2.md) · [archive app](shared/plans/metadata-schema-v2-archive-app.md) | backend, web, archive app | **backend B1–B6 DONE 2026-09-24** (dev only — B6 must not reach production before the web editor can enter `extent`/`issue`); web F1–F5 + archive app next; B7 (drop v1) last |
 | **Task workflow v2** — stages instead of statuses, one open task per item, return = previous person + stage, complete REVIEW = publish · [contract](shared/plans/task-workflow-v2.md) · [backend](backend/plans/task-workflow-v2.md) · [web](frontend/plans/task-workflow-v2.md) | backend, web (deploy together) | PLANNED 2026-09-23 |
 | [Material-type field visibility in the item editor](frontend/plans/material-type-field-visibility.md): type picked first, only that type's fields shown, the rest folded into "Other fields"; static map now, schema v2 rules later | web | TODO 2026-09-23 |
 | [Usage metrics outlive their items](backend/plans/usage-metrics-orphans.md) — deleted items in "most viewed" | backend | TODO, needs a decision |
@@ -53,12 +53,11 @@ English.
 | Archive app: wire "Get data" to COBISS preview — [archive-app.md](shared/archive-app.md) | archive app | TODO |
 
 Suggested order: task workflow v2 (self-contained, both sides together) →
-metadata schema v2 backend B1–B2 → web F1–F2 → B3–B6 / F3–F5 → archive app
-migration → retire schema v1. The web-only material-type visibility plan needs
-no backend work and can run alongside; its §3b folds into web F1. (The backend
-`summaryNote` fix that used to head this list is moot: `cd8e5bd` removed the
-Summary field from the web editor, so nothing is being lost any more, and
-`summaryNote` is now just a new field in B3.)
+metadata schema v2 web: first the Summary / `extent` / `issue` inputs and the
+`PUBLISH_VALIDATION_FAILED` dialog (the backend already enforces them), then
+F1–F5 → deploy backend + web together (plus one `PUT _mapping`, see the backend
+plan's deploy notes) → archive app migration → retire schema v1. The web-only
+material-type visibility plan can run alongside; its §3b folds into web F1.
 
 ### Done / superseded (in `history/`)
 

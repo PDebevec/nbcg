@@ -1,6 +1,6 @@
 # Frontend: Material-type-driven field visibility in the item editor
 
-## Status: TODO (2026-09-23) — web only, no backend work needed; §3b waits for schema v2
+## Status: TODO (2026-09-23) — web only, no backend work needed; §3b's backend side (schema v2 B1–B2) is done 2026-09-24, it waits for web F1
 
 | Doc | Relation |
 |---|---|
@@ -168,7 +168,7 @@ Of these, v2's planned `extent` field covers only duration (unit `min` for `g i 
 |---|---|
 | §3a: static map, grouped type picker, "Other fields (n)", "On this page" card | nothing. It uses the v1 code lists the editor already loads from `GET /api/schema/record` |
 | Picking a type sets `recordType` + `bibliographicLevel`; clearing it sends `null` for both | nothing new. The API stores all three today, and `null` clears a field since `cd8e5bd` |
-| §3b: switch to the schema | schema v2 **B1** (endpoint) + **B2** (evaluator), and web **F1** |
+| §3b: switch to the schema | schema v2 **B1** (endpoint) + **B2** (evaluator) — both done 2026-09-24 — and web **F1** |
 | §2a differences | a decision in the contract's rule table; otherwise the switch changes what users see |
 | any of the above | archive app: nothing. It builds its own editor from the schema (v1 now, v2 later) |
 

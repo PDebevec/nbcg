@@ -17,7 +17,7 @@ check/edit the metadata in a generated form → create the item → upload scans
 |---|---|---|
 | `GET /api/schema/record` (v1) | **builds its whole metadata editor from this JSON** | frozen — see below |
 | `GET /api/import/cobiss/preview/:cobissId` | "Get data" without creating anything | backend done; wiring in the app still open |
-| `POST /api/items`, `PATCH /api/items/:id` | create / edit | `expectedVersion` on PATCH (409 on conflict) |
+| `POST /api/items`, `PATCH /api/items/:id` | create / edit | `expectedVersion` on PATCH (409 on conflict). **Schema v2 (built 2026-09-24, not yet in production):** creating with `targetState: RECORD` runs the publish check → `400 PUBLISH_VALIDATION_FAILED` for incomplete metadata; `DRAFT` and PATCH are unaffected |
 | `POST /api/files/upload/:itemId` | scans + `extractedTexts` (filename → OCR text) + `role` | keys of `extractedTexts` must match an uploaded filename or the whole request is a 400 |
 | `POST /api/relations/connect` | parent ↔ child | returns the parent's new `version` |
 | `GET /api/search…` | lookups | |
@@ -38,6 +38,11 @@ whether it calls `/api/tasks` (it is assumed not to).
    whoever maintains the app **before** the backend release.
 
 ## Open work for the app
+
+- [ ] **Before the schema v2 backend goes to production:** find out whether
+      the app creates items as `RECORD`. If it does, it starts getting
+      `400 PUBLISH_VALIDATION_FAILED` (e.g. a book without `extent`, which v1
+      cannot even express) — v1 keeps working for everything else.
 
 - [ ] Wire "Get data" to the COBISS preview — [backend note](../backend/history/archive-cobiss-preview.md).
 - [ ] Move to metadata schema v2 — [migration guide](plans/metadata-schema-v2-archive-app.md).

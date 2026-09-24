@@ -9,6 +9,7 @@
  */
 
 import type { ResolvedCode } from './cobiss-code-map';
+import { getAllExtentUnitCodes } from './cobiss-code-map';
 export type { ResolvedCode } from './cobiss-code-map';
 
 export interface DomainRecord {
@@ -395,7 +396,7 @@ export interface DomainRecord {
   // notesOnDissertation?: string[];          // 328/a – Notes on dissertation or thesis
 
   // --- 330: Abstract or summary ---
-  // abstract?: string;                       // 330/a – Summary or abstract
+  summaryNote?: string;                       // 330/a – Summary or abstract
 
   // --- 332: Preferred citation ---
   // preferredCitation?: string;              // 332/a – Preferred citation of described materials
@@ -731,9 +732,7 @@ export interface DomainRecord {
   // }>;
 
   // --- 610: Uncontrolled subject terms ---
-  // uncontrolledKeywords?: Array<{
-  //   term: string;                          // 610/a – Uncontrolled index term (free keyword)
-  // }>;
+  keywords?: string[];                        // 610/a – Uncontrolled index term (free keyword), all occurrences
 
   // --- 615: Subject category code ---
   // subjectCategoryCodes?: Array<{
@@ -857,6 +856,21 @@ export interface DomainRecord {
   //   data?: string;                         // 886/a – Data of unconverted field
   // }>;
 
+  // ============================================================
+  // NBCG — structured fields with no single COMARC source (metadata schema v2)
+  // ============================================================
+
+  extent?: {                                  // numeric extent; 215/a keeps the free-text form
+    value: number;                            // integer ≥ 0
+    unit: string;                             // code from getAllExtentUnitCodes(): pages, minutes, …
+  };
+
+  issue?: {                                   // one issue of a serial collection (parent collectionType 4)
+    volume?: string;
+    number?: string;
+    date?: string;                            // YYYY, YYYY-MM or YYYY-MM-DD
+  };
+
 }
 
 // ─── Runtime sanitizers ───────────────────────────────────────────────────────
@@ -945,6 +959,35 @@ const electronicLocationValidator = sanitizeObj({
   url: str,
 });
 
+// `YYYY`, `YYYY-MM` or `YYYY-MM-DD`; a full date must exist on the calendar.
+const partialDate = (v: unknown): unknown => {
+  if (typeof v !== 'string' || !/^\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?)?$/.test(v))
+    throw new Error('expected date YYYY, YYYY-MM or YYYY-MM-DD');
+  if (v.length === 10 && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) !== v)
+    throw new Error('expected a calendar date');
+  return v;
+};
+
+const EXTENT_UNITS = new Set(getAllExtentUnitCodes().map((u) => u.code));
+
+// `{ value, unit }` — the number the user typed plus the unit the editor wrote.
+const quantity = (v: unknown): unknown => {
+  if (typeof v !== 'object' || v === null || Array.isArray(v))
+    throw new Error('expected { value, unit }');
+  const o = v as Record<string, unknown>;
+  if (typeof o.value !== 'number' || !Number.isInteger(o.value) || o.value < 0)
+    throw new Error('expected value: integer >= 0');
+  if (typeof o.unit !== 'string' || !EXTENT_UNITS.has(o.unit))
+    throw new Error(`expected unit: one of ${[...EXTENT_UNITS].join(', ')}`);
+  return { value: o.value, unit: o.unit };
+};
+
+const issueValidator = sanitizeObj({
+  volume: str,
+  number: str,
+  date:   partialDate,
+});
+
 /**
  * Runtime mirror of DomainRecord — keys + sanitizer functions.
  * TypeScript enforces this object covers every key on the interface exactly.
@@ -991,4 +1034,8 @@ export const DOMAIN_RECORD_SHAPE: Record<keyof DomainRecord, FieldValidator> = {
   cartographicMathematicalData: str,
   country:                      arrOf(resolvedCode),
   publication:                  publicationValidator,
+  summaryNote:                  str,
+  keywords:                     arrOf(str),
+  extent:                       quantity,
+  issue:                        issueValidator,
 };

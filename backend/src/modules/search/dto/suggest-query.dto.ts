@@ -16,7 +16,7 @@ export class SuggestQueryDto {
   @IsInt()
   @Min(1)
   @Max(50)
-  limit?: number = 10;
+  limit?: number = 5;
 
   @IsOptional()
   @IsEnum(['all', 'records', 'drafts'])

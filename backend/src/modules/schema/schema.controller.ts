@@ -38,4 +38,27 @@ export class SchemaController {
 
     return body;
   }
+
+  // `no-cache` = store it, but revalidate every time (a cheap 304). v1's
+  // max-age let a client run on a day-old schema after a deploy.
+  @Get('v2/record')
+  @Header('Cache-Control', 'no-cache')
+  getRecordSchemaV2(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const cacheKey = '__v2__';
+    if (!this.etagCache.has(cacheKey)) {
+      const body = this.schemaService.getRecordSchemaV2();
+      const etag = `"${createHash('md5').update(JSON.stringify(body)).digest('hex')}"`;
+      this.etagCache.set(cacheKey, { etag, body });
+    }
+
+    const { etag, body } = this.etagCache.get(cacheKey)!;
+    res.setHeader('ETag', etag);
+
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304);
+      return;
+    }
+
+    return body;
+  }
 }

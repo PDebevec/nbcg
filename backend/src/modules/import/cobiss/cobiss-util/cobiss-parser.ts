@@ -224,10 +224,18 @@ export function recordXmlToJson(xml: string, cobissId?: string): DomainRecord {
     // 300 – General notes (field is repeatable; collect all /a values)
     notes: all(raw, '300', 'a'),
 
+    // 330 – Summary or abstract (repeatable; one note per occurrence, joined)
+    summaryNote: all(raw, '330', 'a').join('\n\n') || undefined,
+
     // ===== 5XX – NOTES BLOCK =====
 
     // 518 – Title in another script (field is repeatable; collect all /a values)
     titleInOtherScript: all(raw, '518', 'a'),
+
+    // ===== 6XX – SUBJECT ANALYSIS BLOCK =====
+
+    // 610 – Uncontrolled subject terms (field and /a both repeatable; collect all)
+    keywords: all(raw, '610', 'a'),
 
     // ===== 7XX – INTELLECTUAL RESPONSIBILITY BLOCK =====
 

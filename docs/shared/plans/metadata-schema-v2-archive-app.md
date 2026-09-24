@@ -1,6 +1,6 @@
 # Archive app → metadata schema v2: migration guide
 
-## Status: PLANNED (2026-09-23) — can start once the backend ships `GET /api/schema/v2/record`
+## Status: PLANNED (2026-09-23) — backend side built 2026-09-24 (on dev, not yet in production); the app can start against dev
 
 For whoever maintains the desktop archive application (runs at the client on
 `nbcg-dc`, source not in this repo). It already builds its whole metadata
@@ -109,9 +109,20 @@ Re-run it whenever the user changes `materialType`, `recordType`,
 re-fetch the schema.**
 
 Test your port against the conformance fixture
-`backend/src/modules/schema/rules/conformance.json` (list of
-`{ context, expected: { fieldKey: { visible, required, unit } } }`). It is the
-same file the backend and web frontend tests run.
+`backend/src/modules/schema/rules/conformance.json`. It is the same file the
+backend and web frontend tests run. Sections:
+
+| Section | Input → expected |
+|---|---|
+| `isEmpty` | `value` → `true`/`false` (null, blank string, `[]`, `{}` are empty) |
+| `buildContext` | `metadata`, `parents` (their metadata), `itemState` → context values |
+| `mechanics` | its own small `fields` list + `context` → field states (later rule wins, strict `4 ≠ "4"`, array any-match, `all`/`any`/`not`, constraints merge, hidden object hides its children) |
+| `record` | `context` (merged over `contextDefaults`) against the `fields` of `GET /api/schema/v2/record` → field states |
+| `check` | `metadata`, `parents`, `itemState` → `missing` paths and `violations` `{ path, constraint }` (optional: only if the app checks publish readiness itself) |
+
+`expected` is keyed by dotted path (`extent`, `issue.number`); compare only the
+listed properties; `unit` is the unit code or `null`, `label`/`help` the
+English text.
 
 ### 4. Typeahead
 
@@ -153,9 +164,14 @@ If the app publishes (transition or `targetState: RECORD`), handle:
 
 ```json
 { "statusCode": 400, "code": "PUBLISH_VALIDATION_FAILED",
+  "message": "1 of 1 item is not ready to publish",
   "items": [ { "id": "…", "missing": [ { "path": "extent", "label": { … } } ],
-               "violations": [ … ] } ] }
+               "violations": [ { "path": "extent", "label": { … }, "constraint": "unit", "limit": "minutes" } ] } ] }
 ```
+
+`id` is `null` when the app created an item straight as `RECORD` and nothing
+was created. Paths inside repeatable objects carry the index:
+`corporateBodies[1].name`.
 
 Show the `label`s of `missing` and let the user jump to the field. Optionally
 call `GET /api/items/:id/validation?target=RECORD` first to show the checklist
@@ -165,10 +181,12 @@ before the user presses Publish.
 
 | New | What the app needs |
 |---|---|
-| `type: quantity` (`extent`) | number box + unit suffix; save `{ "value": n, "unit": <evaluated unit.code> }` |
+| `type: quantity` (`extent`) | number box + unit suffix; save `{ "value": n, "unit": <evaluated unit.code> }` (integer ≥ 0; unit one of `extentUnit`: `pages`, `sheets`, `volumes`, `items`, `minutes`). A stored unit that no longer matches the evaluated one blocks publishing (`constraint: "unit"`) |
+| `summaryNote` (text) | the summary (COMARC 330) — now stored; COBISS imports fill it |
 | `issue` object (`volume`, `number`, `date`) | nothing special — an `object` field; appears only for children of a serial collection (`collectionType` 4) |
 | `keywords` (string × multiple + suggest) | chips/tag box with free hints |
-| `collectionType` as a `select` | was a raw number input in v1 |
+| `collectionType` as a `select` | was a raw number input in v1; values are numbers (`storeAs: "code"`) |
+| Relator roles | searched via `/api/search/vocabularies/relator`; codes are COMARC numeric (`070` = author) |
 | `readOnly` | render disabled (e.g. `cobissId` after the item exists) |
 
 ### 9. Switch off v1

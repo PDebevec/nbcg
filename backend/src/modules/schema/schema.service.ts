@@ -1,5 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import type { FieldDescriptor } from './schema.types';
+import { buildRecordSchemaV2 } from './v2/build-schema';
+import type { SchemaV2 } from './v2/schema-v2.types';
+import { assertSchemaV2 } from './v2/self-check';
 import {
   getAllLanguageCodes,
   getAllCountryCodes,
@@ -402,12 +405,24 @@ function buildRecordFields(): FieldDescriptor[] {
 const ALL_FIELDS = buildRecordFields();
 
 @Injectable()
-export class SchemaService {
+export class SchemaService implements OnModuleInit {
+  private readonly recordSchemaV2: SchemaV2 = buildRecordSchemaV2();
+
+  // A schema that advertises a field the API drops, a rule on an undeclared
+  // context key or a suggest field outside the allowlist must not boot.
+  onModuleInit() {
+    assertSchemaV2(this.recordSchemaV2);
+  }
 
   getRecordSchema(level?: 'main' | 'child'): { fields: FieldDescriptor[] } {
     const fields = level
       ? ALL_FIELDS.filter(f => f.levels.includes(level))
       : ALL_FIELDS;
     return { fields };
+  }
+
+  /** v2: one schema for every level and material type, the conditions inside. */
+  getRecordSchemaV2(): SchemaV2 {
+    return this.recordSchemaV2;
   }
 }

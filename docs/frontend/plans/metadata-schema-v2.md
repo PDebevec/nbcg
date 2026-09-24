@@ -1,11 +1,53 @@
 # Frontend: schema-driven metadata editor (schema v2)
 
-## Status: PLANNED (2026-09-23) — starts after backend B1 (v2 endpoint)
+## Status: PLANNED (2026-09-23) — backend ready (B1–B6 done 2026-09-24), can start
 
 Contract: [shared/plans/metadata-schema-v2.md](../../shared/plans/metadata-schema-v2.md).
 Backend: [backend/plans/metadata-schema-v2.md](../../backend/plans/metadata-schema-v2.md).
 Interim step: [material-type field visibility](material-type-field-visibility.md),
 a static visibility map in the current form that switches to F1's `useSchemaForm`.
+
+---
+
+## What the backend now provides (2026-09-24)
+
+Everything F1–F5 needs is live on dev ([backend plan](../../backend/plans/metadata-schema-v2.md#done--what-was-built-2026-09-24)):
+
+| Need | Where |
+|---|---|
+| Schema | `GET /api/schema/v2/record` — `Cache-Control: no-cache` + `ETag` |
+| Types to mirror in `src/api/schema.ts` | `backend/src/modules/schema/v2/schema-v2.types.ts` + the rule types at the top of `evaluate.ts` |
+| File to copy verbatim to `src/utils/schemaRules.ts` | `backend/src/modules/schema/rules/evaluate.ts` — besides `evaluateField` / `evaluateAll` / `matches` / `isEmpty` it has `buildContext(metadata, parentsMetadata, itemState)` and **`checkMetadata(schema, metadata, ctx)`**, the exact function the backend's publish check runs. Use it for F4's banner, so "N required fields missing" and the backend's 400 can never disagree. The backend jest test `evaluate.spec.ts` starts checking the copy byte-for-byte as soon as the file exists (skipped until then). |
+| Conformance cases for the web's own tests (optional) | `backend/src/modules/schema/rules/conformance.json` |
+| Vocabulary search | `GET /api/search/vocabularies/:name?q=&limit=5` — same response shape as suggest, without `count` |
+| Publish check | `400 { code: "PUBLISH_VALIDATION_FAILED", message, items: [{ id, missing: [{ path, label }], violations: [{ path, label, constraint, limit?, hint? }] }] }`; dry run `GET /api/items/:id/validation?target=RECORD` → `{ ok, missing, violations }` |
+| New fields accepted | `summaryNote` (330), `keywords` (610), `extent` `{ value, unit }`, `issue` `{ volume, number, date }` |
+| Import warnings | `GET /api/import/jobs/:id` → `progress.warnings[]` (records imported that would fail the publish check) |
+
+Label changes to know about: 215/a `physicalDescription` is now "Extent
+statement" / "Podatak o obimu" in the schema, because the new numeric `extent`
+is "Extent" / "Obim" (and switches to "Number of pages", "Duration", "Number of
+sheets" by material type).
+
+### ⚠ Already affects the current web app
+
+Publish validation is **on** in the backend (every client, every publish):
+
+- **A book (`am`, and any `a b g i j` type that is not a collection) can no
+  longer be published without `extent`, and the current form has no field for
+  it** — only the JSON tab can add `"extent": { "value": 253, "unit": "pages" }`.
+  Same for an issue of a serial (`issue.number`, `issue.date`) and a map's
+  scale (206, which the form has under "Advanced"). Title-only items need a
+  material type to publish.
+- Bulk publish on `AdminItemsPage.vue` shows only the error's `message`
+  ("1 of 2 items are not ready to publish") in a toast, not which fields.
+  "New record" (create as RECORD) fails the same way.
+
+So on production the backend's B6 must ship **together with** at least the
+`extent`/`issue` inputs and the F4 error dialog, or the web cannot publish
+books. The quick path: add a Summary field (`summaryNote`), an extent number
+input with the unit from the material type, and issue number/date to the
+current form, render `PUBLISH_VALIDATION_FAILED` item by item — then F1–F3.
 
 ---
 
@@ -26,7 +68,8 @@ Problems this plan removes, and what `cd8e5bd` already did about them:
 1. ~~**`summaryNote` is never saved.**~~ The backend drops unknown keys and
    `summaryNote` is not one of them. `cd8e5bd` made the web `DomainRecord`
    mirror the backend's exactly, so the editor and the record page have **no
-   Summary field** now. It comes back with backend B3.
+   Summary field** now. Backend B3 is done (2026-09-24): `summaryNote` is
+   accepted and parsed from COBISS 330 — add the field back.
 2. ~~**Dropdowns only offer values already in the data.**~~ Fixed on v1:
    code lists (material/record type, level, languages, countries, relators,
    105 codes) come from `allowedValues` in `GET /api/schema/record`
@@ -129,7 +172,10 @@ New components in `src/components/metadata/`:
 - A shared `PublishErrorDialog.vue` for `400 PUBLISH_VALIDATION_FAILED`:
   per item → missing labels + violations, link to `/admin/items/:id`. Used by:
   - bulk publish on `AdminItemsPage.vue` (the whole batch is rejected — say so);
-  - the editor publish button (nice-to-have **A2**, if accepted);
+  - the editor publish button (nice-to-have **A2**, accepted 2026-09-24: the
+    Status side card's "Publish as record", which saves first when dirty — so
+    the check runs on the saved metadata). The button can show the missing
+    fields up front from `checkMetadata()` instead of waiting for the 400;
   - the task "Complete REVIEW_PUBLISH" dialog ([task workflow plan](task-workflow-v2.md)),
     which also calls `GET /api/items/:id/validation?target=RECORD` up front to
     show the checklist before the click.
@@ -159,13 +205,14 @@ Field and group labels come from the schema (`en`/`cnr`), so
 
 ## Impact on the other side
 
-| Frontend change | Backend needs |
-|---|---|
-| F1–F3 | B1 (v2 endpoint), B2 (evaluator to copy), B5 (vocabulary search) |
-| F2 alone | B1 + B5 |
-| F4 | B6 (`PUBLISH_VALIDATION_FAILED`, `/items/:id/validation`) |
-| New fields render | B3 (else the backend drops them, like `summaryNote`) |
-| Nothing | the archive app — independent client of the same contract |
+| Frontend change | Backend needs | Backend status |
+|---|---|---|
+| F1–F3 | B1 (v2 endpoint), B2 (evaluator to copy), B5 (vocabulary search) | done 2026-09-24 |
+| F2 alone | B1 + B5 | done |
+| F4 | B6 (`PUBLISH_VALIDATION_FAILED`, `/items/:id/validation`) | done — and already enforced, see ⚠ above |
+| New fields render | B3 (else the backend drops them, like `summaryNote`) | done |
+| Import page shows `progress.warnings` | B6 import warnings | done (web renders only `errors` today) |
+| Nothing | the archive app — independent client of the same contract | — |
 
 ## Estimate
 

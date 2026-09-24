@@ -578,4 +578,97 @@ describe('SearchService – suggest', () => {
     // responsibility should be stripped
     expect((result.suggestions[0].value as any).responsibility).toBeUndefined();
   });
+
+  // ── Schema v2: over-fetch + post-filter ──
+
+  const stringBuckets = (...keys: Array<[string, number]>) => () => ({
+    hits: { total: { value: 0 }, hits: [] },
+    aggregations: { suggestions: { buckets: keys.map(([key, doc_count]) => ({ key, doc_count })) } },
+  });
+
+  it('defaults to 5 suggestions', async () => {
+    const body = await suggestWith({ field: 'publisher', limit: undefined });
+    expect(body.aggs.suggestions.terms.size).toBe(5);
+  });
+
+  it('over-fetches buckets only when there is a q to filter by', async () => {
+    expect((await suggestWith({ field: 'notes', q: 'fo', limit: 5 })).aggs.suggestions.terms.size).toBe(25);
+    expect((await suggestWith({ field: 'language', q: 'sl', limit: 4 })).aggs.suggestions.terms.size).toBe(20);
+    expect((await suggestWith({ field: 'author', q: 'no', limit: 2 })).aggs.by_family.terms.size).toBe(10);
+    expect((await suggestWith({ field: 'notes', limit: 5 })).aggs.suggestions.terms.size).toBe(5);
+  });
+
+  it('drops sibling values of array fields that do not match q', async () => {
+    // One document with notes ["Foo", "Bar"] matches q=Fo and contributes both buckets.
+    mockOpenSearch.search.mockImplementationOnce(stringBuckets(['Bar', 7], ['Foo', 3], ['Old foo', 2]));
+    const result = await service.suggest({ field: 'notes', q: 'Fo', limit: 5 } as SuggestQueryDto, principal);
+    expect(result.suggestions.map((s) => s.value)).toEqual(['Foo', 'Old foo']);
+  });
+
+  it('ranks exact, then prefix, then substring; most used first within a rank', async () => {
+    mockOpenSearch.search.mockImplementationOnce(
+      stringBuckets(['Nova knjiga', 20], ['Knjiga d.o.o.', 9], ['Knjiga', 4], ['Knjigoteka', 3]),
+    );
+    const result = await service.suggest({ field: 'publisher', q: 'knjiga', limit: 3 } as SuggestQueryDto, principal);
+    expect(result.suggestions.map((s) => s.value)).toEqual(['Knjiga', 'Knjiga d.o.o.', 'Nova knjiga']);
+  });
+
+  it('filters accent- and punctuation-insensitively', async () => {
+    mockOpenSearch.search.mockImplementationOnce(stringBuckets(['Nikšić', 5], ['Beograd : Prosveta', 4], ['Đurđevac', 1]));
+    const result = await service.suggest({ field: 'place', q: 'niksic', limit: 5 } as SuggestQueryDto, principal);
+    expect(result.suggestions.map((s) => s.value)).toEqual(['Nikšić']);
+
+    mockOpenSearch.search.mockImplementationOnce(stringBuckets(['Nikšić', 5], ['Beograd : Prosveta', 4], ['Đurđevac', 1]));
+    const second = await service.suggest({ field: 'publisher', q: 'beograd prosveta', limit: 5 } as SuggestQueryDto, principal);
+    expect(second.suggestions.map((s) => s.value)).toEqual(['Beograd : Prosveta']);
+
+    mockOpenSearch.search.mockImplementationOnce(stringBuckets(['Nikšić', 5], ['Beograd : Prosveta', 4], ['Đurđevac', 1]));
+    const third = await service.suggest({ field: 'place', q: 'ĐURĐ', limit: 5 } as SuggestQueryDto, principal);
+    // đ folds to d on both sides (as Lucene's asciifolding would).
+    expect(third.suggestions.map((s) => s.value)).toEqual(['Đurđevac']);
+  });
+
+  it('trims to limit after filtering', async () => {
+    mockOpenSearch.search.mockImplementationOnce(stringBuckets(['a1', 5], ['a2', 4], ['a3', 3], ['a4', 2]));
+    const result = await service.suggest({ field: 'keywords', q: 'a', limit: 2 } as SuggestQueryDto, principal);
+    expect(result.suggestions.map((s) => s.value)).toEqual(['a1', 'a2']);
+  });
+
+  it('drops sibling codes of resolvedCode array fields', async () => {
+    const bucket = (code: string, en: string, cnr: string, count: number) => ({
+      key: code,
+      doc_count: count,
+      sample: { hits: { hits: [{ _source: { metadata: { language: [{ code, en, cnr }] } } }] } },
+    });
+    mockOpenSearch.search.mockImplementationOnce(() => ({
+      hits: { total: { value: 0 }, hits: [] },
+      aggregations: {
+        suggestions: {
+          buckets: [bucket('eng', 'English', 'Engleski', 50), bucket('slv', 'Slovenian', 'Slovenački', 10)],
+        },
+      },
+    }));
+    const result = await service.suggest({ field: 'language', q: 'slov', limit: 5 } as SuggestQueryDto, principal);
+    expect(result.suggestions.map((s) => (s.value as { code: string }).code)).toEqual(['slv']);
+  });
+
+  it('drops co-authors that do not match q', async () => {
+    const family = (familyName: string, firstName: string, count: number) => ({
+      key: familyName,
+      doc_count: count,
+      by_first: {
+        buckets: [{
+          key: firstName,
+          doc_count: count,
+          sample: { hits: { hits: [{ _source: { metadata: { authors: [{ familyName, firstName }] } } }] } },
+        }],
+      },
+    });
+    mockOpenSearch.search.mockImplementationOnce(() => ({
+      hits: { total: { value: 0 }, hits: [] },
+      aggregations: { by_family: { buckets: [family('Njegoš', 'Petar', 9), family('Ljubiša', 'Stefan', 8)] } },
+    }));
+    const result = await service.suggest({ field: 'author', q: 'petar nje', limit: 5 } as SuggestQueryDto, principal);
+    expect(result.suggestions.map((s) => (s.value as { familyName: string }).familyName)).toEqual(['Njegoš']);
+  });
 });

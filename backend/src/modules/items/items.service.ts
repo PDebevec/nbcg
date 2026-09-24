@@ -12,26 +12,16 @@ import {
   TaskStatus,
   VisibilityStatus,
 } from '../../../generated/prisma/enums';
-import { EDITABLE_BASE_METADATA_SHAPE } from '../../core/types/metadata.types';
+import { METADATA_VALIDATORS } from '../../core/types/metadata.types';
 import type { FieldChange } from '../../core/types/revision.types';
-import { DOMAIN_RECORD_SHAPE, FieldValidator } from '../import/cobiss/cobiss-util/cobiss.types';
 import type { Actor } from '../../core/auth/actor.type';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { RevisionsService } from '../../core/revisions/revisions.service';
 import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
 import { TaskHistoryService } from '../../core/task-history/task-history.service';
+import { PublishValidatorService } from '../schema/publish-validator.service';
 import { diffMetadata } from '../../shared/util/diff-metadata';
 import { generateDeterministicId } from '../../shared/util/generateUuidFromCobissId';
-
-// Derived at module load from the type shapes — automatically stays in sync
-// with DomainRecord and BaseMetadata. Maps key → sanitizer function.
-// Unknown keys are dropped; known keys with wrong types throw 400.
-// A known key sent as `null` means "unset this field": PATCH merges over the
-// stored blob, so without it a cleared field would silently keep its old value.
-const METADATA_VALIDATORS = new Map<string, FieldValidator>([
-  ...Object.entries(EDITABLE_BASE_METADATA_SHAPE),
-  ...Object.entries(DOMAIN_RECORD_SHAPE),
-]);
 
 // Required metadata field validators. `null` (unset) never passes for these.
 // Add entries here to enforce more required fields without changing service logic.
@@ -61,6 +51,7 @@ export class ItemsService {
     private readonly seaweedfs: SeaweedfsService,
     private readonly revisions: RevisionsService,
     private readonly taskHistory: TaskHistoryService,
+    private readonly publishValidator: PublishValidatorService,
   ) {}
 
   async stats(): Promise<{
@@ -127,6 +118,14 @@ export class ItemsService {
       childrenInRecords: 0,
       jeGlavnoGradivo: true,
     };
+
+    // Creating straight into RECORD is publishing, so it passes the same check
+    // as a transition. A new item has no parents yet.
+    if (targetState === ItemType.RECORD) {
+      await this.publishValidator.assertPublishable([
+        { id: id ?? null, metadata: finalMetadata, itemState: 'NEW' },
+      ]);
+    }
 
     const data = {
       ...(id ? { id } : {}),
@@ -404,6 +403,15 @@ export class ItemsService {
       const fromRecords = ids.filter((id) => recordsMap.has(id));
       const now = new Date();
 
+      // Inside the transaction and before any row moves: one incomplete item
+      // fails the whole batch with a list of what is missing where.
+      if (targetState === ItemType.RECORD) {
+        await this.publishValidator.assertPublishable(
+          fromDrafts.map((id) => ({ id, metadata: draftsMap.get(id)!.metadata, itemState: 'DRAFT' as const })),
+          tx,
+        );
+      }
+
       if (targetState === ItemType.RECORD) {
         await tx.record.createMany({
           data: fromDrafts.map((id) => {
@@ -568,6 +576,29 @@ export class ItemsService {
     });
   }
 
+  /**
+   * Dry run of the publish check for one item — the checklist a dialog shows
+   * before the user presses Publish. Also answers for an existing RECORD
+   * (what an edit would have to fix), though PATCH never enforces it.
+   */
+  async validation(id: string) {
+    const [draft, record] = await Promise.all([
+      this.prisma.draft.findUnique({ where: { id }, select: { metadata: true } }),
+      this.prisma.record.findUnique({ where: { id }, select: { metadata: true } }),
+    ]);
+    if (!draft && !record) {
+      throw new NotFoundException(`Item not found: ${id}`);
+    }
+
+    const [result] = await this.publishValidator.validate([
+      { id, metadata: (draft ?? record)!.metadata, itemState: draft ? 'DRAFT' : 'RECORD' },
+    ]);
+    return { ok: result.ok, missing: result.missing, violations: result.violations };
+  }
+
+  // Unknown keys are dropped; a known key with the wrong type is a 400. A known
+  // key sent as `null` means "unset this field": PATCH merges over the stored
+  // blob, so without it a cleared field would silently keep its old value.
   private sanitizeMetadata(
     rawMetadata: Record<string, unknown>,
   ): Record<string, unknown> {

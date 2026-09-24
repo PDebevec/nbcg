@@ -5,7 +5,8 @@
 #
 # Tests every API endpoint with all auth personas (admin, editor, cataloguer,
 # reader, anonymous). Covers: health, search visibility, items CRUD,
-# transitions, relations, files, COBISS import/preview, and auth edge cases.
+# transitions, relations, files, COBISS import/preview, metadata schema v2
+# (schema, vocabularies, suggest, publish validation), and auth edge cases.
 #
 # Prerequisites:
 #   - Backend running at localhost:3000
@@ -27,6 +28,11 @@ set -uo pipefail
 API="http://localhost:3000/api"
 KC="http://localhost:8082/realms/nbcg/protocol/openid-connect/token"
 KC_CLIENT="nbcg-web"
+
+# Metadata schema v2: publishing (POST /items as RECORD, or a transition to
+# RECORD) needs every visible + required field. Fixtures that get published
+# carry this — a book with its page count — next to their title.
+PUBLISHABLE='"materialType":{"code":"am","en":"Book","cnr":"Knjiga"},"extent":{"value":100,"unit":"pages"}'
 
 PASSED=0
 FAILED=0
@@ -230,19 +236,19 @@ DRAFT_HIDDEN_ID=$(json_field "['id']")
 CLEANUP_IDS+=("$DRAFT_HIDDEN_ID")
 
 # Record - PUBLIC
-http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"RECORD","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-RECORD-PUBLIC","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"RECORD","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-RECORD-PUBLIC",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
 assert_status "Editor creates PUBLIC record" "201"
 RECORD_PUBLIC_ID=$(json_field "['id']")
 CLEANUP_IDS+=("$RECORD_PUBLIC_ID")
 
 # Record - PRIVATE
-http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"RECORD","visibilityStatus":"PRIVATE","metadata":{"title":"TEST-SUITE-RECORD-PRIVATE","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"RECORD","visibilityStatus":"PRIVATE","metadata":{"title":"TEST-SUITE-RECORD-PRIVATE",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
 assert_status "Editor creates PRIVATE record" "201"
 RECORD_PRIVATE_ID=$(json_field "['id']")
 CLEANUP_IDS+=("$RECORD_PRIVATE_ID")
 
 # Record - HIDDEN
-http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"RECORD","visibilityStatus":"HIDDEN","metadata":{"title":"TEST-SUITE-RECORD-HIDDEN","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"RECORD","visibilityStatus":"HIDDEN","metadata":{"title":"TEST-SUITE-RECORD-HIDDEN",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
 assert_status "Editor creates HIDDEN record" "201"
 RECORD_HIDDEN_ID=$(json_field "['id']")
 CLEANUP_IDS+=("$RECORD_HIDDEN_ID")
@@ -265,7 +271,7 @@ CAT_DRAFT_ID=$(json_field "['id']")
 CLEANUP_IDS+=("$CAT_DRAFT_ID")
 
 # Cataloguer cannot create record
-http POST "$API/items" "$TOKEN_CATALOGUER" '{"targetState":"RECORD","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-CAT-RECORD","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+http POST "$API/items" "$TOKEN_CATALOGUER" '{"targetState":"RECORD","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-CAT-RECORD",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
 assert_status "Cataloguer cannot create record" "403"
 
 # --- 3c: Update auth checks ---
@@ -434,7 +440,7 @@ assert_status "Pagination works" "200"
 section "6. Transitions"
 
 # Create a draft specifically for transition testing
-http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-TRANSITION","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-TRANSITION",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
 assert_status "Create draft for transition test" "201"
 TRANSITION_ID=$(json_field "['id']")
 CLEANUP_IDS+=("$TRANSITION_ID")
@@ -1371,7 +1377,7 @@ FLUSH_WAIT=4
 # --- 13a: an item opens its timeline at creation ---------------------------
 echo -e "\n  ${YELLOW}Item timeline...${NC}"
 
-http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-HISTORY","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-HISTORY",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
 assert_status "Create item for history test" "201"
 HIST_ID=$(json_field "['id']")
 CLEANUP_IDS+=("$HIST_ID")
@@ -1552,7 +1558,7 @@ assert_status "Top items rejects an unbounded limit" "400"
 # --- 14c: views are counted, bots are not -----------------------------------
 echo -e "\n  ${YELLOW}View counting...${NC}"
 
-http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"RECORD","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-METRICS","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"RECORD","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-METRICS",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
 assert_status "Create item for metrics test" "201"
 MET_ID=$(json_field "['id']")
 CLEANUP_IDS+=("$MET_ID")
@@ -1746,7 +1752,7 @@ assert_no_attribution() {
 }
 
 # --- 15a: the name is snapshotted from the JWT at write time -----------------
-http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-ATTRIBUTION","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-ATTRIBUTION",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
 assert_status "Create item for attribution test" "201"
 ATTRIB_ID=$(json_field "['id']")
 CLEANUP_IDS+=("$ATTRIB_ID")
@@ -2564,7 +2570,7 @@ fi
 # the task list lies: the draft goes out and "please review" stays OPEN forever.
 echo -e "\n  ${YELLOW}The observer...${NC}"
 
-http POST "$API/items" "$TOKEN_CATALOGUER" '{"targetState":"DRAFT","visibilityStatus":"PRIVATE","metadata":{"title":"TEST-SUITE-OBSERVER-DRAFT","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+http POST "$API/items" "$TOKEN_CATALOGUER" '{"targetState":"DRAFT","visibilityStatus":"PRIVATE","metadata":{"title":"TEST-SUITE-OBSERVER-DRAFT",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
 assert_status "Create draft for the observer test" "201"
 OBS_ID=$(json_field "['id']")
 CLEANUP_IDS+=("$OBS_ID")
@@ -2617,7 +2623,7 @@ http GET "$API/tasks/$OBS_REVIEW_ID" "$TOKEN_EDITOR"
 assert_json_field "Unpublishing does NOT reopen a completed task" "['status']" "COMPLETED"
 
 # Guards the closing.length === 0 branch.
-http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-NO-TASKS","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-NO-TASKS",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
 NOTASK_ID=$(json_field "['id']")
 CLEANUP_IDS+=("$NOTASK_ID")
 http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"ids\":[\"$NOTASK_ID\"],\"targetState\":\"RECORD\"}"
@@ -2716,6 +2722,350 @@ else
 fi
 
 fi  # directory-synced guard
+
+# ============================================================================
+# 19. METADATA SCHEMA v2
+# ============================================================================
+# docs/shared/plans/metadata-schema-v2.md. v1 (/schema/record, section "Schema
+# Endpoint") stays frozen until the archive app has moved.
+section "19. Metadata Schema v2"
+
+# Pass/fail on a Python expression over the parsed body (`d`).
+assert_json_true() {
+  local test_name=$1 expr=$2
+  if echo "$HTTP_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if ($expr) else 1)" 2>/dev/null; then
+    echo -e "  ${GREEN}PASS${NC} $test_name"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} $test_name (body: $(echo "$HTTP_BODY" | head -c 300))"
+    ((FAILED++))
+    ERRORS+=("$test_name")
+  fi
+}
+
+# Create a draft (as the editor) and print its id.
+create_draft() {
+  local visibility=$1 metadata=$2
+  http POST "$API/items" "$TOKEN_EDITOR" "{\"targetState\":\"DRAFT\",\"visibilityStatus\":\"$visibility\",\"metadata\":$metadata}"
+  json_field "['id']"
+}
+
+BOOK='{"code":"am","en":"Book","cnr":"Knjiga"}'
+SERIAL='{"code":"as","en":"Journal / Serial","cnr":"Časopis / Serijska publikacija"}'
+VIDEO='{"code":"gm","en":"Video / Film","cnr":"Video / Film"}'
+
+# --- 19a: the schema -------------------------------------------------------
+echo -e "\n  ${YELLOW}GET /schema/v2/record...${NC}"
+
+for persona in ANON READER CATALOGUER EDITOR ADMIN; do
+  token_var="TOKEN_$persona"
+  http GET "$API/schema/v2/record" "${!token_var}"
+  assert_status "GET /schema/v2/record returns 200 ($persona)" "200"
+done
+
+V2_HEADERS=$(curl -s -o /dev/null -D - "$API/schema/v2/record" 2>/dev/null | tr -d '\r')
+V2_ETAG=$(echo "$V2_HEADERS" | grep -i '^etag:' | awk '{print $2}')
+HTTP_BODY="{\"etag\":\"${V2_ETAG//\"/}\",\"cc\":\"$(echo "$V2_HEADERS" | grep -i '^cache-control:' | cut -d' ' -f2-)\"}"
+assert_json_true "v2 sends an ETag" "len(d['etag']) > 0"
+assert_json_true "v2 Cache-Control is no-cache (revalidate on every load)" "'no-cache' in d['cc'] and 'max-age' not in d['cc']"
+
+HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -H "If-None-Match: $V2_ETAG" "$API/schema/v2/record" 2>/dev/null)
+assert_status "v2 If-None-Match with the current ETag → 304" "304"
+HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -H 'If-None-Match: "stale"' "$API/schema/v2/record" 2>/dev/null)
+assert_status "v2 If-None-Match with a stale ETag → 200" "200"
+
+V1_HEADERS=$(curl -s -o /dev/null -D - "$API/schema/record" 2>/dev/null | tr -d '\r')
+HTTP_BODY="{\"cc\":\"$(echo "$V1_HEADERS" | grep -i '^cache-control:' | cut -d' ' -f2-)\"}"
+assert_json_true "v1 is frozen: still Cache-Control max-age=86400" "'max-age=86400' in d['cc']"
+http GET "$API/schema/record"
+assert_json_true "v1 is frozen: no v2-only fields" "not {'extent','issue','keywords','summaryNote'} & {f['key'] for f in d['fields']}"
+V1_KEYS=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(','.join(f['key'] for f in json.load(sys.stdin)['fields']))")
+
+http GET "$API/schema/v2/record"
+V2_BODY="$HTTP_BODY"
+assert_json_true "schemaVersion is 2" "d['schemaVersion'] == 2 and d['languages'] == ['en', 'cnr']"
+assert_json_true "Every v1 field key is still in v2" "set('$V1_KEYS'.split(',')) <= {f['key'] for f in d['fields']}"
+assert_json_true "New fields: summaryNote, keywords, extent, issue" "{'summaryNote','keywords','extent','issue'} <= {f['key'] for f in d['fields']}"
+assert_json_true "Small vocabulary is inlined (materialType, 25 values)" "len(d['vocabularies']['materialType']['values']) == 25"
+assert_json_true "Big vocabulary is searched, not inlined (language)" "'values' not in d['vocabularies']['language'] and d['vocabularies']['language']['search']['path'] == '/search/vocabularies/language?limit=5'"
+assert_json_true "collectionType vocabulary has codes 0/1/3/4" "[v['code'] for v in d['vocabularies']['collectionType']['values']] == [0, 1, 3, 4]"
+assert_json_true "Every field and sub-field has label.en and label.cnr" \
+  "(lambda w: all(w(w, f) for f in d['fields']))(lambda w, f: bool(f['label']['en']) and bool(f['label']['cnr']) and all(w(w, c) for c in (f.get('objectShape') or [])))"
+assert_json_true "Every group has label.en and label.cnr" "all(g['label']['en'] and g['label']['cnr'] for g in d['groups'])"
+assert_json_true "extent has a rule with unit pages" "any((r['set'].get('unit') or {}).get('code') == 'pages' for f in d['fields'] if f['key'] == 'extent' for r in f['rules'])"
+assert_json_true "extent is a quantity rendered as a number" "[(f['type'], f['input']) for f in d['fields'] if f['key'] == 'extent'] == [('quantity', 'number')]"
+assert_json_true "materialType is required (drives every rule)" "[f['required'] for f in d['fields'] if f['key'] == 'materialType'] == [True]"
+assert_json_true "input is computed: language autocomplete, country multiselect, notes textarea" \
+  "{f['key']: f['input'] for f in d['fields']}.get('language') == 'autocomplete' and {f['key']: f['input'] for f in d['fields']}['country'] == 'multiselect' and {f['key']: f['input'] for f in d['fields']}['notes'] == 'textarea'"
+assert_json_true "storeAs is explicit on authors.role (resolvedCode) and authors.responsibility (code)" \
+  "[(c['key'], c['values']['storeAs']) for f in d['fields'] if f['key'] == 'authors' for c in f['objectShape'] if c['values']] == [('role', 'resolvedCode'), ('responsibility', 'code')]"
+assert_json_true "Every rule refers to a declared context key" \
+  "(lambda keys: (lambda refs: (lambda w: all(w(w, r['when']) for f in d['fields'] for r in f['rules']))(refs))(lambda w, c: all(w(w, x) for x in c['all']) if 'all' in c else all(w(w, x) for x in c['any']) if 'any' in c else w(w, c['not']) if 'not' in c else c['ref'] in keys))({k['key'] for k in d['context']})"
+
+# Every suggest path and every vocabulary search the schema advertises must answer.
+SCHEMA_PATHS=$(echo "$V2_BODY" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+def walk(fs):
+    for f in fs:
+        if f.get('suggest'): print(f['suggest']['path'])
+        walk(f.get('objectShape') or [])
+walk(d['fields'])
+for v in d['vocabularies'].values():
+    if 'search' in v: print(v['search']['path'])
+" | sort -u)
+for path in $SCHEMA_PATHS; do
+  http GET "$API${path}&q=a"
+  assert_status "Advertised path answers: $path" "200"
+done
+
+# --- 19b: vocabulary search ------------------------------------------------
+echo -e "\n  ${YELLOW}GET /search/vocabularies/:name...${NC}"
+
+http GET "$API/search/vocabularies/language?q=crn"
+assert_status "Vocabulary search is public (anonymous)" "200"
+assert_json_true "language?q=crn finds Montenegrin (cnr)" "d['field'] == 'language' and any(s['value']['code'] == 'cnr' for s in d['suggestions'])"
+assert_json_true "Vocabulary hits have no count (same shape as suggest otherwise)" "all(set(s) == {'value'} for s in d['suggestions'])"
+
+http GET "$API/search/vocabularies/language?q=a&limit=2"
+assert_json_true "limit=2 → at most 2" "0 < len(d['suggestions']) <= 2"
+http GET "$API/search/vocabularies/language?q=a"
+assert_json_true "Default limit is 5" "len(d['suggestions']) == 5"
+http GET "$API/search/vocabularies/language?q=cnr"
+assert_json_true "An exact code match comes first" "d['suggestions'][0]['value']['code'] == 'cnr'"
+http GET "$API/search/vocabularies/language?q=JUZNOALTAJSKI"
+assert_json_true "Accent- and case-insensitive (Južnoaltajski)" "[s['value']['code'] for s in d['suggestions']] == ['alt']"
+http GET "$API/search/vocabularies/collectionType?q=serial"
+assert_json_true "Numeric codes stay numbers (collectionType 4)" "d['suggestions'] == [{'value': {'code': 4, 'en': 'Serial collection', 'cnr': 'Serijska zbirka'}}]"
+# COMARC relator codes are numeric: 070 = author.
+http GET "$API/search/vocabularies/relator?q=070"
+assert_json_true "relator vocabulary is searchable by its numeric code" "d['suggestions'][0]['value']['code'] == '070'"
+
+http GET "$API/search/vocabularies/nope?q=a"
+assert_status "Unknown vocabulary → 404" "404"
+http GET "$API/search/vocabularies/language?q=a&limit=0"
+assert_status "limit=0 → 400" "400"
+http GET "$API/search/vocabularies/language?q=a&limit=51"
+assert_status "limit=51 → 400" "400"
+
+for persona in READER CATALOGUER EDITOR ADMIN; do
+  token_var="TOKEN_$persona"
+  http GET "$API/search/vocabularies/materialType?q=book" "${!token_var}"
+  assert_status "Vocabulary search 200 ($persona)" "200"
+done
+
+# --- 19c: new fields round-trip and are validated on write ------------------
+echo -e "\n  ${YELLOW}New metadata fields...${NC}"
+
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"DRAFT","visibilityStatus":"PRIVATE","metadata":{"title":"TEST-SUITE-V2-FIELDS","summaryNote":"A short summary.","keywords":["istorija","Crna Gora"],"extent":{"value":253,"unit":"pages"},"issue":{"volume":"12","number":"3","date":"1905-03","bogus":"x"}}}'
+assert_status "Draft with summaryNote, keywords, extent, issue → 201" "201"
+V2F_ID=$(json_field "['id']")
+CLEANUP_IDS+=("$V2F_ID")
+assert_json_true "summaryNote is stored (it used to be dropped silently)" "d['metadata']['summaryNote'] == 'A short summary.'"
+assert_json_true "keywords are stored" "d['metadata']['keywords'] == ['istorija', 'Crna Gora']"
+assert_json_true "extent is stored as { value, unit }" "d['metadata']['extent'] == {'value': 253, 'unit': 'pages'}"
+assert_json_true "issue is stored; an unknown sub-key is dropped" "d['metadata']['issue'] == {'volume': '12', 'number': '3', 'date': '1905-03'}"
+
+http PATCH "$API/items/$V2F_ID" "$TOKEN_EDITOR" '{"expectedVersion":0,"metadata":{"summaryNote":null}}'
+assert_status "PATCH summaryNote: null clears it" "200"
+
+bad_field() {
+  local name=$1 metadata=$2
+  http POST "$API/items" "$TOKEN_EDITOR" "{\"targetState\":\"DRAFT\",\"visibilityStatus\":\"PRIVATE\",\"metadata\":{\"title\":\"TEST-SUITE-V2-BAD\",$metadata}}"
+  assert_status "$name → 400" "400"
+  if [ "$HTTP_STATUS" = "201" ]; then CLEANUP_IDS+=("$(json_field "['id']")"); fi
+}
+bad_field "extent with an unknown unit" '"extent":{"value":10,"unit":"furlongs"}'
+bad_field "extent with a negative value" '"extent":{"value":-1,"unit":"pages"}'
+bad_field "extent with a fraction" '"extent":{"value":2.5,"unit":"pages"}'
+bad_field "extent as a bare number" '"extent":253'
+bad_field "issue.date with month 13" '"issue":{"date":"1905-13"}'
+bad_field "issue.date that is not on the calendar" '"issue":{"date":"1905-02-30"}'
+bad_field "issue.date in another format" '"issue":{"date":"12.03.1905"}'
+bad_field "keywords as a string" '"keywords":"istorija"'
+
+# --- 19d: suggest — only matching values, new allowlist fields --------------
+echo -e "\n  ${YELLOW}Suggest (v2 fixes)...${NC}"
+
+SG="TSG$(date +%s)"
+http POST "$API/items" "$TOKEN_EDITOR" "{\"targetState\":\"DRAFT\",\"visibilityStatus\":\"PRIVATE\",\"metadata\":{\"title\":\"TEST-SUITE-V2-SUGGEST\",\"notes\":[\"$SG-Alpha\",\"$SG-Beta\"],\"keywords\":[\"$SG-Kw\"],\"corporateBodies\":[{\"name\":\"$SG-Corp\"}],\"dimensions\":\"$SG-24 cm\",\"physicalDescription\":\"$SG-312 str.\",\"publication\":{\"placeOfManufacture\":\"$SG-Place\",\"manufacturerName\":\"$SG-Maker\"}}}"
+assert_status "Create draft with suggest data" "201"
+CLEANUP_IDS+=("$(json_field "['id']")")
+
+# Wait for pgsync instead of sleeping a fixed time: the control query sees both notes.
+for _ in $(seq 1 20); do
+  http GET "$API/search/suggest?field=notes&q=$SG&type=drafts" "$TOKEN_ADMIN"
+  if echo "$HTTP_BODY" | grep -q "$SG-Beta"; then break; fi
+  sleep 1
+done
+assert_json_true "Control: q=<prefix> sees both notes of the draft" "{s['value'] for s in d['suggestions']} == {'$SG-Alpha', '$SG-Beta'}"
+
+http GET "$API/search/suggest?field=notes&q=$SG-Al&type=drafts" "$TOKEN_ADMIN"
+assert_json_true "q=<prefix>-Al returns Alpha and NOT its sibling Beta" "[s['value'] for s in d['suggestions']] == ['$SG-Alpha']"
+
+for pair in "keywords:$SG-Kw" "corporateBody:$SG-Corp" "dimensions:$SG-24 cm" "physicalDescription:$SG-312 str." "placeOfManufacture:$SG-Place" "manufacturerName:$SG-Maker"; do
+  field=${pair%%:*}; expected=${pair#*:}
+  http GET "$API/search/suggest?field=$field&q=$SG&type=drafts" "$TOKEN_ADMIN"
+  assert_json_true "Suggest field=$field returns the stored value" "[s['value'] for s in d['suggestions']] == ['$expected']"
+done
+
+http GET "$API/search/suggest?field=language"
+assert_json_true "Suggest default limit is 5" "len(d['suggestions']) <= 5"
+http GET "$API/search/suggest?field=keywords&q=$SG&type=drafts"
+assert_json_true "Suggest stays visibility-filtered (anonymous sees no draft values)" "d['suggestions'] == []"
+
+# --- 19e: publish validation -------------------------------------------------
+echo -e "\n  ${YELLOW}Publish validation...${NC}"
+
+# A book without its page count.
+PV_BOOK=$(create_draft PUBLIC "{\"title\":\"TEST-SUITE-V2-NO-EXTENT\",\"materialType\":$BOOK}")
+CLEANUP_IDS+=("$PV_BOOK")
+
+http GET "$API/items/$PV_BOOK/validation?target=RECORD" "$TOKEN_ADMIN"
+assert_status "GET /items/:id/validation → 200" "200"
+assert_json_true "Validation dry run: ok=false, extent missing, labelled as pages" \
+  "d['ok'] is False and [m['path'] for m in d['missing']] == ['extent'] and d['missing'][0]['label'] == {'en': 'Number of pages', 'cnr': 'Broj strana'} and d['violations'] == []"
+http GET "$API/items/$PV_BOOK/validation" "$TOKEN_ADMIN"
+assert_status "target defaults to RECORD" "200"
+http GET "$API/items/$PV_BOOK/validation?target=DRAFT" "$TOKEN_ADMIN"
+assert_status "target=DRAFT → 400 (only publishing is validated)" "400"
+
+http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"targetState\":\"RECORD\",\"ids\":[\"$PV_BOOK\"]}"
+assert_status "Publishing a book without extent → 400" "400"
+assert_json_true "…code PUBLISH_VALIDATION_FAILED" "d['code'] == 'PUBLISH_VALIDATION_FAILED' and d['statusCode'] == 400"
+assert_json_true "…names the item and the missing field" "d['items'][0]['id'] == '$PV_BOOK' and 'extent' in [m['path'] for m in d['items'][0]['missing']]"
+assert_json_true "…with a readable message" "d['message'] == '1 of 1 item is not ready to publish'"
+http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"targetState\":\"DRAFT\",\"ids\":[\"$PV_BOOK\"]}"
+assert_body_contains "…and it is still a draft" "already in state DRAFT"
+
+http PATCH "$API/items/$PV_BOOK" "$TOKEN_EDITOR" '{"expectedVersion":0,"metadata":{"extent":{"value":120,"unit":"pages"}}}'
+assert_status "Saving the draft never validates; add the extent" "200"
+http GET "$API/items/$PV_BOOK/validation?target=RECORD" "$TOKEN_EDITOR"
+assert_json_true "Validation dry run is now ok" "d == {'ok': True, 'missing': [], 'violations': []}"
+http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"targetState\":\"RECORD\",\"ids\":[\"$PV_BOOK\"]}"
+assert_status "With extent it publishes → 201" "201"
+
+# All-or-nothing bulk publish.
+PV_OK=$(create_draft PUBLIC "{\"title\":\"TEST-SUITE-V2-BULK-OK\",$PUBLISHABLE}")
+PV_BAD=$(create_draft PUBLIC '{"title":"TEST-SUITE-V2-BULK-BAD"}')
+CLEANUP_IDS+=("$PV_OK" "$PV_BAD")
+http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"targetState\":\"RECORD\",\"ids\":[\"$PV_OK\",\"$PV_BAD\"]}"
+assert_status "Bulk publish of one valid + one invalid → 400" "400"
+assert_json_true "…lists only the invalid item" "[i['id'] for i in d['items']] == ['$PV_BAD'] and [m['path'] for m in d['items'][0]['missing']] == ['materialType'] and d['message'] == '1 of 2 items are not ready to publish'"
+http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"targetState\":\"DRAFT\",\"ids\":[\"$PV_OK\"]}"
+assert_body_contains "…and the valid one did NOT move either" "already in state DRAFT"
+http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"targetState\":\"RECORD\",\"ids\":[\"$PV_OK\"]}"
+assert_status "The valid one alone publishes" "201"
+
+# Creating straight into RECORD is publishing too.
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"RECORD","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-V2-DIRECT"}}'
+assert_status "POST /items as RECORD with missing fields → 400" "400"
+assert_json_true "…PUBLISH_VALIDATION_FAILED with id null (nothing was created)" "d['code'] == 'PUBLISH_VALIDATION_FAILED' and d['items'][0]['id'] is None and [m['path'] for m in d['items'][0]['missing']] == ['materialType']"
+if [ "$HTTP_STATUS" = "201" ]; then CLEANUP_IDS+=("$(json_field "['id']")"); fi
+http POST "$API/items" "$TOKEN_CATALOGUER" '{"targetState":"RECORD","visibilityStatus":"PUBLIC","metadata":{"title":"TEST-SUITE-V2-DIRECT"}}'
+assert_status "Cataloguer creating a RECORD is still 403 (auth before validation)" "403"
+
+# Old records are not validated on edit.
+http POST "$API/items" "$TOKEN_EDITOR" "{\"targetState\":\"RECORD\",\"visibilityStatus\":\"PUBLIC\",\"metadata\":{\"title\":\"TEST-SUITE-V2-RECORD\",$PUBLISHABLE}}"
+assert_status "Complete record created directly → 201" "201"
+PV_REC=$(json_field "['id']")
+CLEANUP_IDS+=("$PV_REC")
+http PATCH "$API/items/$PV_REC" "$TOKEN_EDITOR" '{"expectedVersion":0,"metadata":{"extent":null}}'
+assert_status "PATCH of a record that then lacks extent → 200 (not validated)" "200"
+http GET "$API/items/$PV_REC/validation?target=RECORD" "$TOKEN_EDITOR"
+assert_json_true "…but the dry run still reports it" "d['ok'] is False and [m['path'] for m in d['missing']] == ['extent']"
+
+# A unit that no longer fits the material type is a violation, not a silent reinterpretation.
+PV_VIDEO=$(create_draft PUBLIC "{\"title\":\"TEST-SUITE-V2-VIDEO\",\"materialType\":$VIDEO,\"extent\":{\"value\":95,\"unit\":\"pages\"}}")
+CLEANUP_IDS+=("$PV_VIDEO")
+http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"targetState\":\"RECORD\",\"ids\":[\"$PV_VIDEO\"]}"
+assert_status "Video with extent in pages → 400" "400"
+assert_json_true "…violation: unit, expected minutes" "d['items'][0]['missing'] == [] and [(v['path'], v['constraint'], v['limit']) for v in d['items'][0]['violations']] == [('extent', 'unit', 'minutes')]"
+
+# An issue of a serial collection needs its issue number and date.
+PV_SERIAL=$(create_draft PUBLIC "{\"title\":\"TEST-SUITE-V2-SERIAL\",\"collectionType\":4,\"materialType\":$SERIAL}")
+PV_ISSUE=$(create_draft PUBLIC "{\"title\":\"TEST-SUITE-V2-ISSUE\",\"materialType\":$SERIAL,\"extent\":{\"value\":16,\"unit\":\"pages\"}}")
+CLEANUP_IDS+=("$PV_SERIAL" "$PV_ISSUE")
+http GET "$API/items/$PV_ISSUE/validation?target=RECORD" "$TOKEN_EDITOR"
+assert_json_true "Before it is linked, the issue has nothing missing" "d['ok'] is True"
+http POST "$API/relations/connect" "$TOKEN_ADMIN" "{\"parentId\":\"$PV_SERIAL\",\"childIds\":[\"$PV_ISSUE\"]}"
+assert_status "Link the issue under the serial collection" "201"
+http GET "$API/items/$PV_ISSUE/validation?target=RECORD" "$TOKEN_EDITOR"
+assert_json_true "Child of a serial: issue.number and issue.date missing" "[m['path'] for m in d['missing']] == ['issue.number', 'issue.date']"
+http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"targetState\":\"RECORD\",\"ids\":[\"$PV_ISSUE\"]}"
+assert_status "Publishing the issue without issue.number → 400" "400"
+assert_json_true "…names issue.number" "'issue.number' in [m['path'] for m in d['items'][0]['missing']]"
+http PATCH "$API/items/$PV_ISSUE" "$TOKEN_EDITOR" '{"expectedVersion":0,"metadata":{"issue":{"number":"7","date":"1905-03"}}}'
+assert_status "Fill in issue number and date" "200"
+http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"targetState\":\"RECORD\",\"ids\":[\"$PV_ISSUE\"]}"
+assert_status "The complete issue publishes → 201" "201"
+
+# --- 19f: who may see a validation --------------------------------------------
+echo -e "\n  ${YELLOW}Validation endpoint access...${NC}"
+
+PV_HIDDEN=$(create_draft HIDDEN '{"title":"TEST-SUITE-V2-HIDDEN"}')
+CLEANUP_IDS+=("$PV_HIDDEN")
+http GET "$API/items/$PV_HIDDEN/validation?target=RECORD" "$TOKEN_READER"
+assert_status "Reader on a hidden draft → 404 (not 403)" "404"
+http GET "$API/items/$PV_HIDDEN/validation?target=RECORD"
+assert_status "Anonymous on a draft → 404" "404"
+http GET "$API/items/$PV_HIDDEN/validation?target=RECORD" "$TOKEN_CATALOGUER"
+assert_status "Cataloguer on a hidden draft → 200" "200"
+http GET "$API/items/$PV_REC/validation?target=RECORD" "$TOKEN_READER"
+assert_status "Reader on a public record → 200" "200"
+http GET "$API/items/$PV_REC/validation?target=RECORD"
+assert_status "Anonymous on a public record → 200" "200"
+http GET "$API/items/does-not-exist/validation?target=RECORD" "$TOKEN_ADMIN"
+assert_status "Unknown item → 404" "404"
+
+# --- 19g: COBISS import as RECORD is never blocked, only warned about ---------
+echo -e "\n  ${YELLOW}Import warnings...${NC}"
+
+# A musical sound recording (jm) whose COBISS record has no numeric extent.
+IMPORT_COBISS_ID="36797700"
+http GET "$API/import/cobiss/preview/$IMPORT_COBISS_ID" "$TOKEN_ADMIN"
+if [ "$HTTP_STATUS" != "200" ]; then
+  echo -e "  ${YELLOW}SKIP${NC} Import warning test — COBISS preview unavailable (HTTP $HTTP_STATUS)"
+  ((SKIPPED++))
+elif [ "$(json_field "['alreadyExists']")" != "False" ]; then
+  echo -e "  ${YELLOW}SKIP${NC} Import warning test — COBISS:$IMPORT_COBISS_ID already exists locally"
+  ((SKIPPED++))
+else
+  IMPORT_ITEM_ID=$(json_field "['itemId']")
+  CLEANUP_IDS+=("$IMPORT_ITEM_ID")
+  http POST "$API/import/cobiss" "$TOKEN_ADMIN" "{\"ids\":[\"$IMPORT_COBISS_ID\"],\"target\":\"RECORD\",\"visibilityStatus\":\"PRIVATE\"}"
+  assert_status "Import an incomplete COBISS record as RECORD" "201"
+  IMPORT_JOB=$(json_field "['jobId']")
+  for _ in $(seq 1 30); do
+    http GET "$API/import/jobs/$IMPORT_JOB" "$TOKEN_ADMIN"
+    STATE=$(json_field "['state']")
+    if [ "$STATE" = "completed" ] || [ "$STATE" = "failed" ]; then break; fi
+    sleep 1
+  done
+  assert_json_true "The import is not blocked (succeeded 1, failed 0)" "d['state'] == 'completed' and d['progress']['succeeded'] == 1 and d['progress']['failed'] == 0"
+  assert_json_true "…but its would-fail publish check is listed as a warning" \
+    "[w['id'] for w in d['progress']['warnings']] == ['$IMPORT_COBISS_ID'] and 'missing extent' in d['progress']['warnings'][0]['reason']"
+  http GET "$API/import/cobiss/preview/$IMPORT_COBISS_ID" "$TOKEN_ADMIN"
+  assert_json_true "…and the item exists as a RECORD" "d['alreadyExists'] is True and d['existsAs'] == 'RECORD'"
+fi
+
+# issue.date is declared keyword in the pgsync mapping, so partial dates never depend on
+# which document happened to be indexed first.
+if [ -f "${PGSYNC_SCHEMA:-}" ]; then
+  if python3 -c "import json,sys; d=json.load(open('$PGSYNC_SCHEMA')); sys.exit(0 if all(n['nodes']['transform']['mapping']['metadata']['properties']['issue']['properties']['date']['type'] == 'keyword' for n in d) else 1)" 2>/dev/null; then
+    echo -e "  ${GREEN}PASS${NC} pgsync maps metadata.issue.date as keyword in both indices"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} pgsync does not map metadata.issue.date as keyword"
+    ((FAILED++))
+    ERRORS+=("pgsync must map metadata.issue.date as keyword")
+  fi
+fi
+HTTP_BODY=$(curl -s "localhost:9200/records,drafts/_mapping/field/metadata.issue.date" 2>/dev/null)
+if [ -n "$HTTP_BODY" ]; then
+  assert_json_true "Live indices map metadata.issue.date as keyword" \
+    "all(d[i]['mappings']['metadata.issue.date']['mapping']['date']['type'] == 'keyword' for i in ('records', 'drafts'))"
+fi
 
 # ============================================================================
 # CLEANUP

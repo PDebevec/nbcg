@@ -124,8 +124,10 @@ otherwise same stage".
   The existing observer closes the task and logs `CLOSED_ON_PUBLISH` by the real
   publisher — so there is exactly one closing path whether the publish came from
   the task or not. Pass the optional `note` through to that row.
-  Publish validation (metadata schema v2, B6) runs inside `transition()`; its
-  400 reaches the task dialog unchanged.
+  Publish validation (metadata schema v2, B6 — built 2026-09-24) runs inside
+  `transition()`, in its transaction before any row moves; its 400 reaches the
+  task dialog unchanged, and the task stays OPEN because the whole transaction
+  rolls back.
 - item is already a RECORD → `COMPLETED` with a `changes` entry noting
   "reviewed, already published".
 

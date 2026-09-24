@@ -916,6 +916,18 @@ export function resolveRelatorCode(code: string): ResolvedCode {
   return { code, en: entry?.[0] ?? code, cnr: entry?.[1] ?? code };
 }
 
+// Units for the numeric `extent` field (metadata schema v2). Not a COBISS code
+// list: COBISS keeps extent as free text in 215/a ("253 str."). The editor
+// writes the unit next to the number, so a stored 253 is never reinterpreted
+// when the material type changes. [abbreviation en, abbreviation cnr]
+const EXTENT_UNIT_MAP: Record<string, [string, string]> = {
+  pages:   ["p.",     "str."],
+  sheets:  ["sheets", "list."],
+  volumes: ["vols",   "sv."],
+  items:   ["items",  "kom."],
+  minutes: ["min",    "min"],
+};
+
 // ---------------------------------------------------------------------------
 // "getAll" helpers — return every code in a map as ResolvedCode[]
 // Used by the schema endpoint to expose allowed values for coded fields.
@@ -934,3 +946,4 @@ export const getAllContentTypeCodes        = () => mapToResolved(CONTENT_TYPE_MA
 export const getAllLiteraryFormCodes       = () => mapToResolved(LITERARY_FORM_MAP);
 export const getAllBiographyCodes          = () => mapToResolved(BIOGRAPHY_CODE_MAP);
 export const getAllRelatorCodes            = () => mapToResolved(RELATOR_CODE_MAP);
+export const getAllExtentUnitCodes         = () => mapToResolved(EXTENT_UNIT_MAP);

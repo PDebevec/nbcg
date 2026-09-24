@@ -6,6 +6,7 @@ import type { Principal, VisibilityFilter } from '../../core/auth/principal.type
 import type { SearchQueryDto } from './dto/search-query.dto';
 import type { SuggestQueryDto } from './dto/suggest-query.dto';
 import { SUGGEST_FIELDS } from './suggest-fields';
+import { rankByQuery } from '../../shared/util/text-match';
 import type { SuggestFieldConfig } from './suggest-fields';
 
 export interface MatchedFile {
@@ -377,6 +378,19 @@ export interface SuggestResult {
   suggestions: SuggestItem[];
 }
 
+/**
+ * With `q`, ask OpenSearch for this many times more buckets than wanted, then
+ * keep only the ones that really match (`rankByQuery`). A document matches when
+ * ANY element of an array field does, and then contributes a bucket for every
+ * element — `notes: ["Foo", "Bar"]` answers `q=Fo` with `Bar` too. The extra
+ * buckets leave room for those to be dropped without coming up short.
+ */
+const SUGGEST_OVERFETCH = 5;
+
+function bucketCount(q: string | undefined, limit: number): number {
+  return q?.trim() ? limit * SUGGEST_OVERFETCH : limit;
+}
+
 function buildStringSuggestBody(
   config: SuggestFieldConfig,
   q: string | undefined,
@@ -398,7 +412,7 @@ function buildStringSuggestBody(
     },
     aggs: {
       suggestions: {
-        terms: { field: config.keywordPath, size: limit, order: { _count: 'desc' } },
+        terms: { field: config.keywordPath, size: bucketCount(q, limit), order: { _count: 'desc' } },
       },
     },
   };
@@ -434,7 +448,7 @@ function buildResolvedCodeSuggestBody(
     },
     aggs: {
       suggestions: {
-        terms: { field: rc.codePath, size: limit, order: { _count: 'desc' } },
+        terms: { field: rc.codePath, size: bucketCount(q, limit), order: { _count: 'desc' } },
         aggs: {
           sample: {
             top_hits: { size: 1, _source: { includes: rc.sourceIncludes } },
@@ -474,7 +488,7 @@ function buildAuthorSuggestBody(
     },
     aggs: {
       by_family: {
-        terms: { field: ac.primaryAggField, size: limit, order: { _count: 'desc' } },
+        terms: { field: ac.primaryAggField, size: bucketCount(q, limit), order: { _count: 'desc' } },
         aggs: {
           by_first: {
             terms: { field: ac.secondaryAggField, size: 1 },
@@ -493,43 +507,53 @@ function buildAuthorSuggestBody(
 // ─── Suggest result mappers ──────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapStringSuggestResult(field: string, raw: any): SuggestResult {
+function mapStringSuggestResult(field: string, raw: any, q: string | undefined, limit: number): SuggestResult {
   const buckets = raw?.aggregations?.suggestions?.buckets ?? [];
-  return {
-    field,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    suggestions: buckets.map((b: any) => ({ value: b.key, count: b.doc_count })),
-  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const all: SuggestItem[] = buckets.map((b: any) => ({ value: b.key, count: b.doc_count }));
+  return { field, suggestions: rankByQuery(all, q, (s) => [s.value as string], limit) };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapResolvedCodeSuggestResult(field: string, config: SuggestFieldConfig, raw: any): SuggestResult {
+function mapResolvedCodeSuggestResult(
+  field: string,
+  config: SuggestFieldConfig,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw: any,
+  q: string | undefined,
+  limit: number,
+): SuggestResult {
   const buckets = raw?.aggregations?.suggestions?.buckets ?? [];
   const rc = config.resolvedCode!;
   // The sourceIncludes path is like "metadata.language" — extract the last segment
   const metaField = rc.sourceIncludes[0].replace('metadata.', '');
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const all: SuggestItem[] = buckets.map((b: any) => {
+    const hit = b.sample?.hits?.hits?.[0]?._source;
+    const fieldValue = hit?.metadata?.[metaField];
+
+    // For array ResolvedCode fields (e.g. language[]), find the element matching the bucket code
+    let resolved: unknown = fieldValue;
+    if (Array.isArray(fieldValue)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      resolved = fieldValue.find((el: any) => el?.code === b.key) ?? { code: b.key };
+    }
+
+    return { value: resolved, count: b.doc_count };
+  });
+
   return {
     field,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    suggestions: buckets.map((b: any) => {
-      const hit = b.sample?.hits?.hits?.[0]?._source;
-      const fieldValue = hit?.metadata?.[metaField];
-
-      // For array ResolvedCode fields (e.g. language[]), find the element matching the bucket code
-      let resolved: unknown = fieldValue;
-      if (Array.isArray(fieldValue)) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        resolved = fieldValue.find((el: any) => el?.code === b.key) ?? { code: b.key };
-      }
-
-      return { value: resolved, count: b.doc_count };
-    }),
+    suggestions: rankByQuery(all, q, (s) => {
+      const v = s.value as { code?: string; en?: string; cnr?: string };
+      return [v?.code, v?.en, v?.cnr];
+    }, limit),
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapAuthorSuggestResult(field: string, raw: any): SuggestResult {
+function mapAuthorSuggestResult(field: string, raw: any, q: string | undefined, limit: number): SuggestResult {
   const familyBuckets = raw?.aggregations?.by_family?.buckets ?? [];
   const suggestions: SuggestItem[] = [];
 
@@ -561,7 +585,13 @@ function mapAuthorSuggestResult(field: string, raw: any): SuggestResult {
     }
   }
 
-  return { field, suggestions };
+  return {
+    field,
+    suggestions: rankByQuery(suggestions, q, (s) => {
+      const a = s.value as { familyName?: string; firstName?: string };
+      return [a.familyName, a.firstName, `${a.firstName ?? ''} ${a.familyName ?? ''}`, `${a.familyName ?? ''} ${a.firstName ?? ''}`];
+    }, limit),
+  };
 }
 
 @Injectable()
@@ -712,7 +742,7 @@ export class SearchService {
       );
     }
 
-    const limit = dto.limit ?? 10;
+    const limit = dto.limit ?? 5;
     const visFilter = this.access.visibilityFilter(principal);
     const requestedType = dto.type ?? 'all';
     const { indices, visibilityClause } = this.buildVisibilityQuery(requestedType, visFilter);
@@ -740,11 +770,11 @@ export class SearchService {
 
     switch (config.type) {
       case 'string':
-        return mapStringSuggestResult(dto.field, raw);
+        return mapStringSuggestResult(dto.field, raw, dto.q, limit);
       case 'resolvedCode':
-        return mapResolvedCodeSuggestResult(dto.field, config, raw);
+        return mapResolvedCodeSuggestResult(dto.field, config, raw, dto.q, limit);
       case 'author':
-        return mapAuthorSuggestResult(dto.field, raw);
+        return mapAuthorSuggestResult(dto.field, raw, dto.q, limit);
     }
   }
 

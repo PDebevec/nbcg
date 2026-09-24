@@ -1,6 +1,10 @@
 # Metadata schema v2 — the contract
 
-## Status: PLANNED (2026-09-23)
+## Status: backend DONE (B1–B6, 2026-09-24, not yet in production) · web and archive app next
+
+The backend implements this contract as written, with the refinements marked
+**(as built)** below; details and the decisions taken on the way are in the
+[backend plan](../../backend/plans/metadata-schema-v2.md#done--what-was-built-2026-09-24).
 
 | Doc | What it covers |
 |---|---|
@@ -153,7 +157,14 @@ itself when validating.
 - Bigger → no `values`; `search` says where to look up. (Today: `language` 449,
   `relator` 116, `contentType` 69.)
 - One vocabulary is shared by every field that uses it — the three language
-  fields no longer ship 449 entries three times (v1: ~98 KB, most of it that).
+  fields no longer ship 449 entries three times (v1: ~98 KB, most of it that;
+  v2: ~41 KB).
+- **(as built)** Vocabularies: `materialType` 25, `recordType` 14,
+  `bibliographicLevel` 6, `country` 28, `illustration` 16, `literaryForm` 35,
+  `biography` 5, `responsibility` 3 (`primary`/`alternative`/`secondary`,
+  stored as the bare code), `collectionType` 4, `extentUnit` 5 (`pages`,
+  `sheets`, `volumes`, `items`, `minutes`) — inline; `language` 449, `relator`
+  116 (COMARC numeric codes, `070` = author), `contentType` 69 — searched.
 - Vocabulary labels are the `{ code, en, cnr }` objects from
   `cobiss-code-map.ts`, unchanged.
 
@@ -263,7 +274,7 @@ keys, which then stay editable.
 |---|---|
 | `{ "ref": K, "eq": v }` | context `K` equals `v` |
 | `{ "ref": K, "in": [v1, v2] }` | context `K` is one of the values |
-| `{ "ref": K, "empty": true }` | `K` is null/undefined/`""`/`[]` (`false` = the opposite) |
+| `{ "ref": K, "empty": true }` | `K` is null/undefined/`""`/`[]` (`false` = the opposite). **(as built)** Also a blank string and `{}` — the same `isEmpty` decides "required but empty" on publish |
 | `{ "all": [c…] }` / `{ "any": [c…] }` / `{ "not": c }` | the usual |
 
 If the context value is an **array** (`parentCollectionType`), `eq`/`in` are true
@@ -294,8 +305,19 @@ object fields: evaluate the object, then each objectShape field with the same ct
 
 The TypeScript implementation lives once in the backend and is copied verbatim
 into the web frontend; a conformance fixture (`context` in → expected field
-states out) is published next to this doc so the archive app can test its own
-port against the same cases. See the backend plan.
+states out) is published so the archive app can test its own port against the
+same cases. See the backend plan.
+
+**(as built)** Implementation: `backend/src/modules/schema/rules/evaluate.ts`
+— `buildContext`, `isEmpty`, `matches`, `evaluateField`, `evaluateAll`
+(states keyed by dotted path: `extent`, `issue.number`) and `checkMetadata`,
+the publish check itself, so a client can show exactly what the backend will
+refuse. Fixture: `backend/src/modules/schema/rules/conformance.json`, sections
+`isEmpty`, `buildContext`, `mechanics` (the rule language on synthetic fields),
+`record` (the rule table against `GET /schema/v2/record`) and `check`
+(metadata in → `missing` / `violations` paths out). In `expected`, only the
+listed properties are compared; `unit` is the unit code, `label`/`help` the
+English text.
 
 ### Editor rules every client follows
 
@@ -380,6 +402,14 @@ item and which field:
 }
 ```
 
+**(as built)** Each violation also carries the field's evaluated `label`, and
+`limit` for a broken bound (`minLength: 3` → `3`). A `quantity` whose stored
+unit is not the evaluated one is a violation `{ constraint: "unit", limit:
+"minutes" }` — editor rule 3 enforced on publish. `items` lists only failing
+items; `id` is `null` when `POST /api/items` created nothing. `message` is
+`"1 of 1 item is not ready to publish"` / `"1 of 2 items are not ready to
+publish"`.
+
 `GET /api/items/:id/validation?target=RECORD` returns the same `missing` /
 `violations` for one item with `200 { ok: boolean, … }`, so a dialog can show
 the checklist before the user clicks.
@@ -390,7 +420,8 @@ Deliberately **not** validated:
   the new fields on its next edit. The editor still shows the warnings;
 - the COBISS import worker, even with `target: RECORD` — COBISS is the
   catalogue of record; the job result lists the items that would fail, so they
-  can be fixed later.
+  can be fixed later. **(as built)** In `progress.warnings[] { id, reason }` of
+  `GET /api/import/jobs/:id`, separate from `errors` (those items did import).
 
 ---
 
@@ -409,7 +440,7 @@ issue). Material-type categories are keyed on `recordType` (first letter of
 | `collectionType` | `select`, required, default 0 | hidden when `isChild` and the parent is a serial (an issue is not a collection) |
 | `materialType` | `select` | required on publish (it drives every other rule) |
 | **`extent`** (new, `quantity`) | hidden | `a b c d` → visible, unit `pages` "str.", label "Broj strana"; `g i j` → visible, unit `minutes` "min", label "Trajanje"; `e f k` → visible, unit `sheets` "list."; **required** when `collectionType = 0` and `recordType ∈ a b g i j`; never required when `collectionType ≠ 0` (it lives on the children) |
-| `cartographicMathematicalData` (206, scale) | hidden | `e f` → visible + required, label "Merilo", hint "1:25 000" |
+| `cartographicMathematicalData` (206, scale) | hidden | `e f` → visible + required, label "Scale" / "Razmjera" (as built; was "Merilo" here), help "1:25 000" |
 | `musicEditionStatement` (208) | hidden | `c d j` → visible |
 | `ismn` | hidden | `c d` → visible |
 | `isbn` | visible | hidden when `bibliographicLevel = s` or `parentCollectionType ∋ 4` |
@@ -417,6 +448,8 @@ issue). Material-type categories are keyed on `recordType` (first letter of
 | `numberingAndDates` (207) | hidden | visible when `bibliographicLevel ∈ s i` or `collectionType = 4` |
 | **`issue`** (new, `object`: `volume`, `number`, `date`) | hidden | `parentCollectionType ∋ 4` → visible; `number` and `date` required |
 | `textualMaterialCodes` (105) | hidden | `a b` → visible |
+| v1 `levels: ['main']` fields: `collectionType`, `isbn`, `ismn`, `textualMaterialCodes`, `titleByAnotherAuthor`, `authors`, `corporateBodies`, `edition`, `cartographicMathematicalData`, `musicEditionStatement` | — | **(as built, decided 2026-09-24)** hidden when `parentCollectionType ∋ 4` (an issue of a serial), as the last rule so it wins over the material-type rules. Not for other children: a book inside a fond keeps its authors |
+| `cobissId` | editable | **(as built)** `readOnly` + help "Cannot be changed after creation." once `itemState ≠ NEW` |
 | **`keywords`** (new, 610, `string` × multiple) | visible | `suggest` free — the "repeating free text" example |
 | **`summaryNote`** (330) | visible, `text` | — (the web editor had a Summary field that the API silently dropped; it was removed in `cd8e5bd` until this lands — see the backend plan) |
 
@@ -435,6 +468,12 @@ date picker ([collection views](../../frontend/plans/collection-views.md)).
 
 ## Open questions (not blocking the backend work)
 
+- [ ] Montenegrin check of the captions new in v2 (list in the
+      [reference](../../backend/reference.md#schema-v2)).
+- [ ] Accent-insensitive matching inside OpenSearch (`asciifolding` + reindex):
+      suggest filters accent-insensitively, but `Niksic` still finds nothing.
+      Skipped on 2026-09-24; do it with the next reindex.
+
 - [ ] The rule table above — confirm with the library, especially what is
       required for which material type.
 - [ ] `collectionType` values `2` and `5+`: unused today? (The web
@@ -444,7 +483,7 @@ date picker ([collection views](../../frontend/plans/collection-views.md)).
       `"1 video disk (95 min)"`) on import? Best-effort regex; nice for search,
       not required.
 - [ ] Merge the web editor's interim visibility rules into the rule table
-      above? They make series, `edition`, original/translation languages,
+      above? (2026-09-24: not for now — the contract table was built as is.) They make series, `edition`, original/translation languages,
       place/name of manufacture, `titleByAnotherAuthor` and
       `documentTypology` type-specific, and hide ISBN for `cm dm aa ai li ud`
       too ([§2a](../../frontend/plans/material-type-field-visibility.md#2a-differences-from-the-schema-v2-initial-rule-set)).

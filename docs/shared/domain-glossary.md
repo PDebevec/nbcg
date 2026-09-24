@@ -18,9 +18,10 @@ conversation (Slovenian, in brackets where it differs).
 | `ResolvedCode` | | | `{ code, en, cnr }` — how every coded value is stored, so it displays without a lookup |
 | COBISS | | | the national union catalogue system; items can be imported by COBISS id |
 | COMARC/B | | | the COBISS bibliographic format (UNIMARC-based) the metadata follows; field numbers like 200/a, 210/c |
-| extent | number of pages / duration | broj strana / trajanje | planned `quantity` field (sl. *št. strani*, *dolžina*) — [schema v2](plans/metadata-schema-v2.md) |
-| issue | issue | broj / sveska | planned fields for a child of a serial: volume, number, date (sl. *št. časopisa*) |
-| scale | scale | razmjer / mjerilo | `cartographicMathematicalData` (206) for maps (sl. *kartografsko merilo*) |
+| extent | number of pages / duration | broj strana / trajanje | `metadata.extent` `{ value, unit }` — a `quantity`: the number is typed, the unit (`pages`, `minutes`, `sheets`, …) follows the material type (sl. *št. strani*, *dolžina*) — [schema v2](plans/metadata-schema-v2.md) |
+| issue | issue | broj / sveska | `metadata.issue` `{ volume, number, date }` on an item whose parent is a serial collection (sl. *št. časopisa*) |
+| scale | scale | razmjera | `cartographicMathematicalData` (206) for maps; required to publish a map (sl. *kartografsko merilo*) |
+| keywords | keywords | ključne riječi | `metadata.keywords`, COMARC 610 free keywords (sl. *ključne besede*) |
 | task | task | zadatak | a staff handoff about one item (sl. *task*, *naloga*) |
 | `kind` → stage | stage | faza | `GENERAL`, `FIX_METADATA`, `REVIEW_PUBLISH` |
 | return with notes | return | vrati | send a task back one step with a reason |

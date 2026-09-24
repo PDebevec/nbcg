@@ -19,6 +19,12 @@ npm run start:dev        # nest start --watch, http://localhost:3000/api
 - `npm run build` → the entry point is **`dist/src/main.js`**, not
   `dist/main.js`, because `generated/` and `prisma.config.ts` sit outside `src/`.
 - `npm run start:prod` = `prisma migrate deploy` + `node dist/src/main.js`.
+- The API refuses to boot if the metadata schema v2 self-check fails
+  (`SchemaService.onModuleInit`); the error lists every problem.
+- `nest start --watch` has been seen (2026-09-24) to stop re-emitting some
+  files: `dist/…/items.service.js` stayed an hour old while other files rebuilt,
+  and the server was not restarted. If a change seems to have no effect, compare
+  the `dist/` timestamp with the source and restart the watcher.
 
 ## ⚠ Do not run `npm run lint`
 
@@ -73,18 +79,35 @@ Users `admin`, `editor`, `cataloguer`, `reader` (password = username) — see
 
 - **`backend/test/api-test-suite.sh`** — the end-to-end suite against a running
   API + real infrastructure, organised in numbered sections (§1 health … §18
-  task delegation). **Every new or changed endpoint/behaviour gets tests here,
+  task delegation, §19 metadata schema v2). **Every new or changed endpoint/behaviour gets tests here,
   for every persona (anonymous, reader, cataloguer, editor, admin), before the
   work counts as done** — including response-shape-only changes.
 - `npm test` — jest unit specs (`*.spec.ts`), e.g. `tasks.service.spec.ts`,
-  `search.service.spec.ts`.
+  `search.service.spec.ts`, and the schema v2 specs under `src/modules/schema/`.
+- Items that get **published** in the suite must pass publish validation: add
+  `'"$PUBLISHABLE"'` (a book with its page count) to their metadata, as the
+  existing fixtures do.
 - Some §16/§18 tests need the user directory synced first (`POST
   /api/users/sync`), otherwise they SKIP.
+
+## Metadata schema v2 — changing fields or rules
+
+- A new metadata field goes into `DomainRecord` + `DOMAIN_RECORD_SHAPE`
+  (`cobiss.types.ts`) **and** `src/modules/schema/v2/record-fields.ts` +
+  `labels.ts`. Forget either and the self-check fails the boot (and jest), by
+  design — that is what stops a field being silently dropped again.
+- A rule change = `record-fields.ts` + the matching cases in
+  `rules/conformance.json`.
+- `rules/evaluate.ts` is copied verbatim to the web frontend
+  (`frontend/src/utils/schemaRules.ts`); once that copy exists,
+  `evaluate.spec.ts` fails until both are identical. Keep the file import-free.
+- A new `suggest` needs an entry in `src/modules/search/suggest-fields.ts`.
 
 ## OpenSearch mapping changes
 
 Changing `infrastructure/docker/pgsync/schema.json` needs a reindex — see
-[opensearch-reindex.md](../infrastructure/opensearch-reindex.md). Anything that
+[opensearch-reindex.md](../infrastructure/opensearch-reindex.md) — unless the
+field does not exist in any document yet (then one `PUT _mapping`, same doc). Anything that
 changes often (counters, logs, tasks) must stay **out** of pgsync: a change to a
 tracked row re-indexes the whole document, extracted file text included.
 

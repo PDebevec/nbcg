@@ -1,10 +1,12 @@
-import { Controller, Get, Headers, Param, Query } from '@nestjs/common';
+import { Controller, Get, Headers, NotFoundException, Param, Query } from '@nestjs/common';
 import { GetPrincipal } from '../../core/auth/get-principal.decorator';
 import type { Principal } from '../../core/auth/principal.type';
 import { MetricsService } from '../../core/metrics/metrics.service';
 import { SearchService } from './search.service';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { SuggestQueryDto } from './dto/suggest-query.dto';
+import { VocabularyQueryDto } from './dto/vocabulary-query.dto';
+import { searchVocabulary } from '../schema/v2/vocabulary-search';
 
 @Controller('search')
 export class SearchController {
@@ -22,6 +24,16 @@ export class SearchController {
   @Get('suggest')
   suggest(@GetPrincipal() principal: Principal, @Query() dto: SuggestQueryDto) {
     return this.searchService.suggest(dto, principal);
+  }
+
+  // A controlled vocabulary from the metadata schema (languages, relator roles,
+  // …). Public like /schema: code lists are not data. Declared above
+  // ':id/children' so `vocabularies/children` can never be read as an item id.
+  @Get('vocabularies/:name')
+  vocabulary(@Param('name') name: string, @Query() dto: VocabularyQueryDto) {
+    const result = searchVocabulary(name, dto.q, dto.limit ?? 5);
+    if (!result) throw new NotFoundException(`Unknown vocabulary "${name}"`);
+    return result;
   }
 
   @Get(':id/children')

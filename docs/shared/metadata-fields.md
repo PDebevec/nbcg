@@ -4,10 +4,11 @@
 
 Legend: ✅ already in SEARCH_FIELDS · 🔍 good search candidate · — not useful for search
 
-> Planned additions (`extent`, `issue`, `keywords`, `summaryNote`) and
-> per-material-type visibility: [metadata schema v2](plans/metadata-schema-v2.md).
-> The web editor's interim visibility map, until then:
-> [material-type field visibility](../frontend/plans/material-type-field-visibility.md).
+> Which field is shown / required for which material type, labels in en + cnr,
+> how each is edited: `GET /api/schema/v2/record` ([metadata schema v2](plans/metadata-schema-v2.md),
+> backend done 2026-09-24). Schema v2 added `extent`, `issue`, `keywords` and
+> `summaryNote` (below). The web editor still uses its interim visibility map
+> until it switches to v2: [material-type field visibility](../frontend/plans/material-type-field-visibility.md).
 
 ---
 
@@ -97,6 +98,15 @@ Array of objects — plain strings.
 | Field | Type | COMARC | Search |
 |-------|------|--------|--------|
 | `notes` | `string[]` | 300/a | ✅ |
+| `summaryNote` | `string` | 330/a | 🔍 — schema v2; the API used to drop it silently |
+
+---
+
+## Subject (610)
+
+| Field | Type | COMARC | Search |
+|-------|------|--------|--------|
+| `keywords` | `string[]` | 610/a (all occurrences) | 🔍 — schema v2; suggest field `keywords` |
 
 ---
 
@@ -132,10 +142,24 @@ These are objects/arrays. To search human-readable labels use `.en` or `.cnr` su
 
 | Field | Type | COMARC | Search |
 |-------|------|--------|--------|
-| `physicalDescription` | `string` | 215/a | — |
+| `physicalDescription` | `string` | 215/a | — free text, e.g. `"253 str."` |
+| `extent` | `{ value: number, unit: string }` | — (NBCG) | — schema v2: the number from 215/a, unit `pages`/`sheets`/`volumes`/`items`/`minutes`; caption and unit follow the material type |
 | `otherPhysicalDetails` | `string` | 215/c | — |
 | `dimensions` | `string` | 215/d | — |
 | `cartographicMathematicalData` | `string` | 206/a | — |
+
+---
+
+## Serial issue (NBCG)
+
+Shown only on an item whose parent is a serial collection (`collectionType` 4);
+`number` and `date` are then required to publish. No COMARC source.
+
+| Field | Type | Search |
+|-------|------|--------|
+| `issue.volume` | `string` | — |
+| `issue.number` | `string` | — |
+| `issue.date` | `string` `YYYY` / `YYYY-MM` / `YYYY-MM-DD` | — mapped `keyword` in OpenSearch (sortable, prefix-queryable) |
 
 ---
 

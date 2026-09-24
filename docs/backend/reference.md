@@ -302,6 +302,12 @@ Both `records` and `drafts` indices mirror the database tables via PGSync:
   - the two `…ByName` fields are mapped `keyword`, not `text`: sorting and terms aggregations on the creator name are the whole reason they are indexed. Full-text search over creator names is not a requirement — the picker resolves a name to a UUID and filters on `createdByUserId`. They are **stripped** for principals below the attribution bar (see [Attribution](#attribution)).
 - Nested `file_attachments[]`: `id`, `fileType`, `role`, `filename`, `mimeType`, `sizeBytes`, `textExtractionStatus`, `extractedText`, `createdAt`
 - `parent_relations[]` (object, not nested): `parentId`, `parentType`
+- `metadata` is mapped dynamically (strings → `text` + `.keyword`), with one
+  declared exception: `metadata.issue.date` is `keyword`, so a partial date
+  (`1905`, `1905-03`) never depends on which document happened to be indexed
+  first (dynamic date detection would make the field `date` or `text`
+  depending on that). ISO strings sort correctly as keywords, and a prefix
+  query `1905-03` finds every issue of that month.
 
 ### Search Queries
 
@@ -471,9 +477,9 @@ curl 'http://localhost:3000/api/search/suggest?field=author&q=Njego&limit=5'
 
 | Param   | Notes |
 |---------|-------|
-| `field` | Allowlisted in `src/modules/search/suggest-fields.ts`: `title`, `subtitle`, `seriesTitle`, `publisher`, `place`, `firstResponsibility`, `edition`, `notes`, `language`, `originalLanguage`, `materialType`, `country`, `recordType`, `bibliographicLevel`, `author`. Anything else is a 400 listing the supported names. |
+| `field` | Allowlisted in `src/modules/search/suggest-fields.ts`: `title`, `subtitle`, `seriesTitle`, `publisher`, `place`, `placeOfManufacture`, `manufacturerName`, `firstResponsibility`, `edition`, `notes`, `keywords`, `corporateBody` (`corporateBodies[].name`), `dimensions`, `physicalDescription`, `language`, `originalLanguage`, `materialType`, `country`, `recordType`, `bibliographicLevel`, `author`. Anything else is a 400 listing the supported names. Every `suggest` in [schema v2](#schema-v2) must name one of these — checked at boot. |
 | `q`     | Optional. `match_phrase_prefix` on the text field; omitted = top values overall. |
-| `limit` | 1–50, default 10. |
+| `limit` | 1–50, default **5** (was 10 before schema v2; every web call passes its own). |
 | `type`  | `all` (default), `records`, `drafts` — then intersected with what the caller may see. |
 
 How it works: a `size: 0` query filtered by the caller's visibility, plus a
@@ -481,16 +487,106 @@ How it works: a `size: 0` query filtered by the caller's visibility, plus a
 the answer is "values **already used in the data**, most common first":
 
 - A value nobody has used yet can never be suggested. That is right for free
-  text (publisher spellings) and **wrong for controlled vocabularies** — the web
-  editor fills its material-type/language/country dropdowns from here, so a
-  language no item uses yet cannot be picked. See
-  `docs/shared/plans/metadata-schema-v2.md`.
-- For array fields (`notes`, …) the aggregation returns every value of every
-  matching document, including sibling values that do not match `q`.
-- Matching goes through the default analyzer: no ASCII folding, so `Niksic`
-  does not find `Nikšić`.
+  text (publisher spellings) and wrong for controlled vocabularies — those have
+  their own endpoint, [`/search/vocabularies/:name`](#vocabulary-search), which
+  searches the code list itself.
+- **Post-filter** (since schema v2): with `q`, OpenSearch is asked for
+  `limit × 5` buckets and only the ones that really match `q` are kept — exact
+  match first, then prefix, then substring, most used first within each. Before
+  this, array fields (`notes`, `keywords`, `authors`, `language`, …) returned
+  every value of every matching document, so `q=Fo` on notes `["Foo", "Bar"]`
+  also suggested `Bar`. Code: `rankByQuery` in `src/shared/util/text-match.ts`.
+- The post-filter compares accent-, case- and punctuation-insensitively
+  (`Nikšić` = `niksic`, `đ` = `d`, `Beograd : Prosveta` = `beograd prosveta`),
+  but it can only filter what OpenSearch returned, and OpenSearch still matches
+  through the default analyzer with no ASCII folding: `q=Niksic` finds nothing.
+  An `asciifolding` sub-field + reindex would fix that; deliberately not done
+  yet (optional in the schema v2 plan).
+
+### Vocabulary search
+
+```bash
+# Search a controlled vocabulary (the code list, not the data). Public.
+curl 'http://localhost:3000/api/search/vocabularies/language?q=crn&limit=5'
+# -> { "field": "language",
+#      "suggestions": [ { "value": { "code": "cnr", "en": "Montenegrin", "cnr": "Crnogorski" } } ] }
+```
+
+- `:name` is any vocabulary in the [schema v2](#schema-v2) registry:
+  `materialType`, `recordType`, `bibliographicLevel`, `language`, `country`,
+  `illustration`, `contentType`, `literaryForm`, `biography`, `relator`,
+  `extentUnit`, `responsibility`, `collectionType`. Unknown → `404`.
+- Matches `code`, `en` and `cnr` with the same normalisation and ranking as the
+  suggest post-filter (exact → prefix → substring, registry order within each).
+  Relator codes are COMARC's numeric ones (`070` = author).
+- `limit` 1–50, default 5; no `q` → the first `limit` values.
+- Same response shape as suggest minus `count`, so a client needs one parser.
+  `collectionType` codes stay numbers.
+- In-memory: `src/modules/schema/v2/vocabulary-search.ts`, index built on first
+  use per vocabulary. Route declared above `:id/children` in `SearchController`.
+
+### Schema (v2)
+
+```bash
+# One schema for every material type and level — the conditions are inside. Public.
+curl -i 'http://localhost:3000/api/schema/v2/record'
+# -> ETag: "…", Cache-Control: no-cache
+# -> { schemaVersion: 2, languages: ["en","cnr"], inlineVocabularyMax: 50,
+#      context: [...], vocabularies: {...}, groups: [...], fields: [...] }
+curl -i -H 'If-None-Match: "<etag>"' 'http://localhost:3000/api/schema/v2/record'   # -> 304
+```
+
+The full contract (every property, the rule language, editor rules) is in
+[shared/plans/metadata-schema-v2.md](../shared/plans/metadata-schema-v2.md).
+How the backend builds and guards it:
+
+| Piece | File (`src/modules/schema/`) |
+|---|---|
+| Field list: keys, types, groups, `suggest`, rules — hand-written data only | `v2/record-fields.ts` |
+| Captions `{ en, cnr }` for fields, groups and rule overrides | `v2/labels.ts` |
+| Vocabulary registry (from `cobiss-code-map.ts` + `collectionType`, `responsibility`, `extentUnit`); `INLINE_VOCABULARY_MAX = 50` decides `values` vs `search` | `v2/vocabularies.ts` |
+| Builder: computes `input` and `order`, attaches labels, assembles the body | `v2/build-schema.ts` |
+| Self-check, run in jest **and** in `SchemaService.onModuleInit` — a bad schema cannot boot | `v2/self-check.ts` |
+| Rule evaluator + publish check, **portable** (no imports; copied verbatim to the web frontend) | `rules/evaluate.ts` |
+| Conformance cases every port must pass (web, archive app) | `rules/conformance.json` |
+| Publish validation service | `publish-validator.service.ts` |
+
+- ~41 KB (v1: ~98 KB): `language` (449), `relator` (116) and `contentType`
+  (69) are not inlined but point at [vocabulary search](#vocabulary-search);
+  one `language` vocabulary serves all three language fields.
+- `Cache-Control: no-cache` + MD5 `ETag`: clients revalidate on every load and
+  get a 304, so a deploy never leaves anyone on a stale schema.
+- The **self-check** refuses a schema that: advertises a key the API does not
+  accept (the old `summaryNote` bug) or a shape its validator rejects or
+  changes (probed with a sample value per field); omits a key the API accepts;
+  uses an undeclared context key in a rule or sets anything but
+  `visible/required/readOnly/unit/label/help/constraints`; names an unknown
+  vocabulary, a suggest field outside `SUGGEST_FIELDS`, or a unit outside
+  `extentUnit`; lacks a caption in either language.
+- v1's `levels: ['main']` became a rule: those 10 fields (`collectionType`,
+  `isbn`, `ismn`, `textualMaterialCodes`, `titleByAnotherAuthor`, `authors`,
+  `corporateBodies`, `edition`, `cartographicMathematicalData`,
+  `musicEditionStatement`) are hidden **only for an issue of a serial**
+  (`parentCollectionType ∋ 4`). Children of other collections keep them.
+- Rules follow the contract's initial rule table (still to be confirmed by the
+  library). Changing a rule = edit `record-fields.ts` + the matching cases in
+  `conformance.json`; `evaluate.spec.ts` runs them.
+
+**Captions that need a Montenegrin check** (marked `NEW` in `v2/labels.ts`;
+everything else was copied from the web frontend's i18n): groups *Osnovno*,
+*Podaci o broju*, *Izdanje i posebni podaci*, *Kodirani datumi*, *Predmet*;
+fields *Podaci o broju* / *Godište* / *Broj* / *Datum izlaska* (issue),
+*Obim* (extent), *Podatak o obimu* (215/a, renamed because `extent` took
+"Obim"), *Ključne riječi*; rule captions *Broj strana*, *Trajanje*, *Broj
+listova*, *Razmjera* (map scale); help *Slobodne ključne riječi (610)*,
+*GGGG, GGGG-MM ili GGGG-MM-DD*; unit abbreviations in `extentUnit` (*str.*,
+*list.*, *sv.*, *kom.*, *min*).
 
 ### Schema (v1)
+
+**Frozen** until the archive app has moved to v2, then deleted (backend plan
+B7). The v2 fields (`summaryNote`, `keywords`, `extent`, `issue`) are
+deliberately not in it.
 
 ```bash
 # Field descriptors for building a metadata editor. Public, no auth needed.
@@ -579,7 +675,45 @@ curl -X POST http://localhost:3000/api/items/transition \
     "ids": ["id-1", "id-2"]
   }'
 # -> 201 [ { "id": "id-1", "version": 4 }, { "id": "id-2", "version": 2 } ]
+
+# Dry run of the publish check for one item. Gated like reading the item
+# (404, not 403, when the caller cannot see it); anonymous works on a public record.
+curl 'http://localhost:3000/api/items/<id>/validation?target=RECORD'
+# -> 200 { "ok": false,
+#          "missing":    [ { "path": "extent", "label": { "en": "Number of pages", "cnr": "Broj strana" } } ],
+#          "violations": [] }
 ```
+
+**Publish validation** (metadata schema v2, since 2026-09-24): every path that
+makes an item a RECORD — `POST /items/transition` to `RECORD` (single or bulk)
+and `POST /items` with `targetState: RECORD` — runs the schema v2 check first:
+each field is evaluated with the item's context (material type, collectionType,
+parents' collectionType); **missing** = visible + required + empty (`null`,
+blank string, `[]`, `{}`), **violations** = a value that breaks its
+`constraints`, or a `quantity` whose stored unit is not the evaluated one
+(`extent` in pages on a video). Hidden fields are never checked. Repeatable
+objects are checked per element (`corporateBodies[1].name`). Failure is
+all-or-nothing, inside the transition's transaction, before any row moves:
+
+```json
+{ "statusCode": 400, "code": "PUBLISH_VALIDATION_FAILED",
+  "message": "1 of 2 items are not ready to publish",
+  "items": [ { "id": "clx…",
+               "missing": [ { "path": "materialType", "label": { "en": "Material type", "cnr": "Vrsta građe" } } ],
+               "violations": [ { "path": "extent", "label": { … }, "constraint": "unit", "limit": "minutes" } ] } ] }
+```
+
+`items` lists only the failing items; `id` is `null` for a `POST /items` that
+created nothing. A violation carries `constraint` (a `constraints` key or
+`unit`), plus `limit` (the broken bound / expected unit) or `hint` (a
+`patternHint`) when there is one. Not validated: draft create/update, `PATCH`
+of an existing RECORD (old COBISS records would demand new fields on every
+edit), the COBISS import worker (it reports would-fail records as
+[warnings](#import-cobiss) instead). What is required today: `title`,
+`collectionType`, `materialType`, plus per type `extent` (books, manuscripts,
+video, sound — not on a collection), map scale (`cartographicMathematicalData`
+for maps), `issue.number` + `issue.date` (an issue of a serial). The rule table
+lives in `src/modules/schema/v2/record-fields.ts`.
 
 **What `version` means:**
 
@@ -651,11 +785,15 @@ exactly as strictly as a real one: it still returns `404` for a missing id and
 | `publication`           | object           | `{year, place, publisher, manufacturerName, placeOfManufacture}` |
 | `edition`               | string           |                                    |
 | `dimensions`            | string           |                                    |
-| `physicalDescription`   | string           |                                    |
+| `physicalDescription`   | string           | 215/a free text, e.g. `"253 str."` |
+| `extent`                | object           | `{value, unit}` — integer ≥ 0 + an `extentUnit` code (`pages`, `sheets`, `volumes`, `items`, `minutes`); schema v2 |
+| `issue`                 | object           | `{volume, number, date}` — `date` is `YYYY`, `YYYY-MM` or `YYYY-MM-DD` (a real calendar date); one issue of a serial; schema v2 |
+| `keywords`              | string[]         | 610/a free keywords; parsed from COBISS; schema v2 |
+| `summaryNote`           | string           | 330/a summary; parsed from COBISS; schema v2 (was dropped silently before) |
 | `notes`                 | string[]         |                                    |
-| `isbn`                  | string           |                                    |
-| `issn`                  | string           |                                    |
-| `series`                | object           | Series info                        |
+| `isbn`                  | string[]         |                                    |
+| `issn`                  | string[]         |                                    |
+| `seriesTitle` …         | string           | `seriesTitle`, `seriesSubtitle`, `seriesResponsibility`, `seriesIssn`, `seriesVolume` |
 | `collectionType`        | number           | Auto-set to 0                      |
 | `jeGlavnoGradivo`       | boolean          | Auto-set to true                   |
 | `childrenInDrafts`      | number           | Auto-managed via DB triggers       |
@@ -1023,12 +1161,21 @@ curl http://localhost:3000/api/import/jobs/<jobId>
     "failed": 1,
     "errors": [
       { "id": "123456", "reason": "No data returned from COBISS for id..." }
+    ],
+    "warnings": [
+      { "id": "36797700", "reason": "Imported as a record, but would not pass publish validation: missing extent" }
     ]
   },
   "failedReason": null,
   "finishedAt": "2024-01-15T10:35:00.000Z"
 }
 ```
+
+`warnings` (schema v2): an import with `target: RECORD` is **never** blocked by
+publish validation — COBISS is the catalogue of record — but each imported
+record that a hand-publish would have refused is listed here, so it can be
+fixed later. Counted in `succeeded`, not `failed`. Absent on jobs queued
+before schema v2.
 
 ---
 
@@ -1075,11 +1222,12 @@ redis-cli -p 6379 KEYS "bull:user-sync:*"
 5. **Transition**: Moving DRAFT->RECORD (or reverse) copies data to the target table, re-links relations and files, then deletes from the source table
 6. **PGSync**: Changes to Postgres are automatically synced to OpenSearch indices in real-time
 7. **Search limit**: OpenSearch hard limit of `from + size < 10000`
-8. **Metadata validation**: Unknown metadata fields are silently dropped; known fields validated against type validators
+8. **Metadata validation**: Unknown metadata fields are silently dropped; known fields validated against type validators (`METADATA_VALIDATORS` in `src/core/types/metadata.types.ts`). Schema v2's self-check guarantees the schema never advertises a field this drops
 9. **Write responses**: `POST /items` returns `201` with the created item (including its `id`); file upload returns `201` with the created attachments; `relations/connect` and `transition` return `201` with the resulting version(s), `relations/disconnect` returns `200` with the parent's state; `PATCH` returns `200 { version }`; `DELETE` returns `200` with empty body
 10. **Relations**: self-references and circular relations (direct or transitive) are rejected with `400`
 11. **Timestamps**: all timestamp columns are `timestamptz`, so REST (`…Z`) and the indexed `_source` copy (`…+00:00`) denote the same instant and parse identically
 12. **`version` is a write counter, not a change counter** — see [Versioning](#items) above before using it as a change signal
+13. **Publishing is validated**: DRAFT → RECORD and create-as-RECORD run the schema v2 publish check; drafts, record edits and imports do not — see [Publish validation](#items)
 
 ---
 

@@ -27,6 +27,25 @@ Needed after a mapping change in `infrastructure/docker/pgsync/schema.json`
 
 Small datasets re-sync in seconds.
 
+## Adding a mapping for a field that does not exist yet — no reindex
+
+A reindex is only needed to **change** a field's mapping. A field that no
+document has used yet can be declared in place: add it to `schema.json` (so new
+environments get it) **and** put the same mapping on the live indices once:
+
+```bash
+curl -XPUT 'localhost:9200/records,drafts/_mapping' -H 'Content-Type: application/json' \
+  -d '{"properties":{"metadata":{"properties":{"issue":{"properties":{"date":{"type":"keyword"}}}}}}}'
+curl 'localhost:9200/records,drafts/_mapping/field/metadata.issue.date'   # check
+```
+
+That exact command is a **one-off deploy step for metadata schema v2**
+(`metadata.issue.date` as `keyword`, 2026-09-24): done on dev, still to run on
+production. Run it before the first item with an `issue` is saved; afterwards
+dynamic mapping would already have picked a type and only a reindex could
+change it. pgsync passes `properties` inside a `transform.mapping` entry
+through unchanged, for `object` fields as for `nested` ones.
+
 ## Declaring a nested child
 
 To map a child table as `nested`, put
