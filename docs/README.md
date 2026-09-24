@@ -46,7 +46,7 @@ English.
 | [Material-type field visibility in the item editor](frontend/plans/material-type-field-visibility.md): type picked first, only that type's fields shown, the rest folded into "Other fields"; static map now, schema v2 rules later | web | TODO 2026-09-23 |
 | [Usage metrics outlive their items](backend/plans/usage-metrics-orphans.md) — deleted items in "most viewed" | backend | TODO, needs a decision |
 | [Collection view types](frontend/plans/collection-views.md) — per-`collectionType` layouts | web | PLANNING, needs input |
-| [Admin nice-to-have](frontend/plans/admin-nice-to-have.md) — 16 small workflow ideas | web | yes/no per item |
+| [Admin nice-to-have](frontend/plans/admin-nice-to-have.md) — 16 small workflow ideas | web | DECIDED 2026-09-24: A1, A2, A3b, A4, A5, A6, A8, A9 accepted and on the canvas; rest rejected or deferred (B1–B5) |
 | [Move `user_profiles` out of `public`](backend/plans/postgres-schema-split.md) | backend | DEFERRED (not rejected) |
 | [Production incident follow-ups](infrastructure/plans/infrastructure-todo.md) — `10.10.11.1:443`, worker client secret | infrastructure | see doc |
 | [Backend → Keycloak internal routing](infrastructure/plans/keycloak-internal-routing-fix.md) — bare-IP hostname breaks JWKS + user sync | infrastructure | plan; check against commit `9705fbc` |
