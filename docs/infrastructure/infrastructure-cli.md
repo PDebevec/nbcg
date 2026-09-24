@@ -5,13 +5,13 @@ a frontend, a backend, and the Docker services they depend on (PostgreSQL,
 Keycloak, Redis, OpenSearch, SeaweedFS, pgAdmin, pgsync). In development the
 frontend and backend run on the host under pm2 rather than in containers.
 
-Everything is driven by one step registry ([`scripts/lib/steps.js`](scripts/lib/steps.js)),
+Everything is driven by one step registry ([`scripts/lib/steps.js`](../../infrastructure/scripts/lib/steps.js)),
 which both entry points read — so a step behaves identically whether you run it
 from the menus or from the shell.
 
 ## Requirements
 
-`make check ENV=dev|prod` (see [`scripts/requirements.js`](scripts/requirements.js))
+`make check ENV=dev|prod` (see [`scripts/requirements.js`](../../infrastructure/scripts/requirements.js))
 verifies everything the target environment actually needs. What it checks is
 derived from `master.config.json`, so it tracks your configuration rather than a
 hardcoded list:
@@ -67,8 +67,8 @@ make config A=merge                # add settings the template gained
 ```
 
 The Makefile targets are thin calls into the npm scripts in
-[`package.json`](package.json), which are themselves aliases for
-[`scripts/run.js`](scripts/run.js). Both lower layers stay usable directly —
+[`package.json`](../../infrastructure/package.json), which are themselves aliases for
+[`scripts/run.js`](../../infrastructure/scripts/run.js). Both lower layers stay usable directly —
 `npm run step -- config dev` from this directory, or
 `node scripts/run.js step config dev` — which is occasionally handy when make's
 variable syntax gets in the way.
@@ -185,7 +185,7 @@ are:
 
 - **Postgres (`db`, `keycloak-db`) and OpenSearch's security config get
   reconciled with the current `.env` on every prod `up`**, unconditionally
-  (see [`lib/reconcile-utils.js`](scripts/lib/reconcile-utils.js)). Both
+  (see [`lib/reconcile-utils.js`](../../infrastructure/scripts/lib/reconcile-utils.js)). Both
   operations are idempotent, so this costs a few seconds even when nothing
   was stale.
 - **Whatever that leaves — or finds — unhealthy gets restarted automatically**,
@@ -212,7 +212,7 @@ appears to have had no effect.
 ### Certificates
 
 The `certs` step creates a private **CA** and issues leaf certificates from it
-([`lib/cert-utils.js`](scripts/lib/cert-utils.js)):
+([`lib/cert-utils.js`](../../infrastructure/scripts/lib/cert-utils.js)):
 
 | File | For | Valid for |
 |---|---|---|
@@ -259,7 +259,7 @@ rejected" rather than as anything that looks like a configuration problem.
 The backend fetches its `jwksUri` from `${KEYCLOAK_URL}` — always the
 canonical hostname, since that is just a reachability concern for the
 container, not something a browser ever sees
-([`backend/src/core/auth/keycloak.strategy.ts`](../backend/src/core/auth/keycloak.strategy.ts)).
+([`backend/src/core/auth/keycloak.strategy.ts`](../../backend/src/core/auth/keycloak.strategy.ts)).
 In prod that is the **public** HTTPS URL, which a container on an internal
 network can neither resolve nor trust.
 
@@ -355,7 +355,7 @@ Quasar inlines every `import.meta.env.VITE_*` value at build time, reading
 ## Menus
 
 All menus share one framework (`runMenu` / `runAction` in
-[`lib/cli-util.js`](scripts/lib/cli-util.js)), so they behave the same:
+[`lib/cli-util.js`](../../infrastructure/scripts/lib/cli-util.js)), so they behave the same:
 
 - **Entries are never hidden**, only disabled with the reason shown — so you can
   always see what exists and what it is waiting on.
@@ -457,7 +457,7 @@ state this CLI can be in.
   prod, where nginx terminates TLS on 443. In prod the frontend itself never
   bakes in one hostname either — it derives Keycloak's URL from
   `window.location.origin` at runtime
-  ([`frontend/src/services/keycloak.ts`](../frontend/src/services/keycloak.ts)),
+  ([`frontend/src/services/keycloak.ts`](../../frontend/src/services/keycloak.ts)),
   which is what makes the whole chain — frontend, Keycloak, backend — follow
   whichever hostname the browser actually used instead of forcing everyone
   back to the canonical one mid-login.
@@ -541,7 +541,7 @@ Deliberately different in the two places, because they have different needs:
 
 ## Migrations and health checks
 
-Both live in [`scripts/lib/db-utils.js`](scripts/lib/db-utils.js).
+Both live in [`scripts/lib/db-utils.js`](../../infrastructure/scripts/lib/db-utils.js).
 
 **Migrate** follows `scripts/migrate.sh` for dev: it checks that the `db`
 container is running (failing immediately if not, rather than polling a
@@ -570,7 +570,7 @@ summarise as `N/N running · N healthy · …`.
   password-reset flow will fail at the point of sending mail. Configure SMTP in
   the realm or turn the feature off.
 - **The backend logs every query** (`log: ['query', …]` in
-  [`prisma.service.ts`](../backend/src/core/prisma/prisma.service.ts)), which is
+  [`prisma.service.ts`](../../backend/src/core/prisma/prisma.service.ts)), which is
   very noisy for production.
 - **Volumes are plain docker volumes.** `config.template.yml` describes a ZFS
   dataset (`zfs.base`) for prod data; nothing implements that yet.

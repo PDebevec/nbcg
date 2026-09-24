@@ -4,7 +4,7 @@
 
 > **Superseded on storage only.** `work_tasks`/`task_comments` were replaced the
 > same day by `tasks` + `task_history` — see
-> [the rewrite](backend-task-history-rewrite.md). `task_comments` is gone: a
+> [the rewrite](task-history-rewrite.md). `task_comments` is gone: a
 > comment is now one action in an append-only log, and the log **survives item
 > deletion**, which this design could not do.
 >
@@ -51,7 +51,7 @@ plan disagree, and the plan text has NOT been rewritten to hide them.
 
 ### The plan as written
 
-The sequenced plan for [Task Delegation](backend-task-delegation.md). Read that
+The sequenced plan for [Task Delegation](task-delegation.md). Read that
 document for *why* the feature exists and for the two Keycloak traps; read this
 one for what to build. Where they disagree, this one wins — the differences are
 listed under "Corrections" below.
@@ -60,7 +60,7 @@ listed under "Corrections" below.
 
 Considered and rejected: putting `work_tasks`/`task_comments` in a new `app`
 schema alongside `user_profiles`, per
-[Move `user_profiles` out of `public`](backend-postgres-schema-split.md).
+[Move `user_profiles` out of `public`](../plans/postgres-schema-split.md).
 
 The reasoning is worth recording, because the instinct behind it was right and
 will recur. Tasks genuinely are not metadata — a task is a conversation between
@@ -99,7 +99,7 @@ already read as workflow rather than catalogue, and renaming `user_profiles`
 would cost a migration plus 13 raw-SQL edits to buy nothing. A grouped comment
 block in `schema.prisma` carries the distinction at zero cost.
 
-## Corrections to `backend-task-delegation.md`
+## Corrections to `docs/backend/history/task-delegation.md`
 
 1. **`TaskKind` exists.** Decided in conversation, never written down. The doc's
    guard rail — "assigning a *review/publish* task to a non-publisher is a 400" —
@@ -125,7 +125,7 @@ carries the domain distinction the schema split would otherwise have expressed:
 // Staff workflow. Not metadata: a task is a conversation between two people
 // that happens to name an item, and nothing here would be exported with the
 // collection. Deliberately in `public` anyway — see
-// todo/backend-task-delegation-plan.md for why a separate schema was rejected,
+// docs/backend/history/task-delegation-plan.md for why a separate schema was rejected,
 // and what would make it worth revisiting.
 // ---------------------------------------------------------------------------
 
@@ -728,17 +728,17 @@ assignee-validation matrix are cheap there and need no running stack.
 
 ## Phase 5 — Documentation
 
-- **`BACKEND_REFERENCE.md`** — the five new endpoints, and the `work_tasks` /
+- **`docs/backend/reference.md`** — the five new endpoints, and the `work_tasks` /
   `task_comments` rows in the table listing with a one-line note that they are
   staff workflow rather than metadata. Line ~506's claim that display-name
   resolution "does not exist yet" is already stale from the directory work and
   should be corrected while there.
-- **`backend-task-delegation.md`** — apply the four corrections above and close
+- **`docs/backend/history/task-delegation.md`** — apply the four corrections above and close
   the open questions.
-- **`backend-postgres-schema-split.md`** — add a status note: deferred, not
+- **`docs/backend/plans/postgres-schema-split.md`** — add a status note: deferred, not
   rejected; the trigger is a database role that must not see staff PII; when it
   happens, `work_tasks` and `task_comments` move with `user_profiles`.
-- **`todo/README.md`** — statuses.
+- **`docs/README.md`** — statuses.
 
 ---
 

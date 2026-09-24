@@ -66,7 +66,7 @@ function missingArrayEntries(live, template) {
  *
  * `available_hostnames` is the only one today: the template ships
  * "localhost"/"127.0.0.1" as illustrative starting values, and removing them
- * for a real deployment (README: "Put the host you actually browse to
+ * for a real deployment (docs/infrastructure/infrastructure-cli.md: "Put the host you actually browse to
  * first") is correct, expected editing — not something `make check` should
  * ever block Setup over. The key's mere *presence* is still checked above;
  * only its element-by-element diff is skipped.

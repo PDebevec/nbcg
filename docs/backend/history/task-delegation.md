@@ -5,11 +5,11 @@
 > **Built.** This document is kept for the *why*: the two Keycloak traps, the
 > terminology inversion, and the reasoning behind the id-only item reference. For
 > what was actually built and in what order, see
-> [the implementation plan](backend-task-delegation-plan.md); for how to call it,
-> see `backend/BACKEND_REFERENCE.md`.
+> [the implementation plan](task-delegation-plan.md); for how to call it,
+> see `docs/backend/reference.md`.
 >
 > Its prerequisite,
-> [User Directory + Attribution Snapshots](backend-user-directory-sync.md),
+> [User Directory + Attribution Snapshots](user-directory-sync.md),
 > shipped on 2026-08-13.
 >
 > **Four things in this document were wrong or incomplete and are corrected
@@ -136,7 +136,7 @@ No FK is possible against a polymorphic reference — same situation as
 > `RETURNED`/`COMMENTED`/`UPDATED`/`CLOSED_ON_PUBLISH`), mirroring
 > `item_revisions`. The decisive gain: **the log survives item deletion**, which
 > a cascading comments table cannot do. See
-> [the rewrite](backend-task-history-rewrite.md).
+> [the rewrite](task-history-rewrite.md).
 >
 > Also missing below and added since: `TaskKind`, and a second index for the
 > advertised `?createdBy=me` filter.
@@ -188,7 +188,7 @@ parsed as local time.
 
 ### User directory — BUILT, consume it as-is
 
-> Fully replaced by [User Directory + Attribution Snapshots](backend-user-directory-sync.md).
+> Fully replaced by [User Directory + Attribution Snapshots](user-directory-sync.md).
 > The `UserProfile` sketch that used to live here has been deleted rather than kept
 > "for context", because it differed from what shipped in ways that would mislead:
 > it had a `groups` column (dropped — rights are the lookup key, not membership),
@@ -244,7 +244,7 @@ directory for a group of rows.** Tasks are read as groups.
 
 `tasks` and `task_history` are keyed by `itemId`, so they belong in `public`
 alongside the item model — see
-[Move `user_profiles` to a `directory` schema](backend-postgres-schema-split.md),
+[Move `user_profiles` to a `directory` schema](../plans/postgres-schema-split.md),
 which moves only the one table that has no item linkage. If that split has landed
 by the time this is built, both new models need `@@schema("public")`.
 
@@ -302,9 +302,9 @@ Guard rails worth enforcing server-side, not just in the UI:
   the "has an open task" badge needs no uniqueness to work.
 - ~~**Where do the tables live?**~~ **Decided: `public`.** A separate Postgres
   schema only earns its keep as a *grant boundary*, and no database role needs
-  one. See [the split doc](backend-postgres-schema-split.md), deferred not
+  one. See [the split doc](../plans/postgres-schema-split.md), deferred not
   rejected, and the reasoning in
-  [the plan](backend-task-delegation-plan.md).
+  [the plan](task-delegation-plan.md).
 - **Task-driven publish** (`POST /api/tasks/:id/publish`) — not built. The
   observer in `transition()` is the correctness mechanism and cannot be removed,
   so this would be ergonomics on top. Revisit if the GUI wants a one-click

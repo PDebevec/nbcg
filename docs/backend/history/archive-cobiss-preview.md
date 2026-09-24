@@ -1,6 +1,6 @@
 # Backend: Synchronous COBISS preview (fetch without persist)
 
-## Status: DONE (backend) / TODO (frontend wire-up)
+## Status: DONE (backend) / TODO (archive app wire-up — tracked in [archive-app.md](../../shared/archive-app.md))
 
 ## Why we need it
 

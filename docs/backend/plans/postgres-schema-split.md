@@ -31,7 +31,7 @@ right tool and per-table `REVOKE` is not, because a new staff table added later
 would silently inherit the grant.
 
 **When it happens, three tables move, not one.** [Task
-Delegation](backend-task-history-rewrite.md) puts `tasks` and `task_history` in
+Delegation](../history/task-history-rewrite.md) puts `tasks` and `task_history` in
 `public` for now, but they are staff workflow by the same argument as
 `user_profiles` — none of the three would be exported with the collection. Move
 all three together and add `directory.` to the raw-SQL inventory below.
@@ -155,7 +155,7 @@ no `"schema"` key.
 **7. Backups need no change.** `infrastructure/scripts/backup.sh` runs restic over
 docker *volumes*, not `pg_dump`.
 
-**8. `BACKEND_REFERENCE.md`'s "Useful Queries" need no change** — every snippet
+**8. `docs/backend/reference.md`'s "Useful Queries" need no change** — every snippet
 there touches `drafts`, `records`, `file_attachments` or `item_relations`.
 
 ## Raw SQL to qualify: 13 sites, none in `src/`
@@ -233,7 +233,7 @@ or any FK — there are none.
   That is a real access-control boundary, not just tidiness.
 - **`\dt public.*` becomes an honest answer** to "what is the metadata model?"
 - **The next non-item table has an obvious precedent.** When
-  [Task Delegation](backend-task-delegation.md) adds `WorkTask`/`TaskComment` —
+  [Task Delegation](../history/task-delegation.md) adds `WorkTask`/`TaskComment` —
   which *are* item-linked and so belong in `public` — the question at least gets
   asked deliberately.
 
@@ -264,7 +264,7 @@ or any FK — there are none.
       migrations alone.
 
 ### Docs
-- [ ] `BACKEND_REFERENCE.md` — mark `user_profiles` as `directory.user_profiles`
+- [ ] `docs/backend/reference.md` — mark `user_profiles` as `directory.user_profiles`
       in the table listing, add a short "Database layout" note (`public` = the
       item model and its CDC-tracked tables; `directory` = the Keycloak shadow),
       and state the raw-SQL qualification rule. "Useful Queries" unchanged.

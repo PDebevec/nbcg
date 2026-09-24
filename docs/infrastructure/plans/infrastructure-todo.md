@@ -12,7 +12,7 @@
 
 ## Context
 
-You reported `https://10.10.11.1:443` returning nothing — no payload — and asked for a read-only investigation (this is production; no fixes were to be made in this session) into the running Docker stack, with a concrete plan written to this file. Two parallel investigations were run: one against the codebase/config (`infrastructure/README.md`, compose files, nginx/Keycloak config), one against the live host (`docker ps`, container logs, port/listener checks, a direct `curl` against the endpoint). Both converged on the same root cause independently.
+You reported `https://10.10.11.1:443` returning nothing — no payload — and asked for a read-only investigation (this is production; no fixes were to be made in this session) into the running Docker stack, with a concrete plan written to this file. Two parallel investigations were run: one against the codebase/config (`docs/infrastructure/infrastructure-cli.md`, compose files, nginx/Keycloak config), one against the live host (`docker ps`, container logs, port/listener checks, a direct `curl` against the endpoint). Both converged on the same root cause independently.
 
 ---
 
@@ -72,7 +72,7 @@ server {
 
 ## The documented fix mechanism (for the record / to cross-check against what you applied)
 
-`infrastructure/README.md` documents `available_hostnames` as *the single place hostnames are configured*, and states every entry becomes "a fully working way to reach the app — login included, not just browsing." Adding an entry is supported, expected operation (not a hack):
+`docs/infrastructure/infrastructure-cli.md` documents `available_hostnames` as *the single place hostnames are configured*, and states every entry becomes "a fully working way to reach the app — login included, not just browsing." Adding an entry is supported, expected operation (not a hack):
 
 1. Add `10.10.11.1` to `available_hostnames` in `infrastructure/master.config.json`.
 2. `make step STEP=config ENV=prod` — merges it into the root `.env` (`ALLOWED_HOSTNAMES`, `CORS_ORIGIN`, `KEYCLOAK_ISSUERS` all regenerate to include it).

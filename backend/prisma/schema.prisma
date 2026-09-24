@@ -151,7 +151,7 @@ model ItemRevision {
   id     String       @id @default(cuid())
   itemId String
   /// The item's version *after* this change. Not a change counter — see
-  /// "What `version` means" in BACKEND_REFERENCE.md.
+  /// "What `version` means" in docs/backend/reference.md.
   version Int
   action ChangeAction
   /// [FieldChangeList]
@@ -248,7 +248,7 @@ model FileMetricDaily {
 // Staff workflow. Not metadata: a task is a conversation between two people
 // that happens to name an item, and nothing here would be exported with the
 // collection. Deliberately in `public` anyway — see
-// todo/backend-task-delegation-plan.md for why a separate schema was rejected,
+// docs/backend/history/task-delegation-plan.md for why a separate schema was rejected,
 // and what would make it worth revisiting.
 // ---------------------------------------------------------------------------
 

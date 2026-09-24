@@ -15,10 +15,10 @@ are all in and verified against the live stack.
 Remaining work is the Follow-on section: task delegation consuming
 `GET /api/users?capability=publish`, and the frontend.
 
-Split out of [Task Delegation](backend-task-delegation.md), which sketched a
+Split out of [Task Delegation](task-delegation.md), which sketched a
 `UserProfile` model but left the sync mechanism open.
 
-> **Follow-up planned:** [Move `user_profiles` to a `directory` schema](backend-postgres-schema-split.md)
+> **Follow-up planned:** [Move `user_profiles` to a `directory` schema](../plans/postgres-schema-split.md)
 > — it is the only table in the database with no link to an item. Nothing in this
 > task changes if that lands: every read here goes through Prisma, which qualifies
 > from `@@schema` automatically.
@@ -405,7 +405,7 @@ model UserProfile {
 
 As shipped this lives in `public`, like everything else. Moving it to a
 `directory` schema is planned separately —
-[Move `user_profiles` to a `directory` schema](backend-postgres-schema-split.md).
+[Move `user_profiles` to a `directory` schema](../plans/postgres-schema-split.md).
 It changes no code in this task: `UsersService` and `UserSyncService` go
 through Prisma, which qualifies from `@@schema` on its own.
 

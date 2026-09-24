@@ -17,7 +17,7 @@ Two things happened in sequence:
 1. Earlier this session, `KEYCLOAK_WORKER_CLIENT_SECRET` was wired up end-to-end (generated,
    routed to the backend, reconciled into the live Keycloak client) to fix
    `UserSyncService`'s `KEYCLOAK_WORKER_CLIENT_SECRET is not set` error — see
-   `todo/infrastructure-todo.md`. That fix worked: the secret is now present, and the code gets
+   `docs/infrastructure/plans/infrastructure-todo.md`. That fix worked: the secret is now present, and the code gets
    past that check.
 2. Getting past that check exposed a **different, pre-existing** problem one step later: the
    actual network call to Keycloak now fails with `fetch failed`.
@@ -96,7 +96,7 @@ just not first):
 
 Then, since this changes `KEYCLOAK_URL`/`CORS_ORIGIN`/`KEYCLOAK_ISSUERS`/nginx's `server_name`/the
 TLS cert's SAN (same regeneration chain as the earlier hostname-allowlist incident in
-`todo/infrastructure-todo.md`):
+`docs/infrastructure/plans/infrastructure-todo.md`):
 
 1. `make step STEP=config ENV=prod` — regenerates the root `.env` from the new hostname order.
 2. `make step STEP=certs ENV=prod` — reissues the nginx leaf cert (README: "Leaves are reissued

@@ -1,6 +1,12 @@
 # Backend + Frontend: Material-Type-Based Field Visibility
 
-## Status: TODO
+## Status: SUPERSEDED (2026-09-23)
+
+> Replaced by the rule-based schema in
+> [Metadata schema v2](../../shared/plans/metadata-schema-v2.md): one `rules`
+> mechanism covers material type, collection type and parent collection, and
+> can change `required`/`unit`/`label` as well as visibility. Kept for the
+> reasoning and the material-type category table.
 
 ## Why we need it
 

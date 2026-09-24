@@ -46,7 +46,7 @@ filter them out of the stats read.
 ### The plan as written
 
 Replaces the `work_tasks` / `task_comments` pair shipped on 2026-08-16 (see
-[the delegation plan](backend-task-delegation-plan.md)) with:
+[the delegation plan](task-delegation-plan.md)) with:
 
 - **`tasks`** — current state. Who gave what to whom, when, and how it stands now.
 - **`task_history`** — append-only audit. What transpired, in order, attributed.
@@ -347,13 +347,13 @@ which does not change. Re-run it anyway; it is not wired into any build step.
 
 ## Phase 5 — Documentation
 
-- `BACKEND_REFERENCE.md` — replace the `work_tasks`/`task_comments` table block
+- `docs/backend/reference.md` — replace the `work_tasks`/`task_comments` table block
   and the Tasks endpoint section; state the delete asymmetry explicitly, since it
   is the surprising part.
-- [the delegation plan](backend-task-delegation-plan.md) — mark superseded on the
+- [the delegation plan](task-delegation-plan.md) — mark superseded on the
   storage model, still authoritative on the guard, the observer and the picker.
-- `todo/README.md`, and drop the now-stale `task_comments` mention from
-  [the schema-split doc](backend-postgres-schema-split.md) (three tables still
+- `docs/README.md`, and drop the now-stale `task_comments` mention from
+  [the schema-split doc](../plans/postgres-schema-split.md) (three tables still
   move together, one of them is now named differently).
 
 ---

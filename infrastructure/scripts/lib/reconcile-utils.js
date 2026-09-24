@@ -158,11 +158,11 @@ async function keycloakCurl(script, env = {}) {
  * Keeps the `nbcg-web` client's redirectUris/webOrigins in sync with the
  * current root .env.
  *
- * The actual fix for the realm-import staleness this project's own README
+ * The actual fix for the realm-import staleness this project's own docs
  * already documents but never wires up: Keycloak's `--import-realm` skips a
  * realm that already exists (confirmed live — `Strategy: IGNORE_EXISTING`),
  * so a changed hostname never reaches an already-provisioned deployment on
- * its own. The README's suggested remedy, `KC_IMPORT_STRATEGY=OVERWRITE_EXISTING`,
+ * its own. The docs' suggested remedy, `KC_IMPORT_STRATEGY=OVERWRITE_EXISTING`,
  * turns out to not apply to `--import-realm` at all (that override belongs to
  * a separate, offline `kc.sh import` command) — and confirmed via Keycloak's
  * own docs, actually overwriting a realm wipes real user credentials and MFA
