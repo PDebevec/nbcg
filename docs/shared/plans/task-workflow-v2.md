@@ -114,7 +114,7 @@ Who may do what (all require being staff — `drafts:manage` or
 | `GENERAL` | `{ note? }` | Task COMPLETED. Nothing else happens. |
 | `GENERAL` | `{ note?, next: { kind: FIX_METADATA \| REVIEW_PUBLISH, assignedToUserId } }` | Stays OPEN, moves to `next.kind` with the new assignee — **may be yourself**. |
 | `FIX_METADATA` | `{ note?, next: { kind: REVIEW_PUBLISH, assignedToUserId } }` — `next` **required** | Stays OPEN, moves to REVIEW_PUBLISH. Assignee must be able to publish (may be yourself if you can). |
-| `REVIEW_PUBLISH`, item is a DRAFT | `{ note? }` | **Publishes the item** (DRAFT → RECORD, same code path and checks as any publish, incl. [publish validation](metadata-schema-v2.md#publish-validation)), then the task is COMPLETED. The caller's own token must allow publishing. |
+| `REVIEW_PUBLISH`, item is a DRAFT | `{ note? }` | **Publishes the item** (DRAFT → RECORD, same code path and checks as any publish, incl. [validation on save](metadata-schema-v2.md#validation-on-save)), then the task is COMPLETED. The caller's own token must allow publishing. |
 | `REVIEW_PUBLISH`, item is already a RECORD | `{ note? }` | Task COMPLETED as "reviewed" — nothing to publish. (Happens after a FIX_METADATA on a published record.) |
 
 If the item is published **outside** the task (items list, bulk publish,
@@ -190,7 +190,8 @@ The four action routes answer **200** with the task view (as in a list row — n
 terminal task), 403 when the caller may not do this action on this task (or,
 completing a review of a draft, when their token cannot publish), 404 for an
 unknown task. Completing a review of a draft passes publish validation's
-`400 PUBLISH_VALIDATION_FAILED` through unchanged.
+`400 PUBLISH_VALIDATION_FAILED` through unchanged (renamed `METADATA_VALIDATION_FAILED` by
+schema v2 B9 — same body plus each item's `state`).
 
 Response changes on the task view:
 

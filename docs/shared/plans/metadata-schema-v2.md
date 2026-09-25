@@ -1,14 +1,16 @@
 # Metadata schema v2 — the contract
 
-## Status: backend DONE (B1–B6, 2026-09-24, not yet in production) · web and archive app next
+## Status: backend B1–B6 DONE (2026-09-24, dev) · decisions of 2026-09-25 → backend B8–B12 OPEN · then web and archive app
 
 The backend implements this contract as written, with the refinements marked
 **(as built)** below; details and the decisions taken on the way are in the
 [backend plan](../../backend/plans/metadata-schema-v2.md#done--what-was-built-2026-09-24).
+The review against the archive app (2026-09-25) changed the contract: marked
+**(2026-09-25)** below, not built yet — backend phases B8–B12.
 
 | Doc | What it covers |
 |---|---|
-| **this file** | The JSON contract every client builds its editor from, the rule language, the suggest/vocabulary calls, publish validation. The one place both sides agree on. |
+| **this file** | The JSON contract every client builds its editor from, the rule language, the suggest/vocabulary calls, validation on save. The one place both sides agree on. |
 | [Backend plan](../../backend/plans/metadata-schema-v2.md) | What changes in NestJS, in which order, which tests. |
 | [Web frontend plan](../../frontend/plans/metadata-schema-v2.md) | Moving the admin editor from hard-coded fields to this schema. |
 | [Archive app migration](metadata-schema-v2-archive-app.md) | What the desktop archive app (at the client, `nbcg-dc`) must change to use v2. |
@@ -43,10 +45,12 @@ since `cd8e5bd`). What is missing:
    free text (publisher, place, keywords, dimensions), the user should see the
    5 most common existing spellings as they type, click one to fill the input,
    and still edit it freely. The point is consistency ("how did others write
-   this?"), not restriction.
-4. **Small closed lists inline, big ones searchable.** A list of 10–20 values is
-   sent whole (no extra calls). Languages (449) and relator roles (116) are not;
-   they get a search endpoint instead.
+   this?" — so one person's `computer` and another's `computers` don't both end
+   up in the keywords), not restriction. These lists grow without limit, so they
+   are never sent whole.
+4. **Small closed lists inline, big ones searchable.** A list of up to 50
+   values is sent whole (no extra calls). Languages (449), relator roles (116)
+   and content types (69) are not; they get a search endpoint instead.
 5. **Labels.** v1 has none, so every client keeps its own translations.
 
 ### Decisions already made (2026-09-23)
@@ -54,9 +58,24 @@ since `cd8e5bd`). What is missing:
 | Question | Decision |
 |---|---|
 | New schema per selection (e.g. re-fetch when material type changes)? | **No.** One call, one JSON, with the conditions inside. The client re-evaluates locally on every change. |
-| Where are required fields enforced? | **In the UI, and the backend blocks publishing** (DRAFT → RECORD). A draft may be incomplete. |
+| Where are required fields enforced? | ~~In the UI, and the backend blocks publishing (DRAFT → RECORD). A draft may be incomplete.~~ **Replaced 2026-09-25:** drafts have their own short required list, and the backend checks every write — see below. |
 | How does the schema know "collection" / "serial"? | The existing `collectionType` on the item: `0` not a collection, `1` primary, `3` standard, `4` serial. "Child of a serial" = a parent has `collectionType = 4`. |
 | Should the web frontend load the schema from the backend or keep a static copy? | **From the backend.** See [the frontend plan](../../frontend/plans/metadata-schema-v2.md#decision-load-the-schema-from-the-backend). |
+
+### Decisions 2026-09-25 (review against the archive app)
+
+| Question | Decision |
+|---|---|
+| Do a draft and a record need different fields? | **Yes, by a rule.** New context key `targetState` (`DRAFT` / `RECORD`): the state the item is being saved as. A **draft** needs a title and a material type, plus what was already required: collection type (defaults to 0), a name in each organisation entry, a URL in each link entry. A **record** also needs the publish fields: extent, map scale, issue number and date. Both editors evaluate with the state they save to — the web editor's draft or record, the archive app's Draft/Record choice per item. |
+| What does the backend check, and when? | **Every write**, against the rules of the state the item ends up in: create (as DRAFT or RECORD), PATCH (the item's current state — a RECORD must stay complete), transition (both directions), linking or unlinking a parent (each child re-checked). Only the COBISS import is exempt. See [Validation on save](#validation-on-save). |
+| Creating a child straight as RECORD: the backend checked it without its parents | **`POST /api/items` takes `parentIds`.** The check uses those parents, and the links are created in the same transaction. The response carries each parent's new `version`. Parents can still be linked later with `POST /api/relations/connect` (the archive app still does, for re-uploads). |
+| A parent was deleted before its children were uploaded | **The write stops:** `400 PARENT_NOT_FOUND` naming the missing ids, on create and on connect; nothing is created or linked. The client tells the user to change or remove that parent. |
+| Can the archive app's Draft/Record choice change after the item exists? | **No.** It is chosen only when the item is created, then locked. An existing item is edited in the state it is in on the backend (the app learns it through its sync); moving between Draft and Record is done in the web app. |
+| The archive app's hand-set main/child switch | **Removed.** "Child" and "issue of a serial" come only from the item's actual parents. |
+| Code lists too big to send whole — offline? | **Not needed**: both clients are always connected. Free text with many values gets hints (`suggest`), big fixed lists are searched (`language`, `relator`, `contentType`), only lists of ≤ 50 are sent whole. |
+| `collectionType` default | **`default: 0` in the schema** (new optional `default` on a field); `POST /api/items` keeps filling it in too. |
+| `numberingAndDates` (207) is marked "fill per issue" but never shown on an issue | **The marker is dropped.** 207 is the serial's own statement ("God. 1, br. 1 (1944)-"); issues use the `issue` object. |
+| Release order: the publish check vs. clients that are not on v2 yet | **None.** All data is test data (2026-09-25): wipe, reimport a few examples, re-upload from the archive app. |
 
 ---
 
@@ -67,7 +86,9 @@ since `cd8e5bd`). What is missing:
 | `GET /api/schema/v2/record` | The whole schema. | public |
 | `GET /api/search/vocabularies/:name?q=&limit=` | Search a controlled vocabulary too big to inline. | public |
 | `GET /api/search/suggest?field=&q=&limit=` | Existing endpoint: most common existing values. | public (visibility-filtered) |
-| `GET /api/items/:id/validation?target=RECORD` | Dry run of the publish check. | same as reading the item |
+| `GET /api/items/:id/validation?target=RECORD` | Dry run of the check; **(2026-09-25)** also `target=DRAFT`. | same as reading the item |
+| `POST /api/items` | **(2026-09-25)** new optional `parentIds: string[]`: checked with these parents, linked in the same transaction. The response adds `parents: [ { parentId, version, childrenInDrafts, childrenInRecords } ]` (what `connect` returns, one per parent). An unknown parent → `400 PARENT_NOT_FOUND`. | as today |
+| `POST /api/relations/connect` | **(2026-09-25)** re-checks each child ([Validation on save](#validation-on-save)); an unknown parent → `400 PARENT_NOT_FOUND` (was a plain 400). | as today |
 
 **v1 stays frozen** at `GET /api/schema/record` until the archive app has moved
 to v2 (the app runs at the client and cannot be updated in lock-step with a
@@ -120,14 +141,21 @@ That keeps the rule evaluator ~50 lines in any language.
   { "key": "isChild",              "type": "boolean",  "source": "parent", "description": "the item has at least one parent" },
   { "key": "parentCollectionType", "type": "number[]", "source": "parent", "path": "collectionType",
     "description": "collectionType of every parent; [] when there is none" },
-  { "key": "itemState",            "type": "string",   "source": "item",   "description": "NEW | DRAFT | RECORD" }
+  { "key": "itemState",            "type": "string",   "source": "item",   "description": "NEW | DRAFT | RECORD — where the item is now (NEW = not created yet)" },
+  { "key": "targetState",          "type": "string",   "source": "item",   "description": "DRAFT | RECORD — the state it is being saved as" }   // (2026-09-25)
 ]
 ```
 
 `source: "parent"` means the client must know the parent(s). The archive app
-knows it when it creates a child under a selected parent; the web editor reads
-`parent_relations` from the item and fetches the parent. The backend loads it
-itself when validating.
+knows them before it creates the item (the batch's parents); the web editor
+reads `parent_relations` from the item and fetches each parent. The backend
+loads them itself when validating — from `item_relations`, or from `parentIds`
+on create.
+
+**(2026-09-25)** `targetState` is what the save goes to: on create, the chosen
+state; on an edit, the item's current state; on a transition, the new one.
+`itemState` stays for rules about the item's existence (`cobissId` locks once
+the item exists).
 
 ### Vocabulary — a closed list of allowed values
 
@@ -199,6 +227,7 @@ itself when validating.
   "required": false,
   "visible": true,
   "readOnly": false,
+  "default": null,           // (2026-09-25) optional: the value a new item starts with (collectionType → 0)
   "unit": null,              // quantity only, e.g. { "code": "pages", "en": "p.", "cnr": "str." }
   "constraints": {           // all optional
     "minLength": 1, "maxLength": 500,
@@ -304,9 +333,9 @@ object fields: evaluate the object, then each objectShape field with the same ct
 ```
 
 The TypeScript implementation lives once in the backend and is copied verbatim
-into the web frontend; a conformance fixture (`context` in → expected field
-states out) is published so the archive app can test its own port against the
-same cases. See the backend plan.
+into the web frontend and the archive app (both TypeScript — nobody ports it);
+a conformance fixture (`context` in → expected field states out) is published
+so each copy is tested against the same cases. See the backend plan.
 
 **(as built)** Implementation: `backend/src/modules/schema/rules/evaluate.ts`
 — `buildContext`, `isEmpty`, `matches`, `evaluateField`, `evaluateAll`
@@ -319,21 +348,31 @@ refuse. Fixture: `backend/src/modules/schema/rules/conformance.json`, sections
 listed properties are compared; `unit` is the unit code, `label`/`help` the
 English text.
 
+**(2026-09-25)** `buildContext(metadata, parents, itemState, targetState)` —
+`targetState` becomes the fourth argument; `checkMetadata` is unchanged (it
+reads whatever context it is given).
+
 ### Editor rules every client follows
 
 1. **Hidden ≠ deleted.** A field that evaluates `visible: false` but already has
    a value (typical after a COBISS import or a material-type change) is shown in
    a collapsed **"Other fields"** section with a note, and saved unchanged. A
    client never drops data because of a rule.
-2. **Required is shown, not blocking on save.** Mark with `*`; show a
-   non-blocking "N required fields missing — cannot be published yet" summary.
-   Saving a draft always works.
+2. **(2026-09-25) Required depends on the state being saved to, and blocks
+   that save.** Evaluate with `targetState` = where the save goes, mark required
+   fields with `*`, and don't send while one is empty or a value breaks its
+   constraints — the backend would refuse it anyway. While editing a draft, a
+   client may also evaluate with `targetState: RECORD` and show a non-blocking
+   "N more fields needed to publish". (Was: required never blocks a draft.)
 3. **Units are written, not typed.** For a `quantity`, the client writes the
    evaluated `unit.code` next to the number on save. If the material type later
    changes, the editor shows the stored unit and flags the mismatch instead of
    silently reinterpreting 253 pages as 253 minutes.
 4. **Re-evaluate on every change** of a context field (`materialType`,
-   `recordType`, `bibliographicLevel`, `collectionType`) — no re-fetch.
+   `recordType`, `bibliographicLevel`, `collectionType`), of the draft/record
+   choice, or of the parents — no re-fetch.
+5. **(2026-09-25) New items start from `default`.** A field with a `default`
+   is prefilled on a new item (`collectionType` → 0).
 
 ---
 
@@ -373,29 +412,35 @@ case-insensitive). No `count`.
 
 ---
 
-## Publish validation
+## Validation on save
 
-Every path that makes an item a RECORD runs the same check:
-`POST /api/items/transition` (single or bulk), `POST /api/items` with
-`targetState: RECORD`, and completing a REVIEW_PUBLISH task (see
-[task workflow v2](task-workflow-v2.md) — built 2026-09-25: it goes through
-`transition()`, the 400 reaches the caller unchanged and the task stays OPEN).
+**(2026-09-25)** Was "publish validation": only paths that made an item a
+RECORD were checked. Now every write is checked, against the rules of the state
+the item ends up in (`targetState`):
+
+| Write | `targetState` | Parents |
+|---|---|---|
+| `POST /api/items` | the requested `targetState` | `parentIds` |
+| `PATCH /api/items/:id` with `metadata` (the stored metadata with the patch applied) | the item's current state — a RECORD must stay complete | `item_relations` |
+| `POST /api/items/transition` (single or bulk), and completing a REVIEW_PUBLISH task ([task workflow v2](task-workflow-v2.md): it goes through `transition()`, the 400 reaches the caller unchanged and the task stays OPEN) | the new state (both directions) | `item_relations` |
+| `POST /api/relations/connect` / `disconnect` | each child, in its current state | the child's parents after the change |
 
 For every field: evaluate it with the item's context; if it is **visible and
 required and empty** → missing; if it has a value that breaks `constraints` →
 violation. Required sub-fields of repeatable objects are checked per element
 (`corporateBodies[1].name`).
 
-Failure is all-or-nothing (transition is one transaction today) and says which
-item and which field:
+Failure is all-or-nothing (one transaction; nothing is created, changed, moved
+or linked) and says which item and which field:
 
 ```json
 {
   "statusCode": 400,
-  "code": "PUBLISH_VALIDATION_FAILED",
+  "code": "METADATA_VALIDATION_FAILED",
   "message": "1 of 2 items is not ready to publish",
   "items": [
     { "id": "clx…",
+      "state": "RECORD",
       "missing":    [ { "path": "extent", "label": { "en": "Number of pages", "cnr": "Broj strana" } } ],
       "violations": [ { "path": "publication.year", "constraint": "pattern",
                         "hint": { "en": "Four-digit year", "cnr": "Godina od četiri cifre" } } ] }
@@ -403,26 +448,40 @@ item and which field:
 }
 ```
 
+**(2026-09-25)** `code` was `PUBLISH_VALIDATION_FAILED` (as built in B6); it
+becomes `METADATA_VALIDATION_FAILED` because drafts fail too, and each item
+says whose rules it failed (`state`). `message` says "not ready to publish"
+when every failing item is a RECORD, "cannot be saved" otherwise.
+
 **(as built)** Each violation also carries the field's evaluated `label`, and
 `limit` for a broken bound (`minLength: 3` → `3`). A `quantity` whose stored
 unit is not the evaluated one is a violation `{ constraint: "unit", limit:
-"minutes" }` — editor rule 3 enforced on publish. `items` lists only failing
-items; `id` is `null` when `POST /api/items` created nothing. `message` is
-`"1 of 1 item is not ready to publish"` / `"1 of 2 items are not ready to
-publish"`.
+"minutes" }` — editor rule 3 enforced. `items` lists only failing items; `id`
+is `null` when `POST /api/items` created nothing.
 
-`GET /api/items/:id/validation?target=RECORD` returns the same `missing` /
+**(2026-09-25)** A parent that does not exist (deleted, or a wrong id) is a
+separate error, checked before the metadata:
+
+```json
+{ "statusCode": 400, "code": "PARENT_NOT_FOUND",
+  "message": "Parent not found: clx…", "parentIds": [ "clx…" ] }
+```
+
+`GET /api/items/:id/validation?target=RECORD|DRAFT` returns the same `missing` /
 `violations` for one item with `200 { ok: boolean, … }`, so a dialog can show
 the checklist before the user clicks.
 
 Deliberately **not** validated:
-- draft create/update (a draft is work in progress);
-- PATCH on an existing RECORD — otherwise every old COBISS record would demand
-  the new fields on its next edit. The editor still shows the warnings;
-- the COBISS import worker, even with `target: RECORD` — COBISS is the
-  catalogue of record; the job result lists the items that would fail, so they
-  can be fixed later. **(as built)** In `progress.warnings[] { id, reason }` of
+- the COBISS import worker — COBISS is the catalogue of record; the job result
+  lists the items that fail their target's rules, so they can be fixed later.
+  **(as built)** In `progress.warnings[] { id, reason }` of
   `GET /api/import/jobs/:id`, separate from `errors` (those items did import).
+  **(2026-09-25)** Because editing a RECORD is now checked, the import also
+  fills `extent` from COBISS 215 where it can (backend B11), so most imported
+  books don't block their first edit;
+- the **children** of an item whose own metadata changes (a Collection turned
+  into a Serial collection) or that is deleted — re-checking every child would
+  be unbounded. Each child is checked on its next write.
 
 ---
 
@@ -435,21 +494,29 @@ issue). Material-type categories are keyed on `recordType` (first letter of
 `g` video/projected, `i` `j` sound, `k` graphics, `l` electronic, `m` multimedia,
 `r` 3-D object.
 
+**(2026-09-25)** Required for a **draft**: `title`, `materialType`,
+`collectionType` (defaults to 0), `corporateBodies[].name`,
+`electronicLocation[].url`. Required for a **record**: all of those, plus
+`extent`, `cartographicMathematicalData` (scale), `issue.number`, `issue.date` —
+each only where its rule makes it visible. "record only" below = a rule with
+`targetState = RECORD` in its `when`.
+
 | Field | Base | Rules |
 |---|---|---|
-| `title` | required | — |
-| `collectionType` | `select`, required, default 0 | hidden when `isChild` and the parent is a serial (an issue is not a collection) |
-| `materialType` | `select` | required on publish (it drives every other rule) |
-| **`extent`** (new, `quantity`) | hidden | `a b c d` → visible, unit `pages` "str.", label "Broj strana"; `g i j` → visible, unit `minutes` "min", label "Trajanje"; `e f k` → visible, unit `sheets` "list."; **required** when `collectionType = 0` and `recordType ∈ a b g i j`; never required when `collectionType ≠ 0` (it lives on the children) |
-| `cartographicMathematicalData` (206, scale) | hidden | `e f` → visible + required, label "Scale" / "Razmjera" (as built; was "Merilo" here), help "1:25 000" |
+| `title` | required (draft + record) | — |
+| `collectionType` | `select`, required (draft + record), **`default: 0`** (2026-09-25) | hidden when `isChild` and the parent is a serial (an issue is not a collection) |
+| `materialType` | `select`, required — **(2026-09-25) for drafts too** | — (it drives every other rule) |
+| **`extent`** (new, `quantity`) | hidden | `a b c d` → visible, unit `pages` "str.", label "Broj strana"; `g i j` → visible, unit `minutes` "min", label "Trajanje"; `e f k` → visible, unit `sheets` "list."; **required, record only**, when `collectionType = 0` and `recordType ∈ a b g i j`; never required when `collectionType ≠ 0` (it lives on the children) |
+| `cartographicMathematicalData` (206, scale) | hidden | `e f` → visible, label "Scale" / "Razmjera" (as built; was "Merilo" here), help "1:25 000"; **required, record only** |
 | `musicEditionStatement` (208) | hidden | `c d j` → visible |
 | `ismn` | hidden | `c d` → visible |
 | `isbn` | visible | hidden when `bibliographicLevel = s` or `parentCollectionType ∋ 4` |
 | `issn` | hidden | visible when `bibliographicLevel ∈ s i` or `collectionType = 4` or `parentCollectionType ∋ 4` |
-| `numberingAndDates` (207) | hidden | visible when `bibliographicLevel ∈ s i` or `collectionType = 4` |
-| **`issue`** (new, `object`: `volume`, `number`, `date`) | hidden | `parentCollectionType ∋ 4` → visible; `number` and `date` required |
+| `numberingAndDates` (207) | hidden; **(2026-09-25) no longer `issueIdentifying`** — the serial's own statement, issues use `issue` | visible when `bibliographicLevel ∈ s i` or `collectionType = 4` |
+| **`issue`** (new, `object`: `volume`, `number`, `date`) | hidden | `parentCollectionType ∋ 4` → visible; `number` and `date` **required, record only** |
 | `textualMaterialCodes` (105) | hidden | `a b` → visible |
-| v1 `levels: ['main']` fields: `collectionType`, `isbn`, `ismn`, `textualMaterialCodes`, `titleByAnotherAuthor`, `authors`, `corporateBodies`, `edition`, `cartographicMathematicalData`, `musicEditionStatement` | — | **(as built, decided 2026-09-24)** hidden when `parentCollectionType ∋ 4` (an issue of a serial), as the last rule so it wins over the material-type rules. Not for other children: a book inside a fond keeps its authors |
+| `corporateBodies[].name`, `electronicLocation[].url` | required (draft + record) inside each entry | — (an entry without them means nothing) |
+| v1 `levels: ['main']` fields: `collectionType`, `isbn`, `ismn`, `textualMaterialCodes`, `titleByAnotherAuthor`, `authors`, `corporateBodies`, `edition`, `cartographicMathematicalData`, `musicEditionStatement` | — | **(as built, decided 2026-09-24)** hidden when `parentCollectionType ∋ 4` (an issue of a serial), as the last rule so it wins over the material-type rules. Not for other children: a book inside a collection keeps its authors. **(2026-09-25)** v2 has no main/child level at all; the archive app drops its switch |
 | `cobissId` | editable | **(as built)** `readOnly` + help "Cannot be changed after creation." once `itemState ≠ NEW` |
 | **`keywords`** (new, 610, `string` × multiple) | visible | `suggest` free — the "repeating free text" example |
 | **`summaryNote`** (330) | visible, `text` | — (the web editor had a Summary field that the API silently dropped; it was removed in `cd8e5bd` until this lands — see the backend plan) |
@@ -471,18 +538,20 @@ date picker ([collection views](../../frontend/plans/collection-views.md)).
 
 - [ ] Montenegrin check of the captions new in v2 (list in the
       [reference](../../backend/reference.md#schema-v2)).
-- [ ] Accent-insensitive matching inside OpenSearch (`asciifolding` + reindex):
+- [x] Accent-insensitive matching inside OpenSearch (`asciifolding` + reindex):
       suggest filters accent-insensitively, but `Niksic` still finds nothing.
-      Skipped on 2026-09-24; do it with the next reindex.
+      Skipped on 2026-09-24. **Planned 2026-09-25** as backend B12 — the data
+      is wiped and reindexed anyway.
 
 - [ ] The rule table above — confirm with the library, especially what is
       required for which material type.
 - [ ] `collectionType` values `2` and `5+`: unused today? (The web
       [collection views](../../frontend/plans/collection-views.md) plan has the
       same question.)
-- [ ] Parse `extent` out of COBISS `physicalDescription` (`"253 str."`,
-      `"1 video disk (95 min)"`) on import? Best-effort regex; nice for search,
-      not required.
+- [x] Parse `extent` out of COBISS `physicalDescription` (`"253 str."`,
+      `"1 video disk (95 min)"`) on import? **Yes, planned 2026-09-25** as
+      backend B11: editing a RECORD is now checked, so an imported book without
+      `extent` could not be edited until someone typed it in.
 - [ ] Merge the web editor's interim visibility rules into the rule table
       above? (2026-09-24: not for now — the contract table was built as is.) They make series, `edition`, original/translation languages,
       place/name of manufacture, `titleByAnotherAuthor` and

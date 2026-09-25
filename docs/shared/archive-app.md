@@ -1,9 +1,8 @@
 # The desktop archive app
 
-A separate desktop application used by archive staff at the client (on the
-`nbcg-dc` machine, Windows). Its source is **not in this repository** and it is
-released on its own schedule, so every backend change it depends on must stay
-backwards-compatible until it is updated.
+A separate desktop application (TypeScript/Vue) used by archive staff at the
+client (on the `nbcg-dc` machine, Windows). Its source is **not in this
+repository** and it is released on its own schedule.
 
 ## What it does
 
@@ -15,34 +14,33 @@ check/edit the metadata in a generated form → create the item → upload scans
 
 | Endpoint | For | Contract notes |
 |---|---|---|
-| `GET /api/schema/record` (v1) | **builds its whole metadata editor from this JSON** | frozen — see below |
-| `GET /api/import/cobiss/preview/:cobissId` | "Get data" without creating anything | backend done; wiring in the app still open |
-| `POST /api/items`, `PATCH /api/items/:id` | create / edit | `expectedVersion` on PATCH (409 on conflict). **Schema v2 (built 2026-09-24, not yet in production):** creating with `targetState: RECORD` runs the publish check → `400 PUBLISH_VALIDATION_FAILED` for incomplete metadata; `DRAFT` and PATCH are unaffected |
+| `GET /api/schema/record` (v1) | **builds its whole metadata editor from this JSON**, per hand-set level `main`/`child` | frozen until the app is on v2 — see below |
+| `GET /api/import/cobiss/preview/:cobissId` | "Get data" without creating anything | wired (`useMetadataForm.ts`) |
+| `POST /api/items`, `PATCH /api/items/:id` | create / edit; `targetState` DRAFT or RECORD, chosen per batch (default Draft) and changeable per item | `expectedVersion` on PATCH (409 on conflict). **Schema v2 B6 (dev):** creating as `RECORD` runs the publish check → `400 PUBLISH_VALIDATION_FAILED`. **B9–B10 (planned 2026-09-25):** every create and edit is checked (`METADATA_VALIDATION_FAILED`); create takes `parentIds` and returns each parent's new `version`; an unknown parent → `400 PARENT_NOT_FOUND`. The Draft/Record choice is locked once the item exists (edits are checked against its backend state) |
 | `POST /api/files/upload/:itemId` | scans + `extractedTexts` (filename → OCR text) + `role` | keys of `extractedTexts` must match an uploaded filename or the whole request is a 400 |
-| `POST /api/relations/connect` | parent ↔ child | returns the parent's new `version` |
-| `GET /api/search…` | lookups | |
+| `POST /api/relations/connect` | links every item of a batch to the batch's parents, after the upload | returns the parent's new `version`. With B10 only for re-uploads and taken-over records (new items use `parentIds` on create); from B9 it re-checks each child; unknown parent → `400 PARENT_NOT_FOUND` |
+| `GET /api/search…` | lookups (parents, …) | |
 
-This list is reconstructed from the backend plans written for the app (COBISS
-preview, material-type visibility) — confirm it against the app itself when
-possible, especially whether it creates items as `DRAFT` or `RECORD` and
-whether it calls `/api/tasks` (it is assumed not to).
+Not used: `/api/tasks` and `POST /api/items/transition` (`transitionItems`
+exists in the app's `items.ts` but nothing calls it). Confirmed 2026-09-25.
 
 ## Rules for backend changes
 
-1. **Never change the shape of a response the app reads in place.** Add a new
-   versioned route (`/api/schema/v2/record`) and keep the old one until the app
-   has moved.
-2. Adding optional response fields is fine; removing or retyping is not.
-3. Behaviour changes that affect every client (e.g. publish validation in
-   schema v2) must be called out in the plan's "Impact" table and checked with
-   whoever maintains the app **before** the backend release.
+**While all data is test data (decided 2026-09-25)** a backend change may
+break the app for a while: wipe, move processed batches back to "scanned",
+upload again once the app catches up. Still:
+
+1. Keep `GET /api/schema/record` (v1) until the app has moved to v2 — the app
+   cannot build its form without it.
+2. Call out every change that affects the app in the plan's "Impact" table.
+
+Once real cataloguing starts, go back to strict backwards compatibility
+(versioned routes, optional additions only).
 
 ## Open work for the app
 
-- [ ] **Before the schema v2 backend goes to production:** find out whether
-      the app creates items as `RECORD`. If it does, it starts getting
-      `400 PUBLISH_VALIDATION_FAILED` (e.g. a book without `extent`, which v1
-      cannot even express) — v1 keeps working for everything else.
-
-- [ ] Wire "Get data" to the COBISS preview — [backend note](../backend/history/archive-cobiss-preview.md).
-- [ ] Move to metadata schema v2 — [migration guide](plans/metadata-schema-v2-archive-app.md).
+- [x] Does the app create items as `RECORD`? Yes, both (2026-09-25) — accepted
+      without a release window, see above.
+- [x] Wire "Get data" to the COBISS preview — [backend note](../backend/history/archive-cobiss-preview.md).
+- [ ] Move to metadata schema v2 — [migration guide](plans/metadata-schema-v2-archive-app.md)
+      (includes dropping the main/child switch and creating with `parentIds`).

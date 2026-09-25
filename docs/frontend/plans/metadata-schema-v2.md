@@ -1,11 +1,18 @@
 # Frontend: schema-driven metadata editor (schema v2)
 
-## Status: PLANNED (2026-09-23) — backend ready (B1–B6 done 2026-09-24), can start
+## Status: PLANNED (2026-09-23) — backend B1–B6 done (2026-09-24); start after backend B8–B10 (decided 2026-09-25)
 
 Contract: [shared/plans/metadata-schema-v2.md](../../shared/plans/metadata-schema-v2.md).
 Backend: [backend/plans/metadata-schema-v2.md](../../backend/plans/metadata-schema-v2.md).
 Interim step: [material-type field visibility](material-type-field-visibility.md),
 a static visibility map in the current form that switches to F1's `useSchemaForm`.
+
+**Changed 2026-09-25** ([contract decisions](../../shared/plans/metadata-schema-v2.md#decisions-2026-09-25-review-against-the-archive-app)):
+drafts have their own required fields (title + material type), selected by a
+new context key `targetState`; the backend checks every save, not only
+publishing; the error code becomes `METADATA_VALIDATION_FAILED`. F1, F4 and F5
+below are updated for it. Build against B8–B10, not the B6 behaviour described
+in the next section.
 
 ---
 
@@ -43,11 +50,13 @@ Publish validation is **on** in the backend (every client, every publish):
   ("1 of 2 items are not ready to publish") in a toast, not which fields.
   "New record" (create as RECORD) fails the same way.
 
-So on production the backend's B6 must ship **together with** at least the
-`extent`/`issue` inputs and the F4 error dialog, or the web cannot publish
-books. The quick path: add a Summary field (`summaryNote`), an extent number
-input with the unit from the material type, and issue number/date to the
-current form, render `PUBLISH_VALIDATION_FAILED` item by item — then F1–F3.
+~~So on production the backend's B6 must ship together with at least the
+`extent`/`issue` inputs and the F4 error dialog.~~ **2026-09-25:** no release
+ordering — all data is test data, so the web may be unable to publish books for
+a while. The quick path still helps testing: add a Summary field
+(`summaryNote`), an extent number input with the unit from the material type,
+and issue number/date to the current form, render the validation error item by
+item — then F1–F3.
 
 ---
 
@@ -114,9 +123,13 @@ backend**, `GET /api/schema/v2/record`, once per session:
   locale: `en-US` → `en`, `me` → `cnr`).
 - `src/utils/schemaRules.ts` — **verbatim copy** of
   `backend/src/modules/schema/rules/evaluate.ts`, header comment saying so.
-- `src/composables/useSchemaForm.ts` — `(metadata: Ref, parents: Ref, itemState)`
-  → `computed` map `path → FieldState` (`visible`, `required`, `readOnly`, `unit`,
-  `label`, `constraints`), plus `missingRequired` and `hiddenWithValue` lists.
+- `src/composables/useSchemaForm.ts` — `(metadata: Ref, parents: Ref, itemState,
+  targetState: Ref<'DRAFT' | 'RECORD'>)` → `computed` map `path → FieldState`
+  (`visible`, `required`, `readOnly`, `unit`, `label`, `constraints`), plus
+  `missingRequired`, `violations` and `hiddenWithValue` lists. `targetState` is
+  the state the editor saves to: a new or existing draft → `DRAFT`, a record →
+  `RECORD` (2026-09-25).
+- New items start from each field's `default` (`collectionType` → 0).
 
 ### F2 — quick win on the current form (S)
 
@@ -164,13 +177,23 @@ New components in `src/components/metadata/`:
   `itemState`) instead of `:readonly="!isNew"`. (Since `cd8e5bd` the API
   rejects a changed `cobissId` with a 400 either way.)
 
-### F4 — publish readiness (S)
+### F4 — save readiness (S)
 
-- Non-blocking banner in the editor: "N required fields missing — cannot be
-  published yet", each a link that scrolls to the field (client-side from
-  `useSchemaForm`, no call).
-- A shared `PublishErrorDialog.vue` for `400 PUBLISH_VALIDATION_FAILED`:
-  per item → missing labels + violations, link to `/admin/items/:id`. Used by:
+**Changed 2026-09-25:** required fields block the save for the state being
+saved to (the contract's editor rule 2).
+
+- Editing or creating a **draft**: evaluate with `targetState: DRAFT` — Save is
+  disabled while the title, material type or another draft-required field is
+  empty, or a value breaks its constraints. Plus a non-blocking line from a
+  second evaluation with `RECORD`: "N more fields needed to publish", each a
+  link that scrolls to the field.
+- Editing or creating a **record**: evaluate with `RECORD` — Save is disabled
+  while any record-required field is empty (the backend refuses the PATCH
+  otherwise).
+- A shared `ValidationErrorDialog.vue` for `400 METADATA_VALIDATION_FAILED`
+  (`PUBLISH_VALIDATION_FAILED` until backend B9): per item → its `state`,
+  missing labels + violations, link to `/admin/items/:id`. Used by the editor's
+  own save as a fallback, and by:
   - bulk publish on `AdminItemsPage.vue` (the whole batch is rejected — say so);
   - the editor publish button (nice-to-have **A2**, accepted 2026-09-24: the
     Status side card's "Publish as record", which saves first when dirty — so
@@ -187,7 +210,12 @@ reads `parent_relations` from the loaded item, fetches each parent with
 `getItem()` (normally one), and feeds `collectionType` into `useSchemaForm`.
 The web app has no "create as child of…" flow today (relations are made via the
 API/archive app), so a new item has no parents; if such a flow is added, pass
-the chosen parent in.
+the chosen parent to `useSchemaForm` and send it as `parentIds` on
+`POST /api/items` (backend B10) — the check then uses it and the link is made
+in the same call.
+
+Linking or unlinking a parent re-checks each child from backend B9 on, so the
+relations UI (if any) must show `METADATA_VALIDATION_FAILED` too.
 
 ### F6 — optional: public record page
 
@@ -210,6 +238,9 @@ Field and group labels come from the schema (`en`/`cnr`), so
 | F1–F3 | B1 (v2 endpoint), B2 (evaluator to copy), B5 (vocabulary search) | done 2026-09-24 |
 | F2 alone | B1 + B5 | done |
 | F4 | B6 (`PUBLISH_VALIDATION_FAILED`, `/items/:id/validation`) | done — and already enforced, see ⚠ above |
+| F1/F4 draft vs record rules | B8 (`targetState` context key, draft/record rule table) | open (2026-09-25) |
+| F4 every save checked, one error code | B9 (`METADATA_VALIDATION_FAILED`, PATCH/relations checked, `?target=DRAFT`) | open (2026-09-25) |
+| F5 create as child | B10 (`parentIds` on `POST /api/items`) | open (2026-09-25) |
 | New fields render | B3 (else the backend drops them, like `summaryNote`) | done |
 | Import page shows `progress.warnings` | B6 import warnings | done (web renders only `errors` today) |
 | Nothing | the archive app — independent client of the same contract | — |

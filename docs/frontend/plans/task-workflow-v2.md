@@ -22,7 +22,7 @@ Nothing below is deployed; both sides go out together.
 | Call | Body | 200 / 201 | Errors worth a specific UI |
 |---|---|---|---|
 | `POST /api/tasks` | `{ itemId, kind, title, description?, assignedToUserId, dueAt? }` | 201 task | **409** `{ code: "ITEM_HAS_OPEN_TASK", message, taskId }` · 400 guard (message names the missing capability + "run POST /api/users/sync") |
-| `POST /api/tasks/:id/complete` | `{ note?, next?: { kind, assignedToUserId } }` | 200 task | 400 FIX_METADATA without `next`, `next` on REVIEW_PUBLISH, a `next.kind` the stage does not lead to, guard · 403 not assignee / `records:manage`, or (review of a draft) caller's token cannot publish · **400 `PUBLISH_VALIDATION_FAILED`** unchanged from publish |
+| `POST /api/tasks/:id/complete` | `{ note?, next?: { kind, assignedToUserId } }` | 200 task | 400 FIX_METADATA without `next`, `next` on REVIEW_PUBLISH, a `next.kind` the stage does not lead to, guard · 403 not assignee / `records:manage`, or (review of a draft) caller's token cannot publish · **400 `METADATA_VALIDATION_FAILED`** unchanged from publish (`PUBLISH_VALIDATION_FAILED` until schema v2 B9) |
 | `POST /api/tasks/:id/return` | `{ note, assignedToUserId? }` | 200 task | 400 no/blank note, never handed over (`returnTarget` was null), target fails the guard for the stage it lands in · 403 not assignee / `records:manage` (the creator may NOT return) |
 | `POST /api/tasks/:id/reassign` | `{ assignedToUserId, note? }` | 200 task | 400 yourself, current assignee, guard · 403 not assignee / creator / `records:manage` |
 | `POST /api/tasks/:id/cancel` | `{ note? }` | 200 task | 403 as reassign |
@@ -133,8 +133,8 @@ Removed: **Start working**, **Send back**, **Reopen**.
 | REVIEW_PUBLISH, item is a DRAFT | a full-width warning banner in capitals: **"COMPLETING THIS TASK PUBLISHES THE ITEM — DRAFT → RECORD"** (cnr: **"ZAVRŠAVANJE OVOG ZADATKA OBJAVLJUJE GRAĐU — NACRT → ZAPIS"**, to be checked by a native speaker); the publish checklist from `GET /api/items/:id/validation?target=RECORD`; button "Publish" disabled while anything is missing (with links to the editor); if the user cannot transition (`!canTransition`), no button, only "Only a publisher can complete this task" |
 | REVIEW_PUBLISH, item is a RECORD | "Already published — confirm the review", optional note |
 
-A `400 PUBLISH_VALIDATION_FAILED` (the check ran again server-side) opens the
-shared `PublishErrorDialog` from the [metadata plan](metadata-schema-v2.md#f4--publish-readiness-s).
+A `400 METADATA_VALIDATION_FAILED` (the check ran again server-side) opens the
+shared `ValidationErrorDialog` from the [metadata plan](metadata-schema-v2.md#f4--save-readiness-s).
 After a successful publish, reload the task *and* tell the caller the item moved
 (links to `/admin/items/:id` keep working — the id is stable across DRAFT ↔ RECORD).
 
@@ -189,7 +189,7 @@ old status labels under a `legacy` key for history rows.
 Update [admin-nice-to-have.md](admin-nice-to-have.md): **A4** (review queue)
 becomes `status=OPEN&kind=REVIEW_PUBLISH` server-side; **A9** (bulk assign)
 must report per-item 409s; **A2** (publish inside the editor) shares the
-`PublishErrorDialog`.
+`ValidationErrorDialog`.
 
 ---
 
@@ -200,7 +200,7 @@ must report per-item 409s; **A2** (publish inside the editor) shares the
 | action routes, `returnTarget`, `lastHandoff`, `returned` filter | service/controller (§3, §5) — **built 2026-09-25** |
 | capabilities `drafts` / `records` in `/api/users` | guard (§2) — **built 2026-09-25** |
 | `409 ITEM_HAS_OPEN_TASK` | migration + create (§1, §3) — **built 2026-09-25** |
-| `/items/:id/validation`, `PUBLISH_VALIDATION_FAILED` | metadata schema v2, B6 — built 2026-09-24 (dev); response shapes in the [web schema v2 plan](metadata-schema-v2.md#what-the-backend-now-provides-2026-09-24) |
+| `/items/:id/validation`, `METADATA_VALIDATION_FAILED` | metadata schema v2, B6 — built 2026-09-24 (dev), renamed from `PUBLISH_VALIDATION_FAILED` in B9 (open); response shapes in the [web schema v2 plan](metadata-schema-v2.md#what-the-backend-now-provides-2026-09-24) |
 
 ## Estimate
 

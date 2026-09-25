@@ -1,11 +1,13 @@
 # Backend: metadata schema v2
 
-## Status: B1–B6 DONE (2026-09-24) · B7 waits for the archive app
+## Status: B1–B6 DONE (2026-09-24) · B8–B12 OPEN (decided 2026-09-25) · B7 waits for the archive app
 
-**Not yet deployed to production.** B6 (publish validation) must ship together
-with the web editor's `extent`/`issue` inputs and error dialog — see
-[Deploy notes](#deploy-notes). Everything below "Phases" is the original plan,
-each phase marked with what was actually done.
+**Not yet deployed to production.** No release ordering is needed any more: all
+data is test data (2026-09-25) — see [Deploy notes](#deploy-notes). B1–B7 below
+"Phases" is the original plan, each phase marked with what was actually done;
+B8–B12 come from the [contract decisions of 2026-09-25](../../shared/plans/metadata-schema-v2.md#decisions-2026-09-25-review-against-the-archive-app)
+(review against the archive app). Order: B8 → B9 → B10; B11 and B12 any time,
+at the latest with the rollout.
 
 The contract is in [shared/plans/metadata-schema-v2.md](../../shared/plans/metadata-schema-v2.md)
 — read it first; this file is only "what changes in NestJS and in which order".
@@ -56,7 +58,7 @@ editor must add its field back when B3 lands.
 | How to map `issue.date` in OpenSearch? Dynamic mapping makes it `date` or `text` depending on the first document indexed. | **`keyword`**, declared in `pgsync/schema.json`. The field did not exist yet, so live indices only need a one-off `PUT _mapping`, no reindex. |
 | Accent-insensitive matching inside OpenSearch (`asciifolding` + reindex)? | **Skipped for now.** The suggest post-filter is accent-insensitive, but OpenSearch still does not return `Nikšić` for `Niksic`. |
 | Merge the web editor's interim visibility rules into the v2 rule table? | **No**, contract table only; stays an open question for the library. |
-| How do v1's `levels: ['main']` become rules? Hiding for every child would take authors, ISBN etc. from a book inside a fond. | **Hidden only under a serial** (`parentCollectionType ∋ 4`) — as the last rule of each of those 10 fields, so it wins. Children of other collections keep them. |
+| How do v1's `levels: ['main']` become rules? Hiding for every child would take authors, ISBN etc. from a book inside a collection. | **Hidden only under a serial** (`parentCollectionType ∋ 4`) — as the last rule of each of those 10 fields, so it wins. Children of other collections keep them. |
 
 ### Where it is (`backend/src/modules/schema/`)
 
@@ -99,7 +101,8 @@ suggest post-filter and vocabulary search.
 - **Map scale caption** is "Razmjera" (the web frontend's word), not "Merilo".
 - **`summaryNote` from COBISS**: repeated 330 fields are joined with a blank line.
 - **No `collectionType` default in the schema**: the contract's `Field` has no
-  `default`; `POST /items` still defaults it to 0.
+  `default`; `POST /items` still defaults it to 0. (B8 adds `default: 0`,
+  decided 2026-09-25.)
 
 ### Tests
 
@@ -119,16 +122,20 @@ suggest post-filter and vocabulary search.
 
 ### Deploy notes
 
-1. **Web first (or together).** Publishing now needs `extent` for books and
-   the other `a b g i j` types, but the web form has no field for it yet
-   ([web plan ⚠](../../frontend/plans/metadata-schema-v2.md#-already-affects-the-current-web-app)).
-2. **Archive app:** confirm which `targetState` it sends — if it creates
-   `RECORD`s, it gets `400 PUBLISH_VALIDATION_FAILED` for incomplete metadata
-   from this release on, even on v1.
-3. **OpenSearch, once, before the first `issue` is saved:**
-   `PUT records,drafts/_mapping` for `metadata.issue.date` = `keyword` — the
-   command is in [opensearch-reindex.md](../../infrastructure/opensearch-reindex.md#adding-a-mapping-for-a-field-that-does-not-exist-yet--no-reindex).
-   No reindex.
+**Rewritten 2026-09-25.** All data is test data, so no release ordering: the web
+editor and the archive app may be unable to publish some types until they are
+on v2, and that's accepted. (Was: web first; confirm the archive app's
+`targetState` — it sends both.) Rollout once B8–B12 are on dev:
+
+1. Wipe the items (drafts, records, relations, files, revisions, tasks) and the
+   OpenSearch indices; recreate the indices with B12's mapping and the
+   `metadata.issue.date` = `keyword` mapping, following
+   [opensearch-reindex.md](../../infrastructure/opensearch-reindex.md).
+2. Import **a few examples**, not everything: e.g. a book, a map, a video or
+   sound recording, a Serial collection with two issues, a Collection with a
+   book and a map inside. Enough to try every rule by hand.
+3. The archive app moves its processed batches back to "scanned" and uploads
+   again once it runs v2.
 4. The Montenegrin captions marked `NEW` should be checked by the library.
 
 ---
@@ -236,7 +243,8 @@ name → 404. Public, like `/schema`.
 - Call it in `ItemsService.create()` when `targetState === RECORD`.
 - Not called: draft create/update, PATCH of a record, the import worker (it
   bypasses `ItemsService` anyway — keep it that way and report would-fail items
-  in the job's `progress.errors` as warnings instead).
+  in the job's `progress.errors` as warnings instead). **Superseded by B9:**
+  only the import worker stays unchecked.
 - `GET /items/:id/validation?target=RECORD` → `200 { ok, missing, violations }`;
   gated like reading the item (`assertCanView`, 404 for hidden).
 - The task workflow's "complete REVIEW_PUBLISH" goes through `transition()`, so
@@ -248,6 +256,94 @@ name → 404. Public, like `/schema`.
 After the archive app confirms it runs on v2: delete `buildRecordFields()`,
 `FieldDescriptor`, `RecordSchemaQueryDto`, the v1 route and its tests; update
 the reference.
+
+### B8 — `targetState`: draft and record rules (S) — OPEN (2026-09-25)
+
+- `v2/record-fields.ts`: context key `targetState` (`DRAFT | RECORD`, source
+  `item`); `itemState` description "where the item is now". Helper
+  `FOR_RECORD: Condition = { ref: 'targetState', eq: 'RECORD' }`.
+- Rule table (contract "Initial rule set"):
+  - `extent`: the required rule becomes `all [collectionType = 0, recordType ∈ a b g i j, FOR_RECORD]`.
+  - `cartographicMathematicalData`: the `e f` rule keeps `visible`/`label`/`help`;
+    a separate `all [e f, FOR_RECORD] → required`. `HIDE_UNDER_SERIAL` stays last.
+  - `issue.number`, `issue.date`: base `required: false`, rule `FOR_RECORD → required`.
+  - Unchanged, and now also enforced on drafts (B9): `title`, `materialType`,
+    `collectionType`, `corporateBodies[].name`, `electronicLocation[].url`.
+  - `numberingAndDates`: drop `issueIdentifying`.
+- `default` on a field: `FieldSpec`/`FieldV2` + contract; `collectionType`
+  gets `default: 0`. Self-check: a `default` is a valid value of its field
+  (a vocabulary code for an enum).
+- `rules/evaluate.ts`: `TargetState` type; `buildContext(metadata, parents,
+  itemState, targetState)`. Callers pass it (B9).
+- `conformance.json`: `buildContext` with `targetState`; `record` cases for a
+  book / map / serial issue evaluated as DRAFT and as RECORD; `check` cases:
+  draft without material type → missing; draft book without `extent` → ok;
+  record book without `extent` → missing; draft issue without `issue.number` →
+  ok. Every existing case gets `targetState: RECORD` (what B6 checked).
+
+### B9 — check every write (M) — OPEN (2026-09-25)
+
+- Rename `PublishValidatorService` → `MetadataValidatorService`
+  (`metadata-validator.service.ts`); `assertValid(items, db)` where each item
+  carries its `targetState`. Error `code` becomes `METADATA_VALIDATION_FAILED`,
+  each failing item carries `state` (the rules it failed); `message` "…not
+  ready to publish" when all failing items are RECORDs, "…cannot be saved"
+  otherwise.
+- `ItemsService.create()`: check for both targets (DRAFT too). The title check
+  in `REQUIRED_METADATA_VALIDATORS` goes — `title` is `required` in the schema.
+  The shape check (`METADATA_VALIDATORS`, plain 400) runs first, as now.
+- `ItemsService.update()`: when `metadata` is in the payload, check the stored
+  metadata with the patch applied (nulls removed), against the item's current
+  state, parents from `item_relations`, inside the transaction. A
+  visibility-only PATCH is not checked.
+- `ItemsService.transition()`: check against the target for **both**
+  directions (RECORD → DRAFT uses the draft rules).
+- `RelationsService.connect()` / `disconnect()`: inside one transaction, write
+  the relation change, then check every child in its current state with its
+  parents *after* the change; any failure → roll back, 400. Not re-checked:
+  children when a parent's metadata changes or the parent is deleted (contract
+  "Validation on save").
+- `GET /items/:id/validation?target=DRAFT|RECORD` (DTO accepts both).
+- Import worker unchanged: warnings for items that fail their target's rules.
+- Docs when built: `reference.md` (endpoint + error shape), the backend and
+  shared task-workflow docs (they name `PUBLISH_VALIDATION_FAILED`),
+  `shared/metadata-fields.md`.
+
+### B10 — `parentIds` on `POST /items` (S) — OPEN (2026-09-25)
+
+- `CreateItemDto.parentIds?: string[]` (`IsArray`, `IsString({ each })`,
+  deduplicated).
+- `create()`: load the parents' metadata — an unknown id → `400 { code:
+  "PARENT_NOT_FOUND", message: "Parent not found: …", parentIds: [missing] }`,
+  nothing created — run the B9 check with them, then create the item, the relations
+  and the revisions (`CREATE` on the item, `RELATION_ADDED` on each parent) in
+  one transaction. `RelationsService` gets a variant that takes the transaction
+  client; no cycle check needed for a brand-new item.
+- Response: the item as now, plus `parents: RelationWriteResult[]` (each
+  parent's new `version` and children counts — what `connect` returns), so the
+  archive app does not re-read parents through the lagging search index.
+- `RelationsService.connect()`: its "Parent not found" (`relations.service.ts`,
+  plain 400 today) throws the same `PARENT_NOT_FOUND` shape — the archive app
+  still links re-uploaded items with `connect` and shows one message for both.
+- Docs when built: `reference.md` (`parentIds`, the `parents` response,
+  `PARENT_NOT_FOUND`).
+
+### B11 — `extent` from COBISS 215 (S) — OPEN (2026-09-25)
+
+Because editing a RECORD is checked (B9), an imported book without `extent`
+could not be edited until someone typed it in. In `cobiss-parser.ts`, next to
+`physicalDescription` (215/a): best-effort regex, e.g. `"253 str."` / `"XII,
+253 str."` → `{ value: 253, unit: "pages" }`, `"1 video disk (95 min)"` → 95
+`minutes`, `"1 zemljovid"` → 1 `sheets`. Only when the unit matches what the
+material type's rule expects; otherwise leave `extent` empty (the import lists
+the item as a warning). The COBISS preview uses the same parser, so the
+archive app's "Get data" fills `extent` too. Cases in `cobiss-parser.spec.ts`.
+
+### B12 — accent-insensitive OpenSearch matching (S) — OPEN (2026-09-25)
+
+The `asciifolding` sub-field skipped in B4 (`Niksic` → `Nikšić`), in
+`infrastructure/docker/pgsync/schema.json`, used by suggest and search. Needs a
+reindex — done as part of the rollout wipe (Deploy notes).
 
 ---
 
@@ -275,7 +371,30 @@ New section **"Schema v2"** (keep the v1 section as is until B7):
 - `GET /items/:id/validation?target=RECORD`: 200 with `ok:false` and the missing
   list; reader on a hidden draft → 404.
 
-Jest: `evaluate.spec.ts` (fixture + frontend copy identical), schema self-check spec.
+**B8–B10 (2026-09-25)** — change section 19 accordingly (the B6 cases expecting
+`PUBLISH_VALIDATION_FAILED`, and "PATCH of a record not validated", flip):
+
+- Draft create without `materialType` → 400 `METADATA_VALIDATION_FAILED`,
+  `items[0].state == DRAFT`; draft book without `extent` → 201.
+- `PATCH` of a RECORD that removes `extent` → 400, item unchanged; `PATCH` of a
+  draft removing `materialType` → 400; visibility-only `PATCH` of an incomplete
+  record → 200.
+- Transition RECORD → DRAFT of an item without `materialType` → 400.
+- `POST /items` with `parentIds: [serial]`, `targetState: RECORD`, no
+  `issue.number` → 400, nothing created, no relation; with `issue` filled →
+  201, relation exists, response `parents[0].version` bumped. Map issue under a
+  serial as RECORD with `issue` filled but no scale → 201 (scale is hidden
+  under a serial). Unknown
+  parent id → 400 `PARENT_NOT_FOUND` with that id in `parentIds`, nothing
+  created; `relations/connect` with an unknown parent → the same code.
+- `relations/connect` of a complete book RECORD under a serial (no `issue`) →
+  400, no relation; the same book as a DRAFT → 200.
+- `GET /items/:id/validation?target=DRAFT` → 200.
+- Schema: `collectionType.default == 0`; `numberingAndDates.issueIdentifying ==
+  false`; `targetState` among the context keys.
+
+Jest: `evaluate.spec.ts` (fixture + frontend copy identical), schema self-check
+spec, B11 parser cases.
 
 ---
 
@@ -285,22 +404,29 @@ Jest: `evaluate.spec.ts` (fixture + frontend copy identical), schema self-check 
 |---|---|---|---|
 | `summaryNote` accepted (done) | add the Summary field back to the editor and the record page (removed in `cd8e5bd`) | — | — |
 | v2 endpoint | adopts it ([plan](../../frontend/plans/metadata-schema-v2.md)) | migrates at its own pace; **v1 frozen** | — |
-| Publish validation | must render `PUBLISH_VALIDATION_FAILED` in the editor, the items-list bulk publish and the task "Complete" dialog | **affected immediately if it creates items as `RECORD`** — confirm before release | — |
+| Publish validation | must render `PUBLISH_VALIDATION_FAILED` in the editor, the items-list bulk publish and the task "Complete" dialog | affected: it creates items as `RECORD` too (confirmed 2026-09-25) — accepted, test data only | — |
 | New fields | rendered by the schema-driven form; **until then the web cannot enter `extent`, so it cannot publish books** | must support `quantity` | `metadata.issue.date` = `keyword`: one `PUT _mapping` on production, no reindex |
 | Import `progress.warnings` | import page could list them (renders only `errors` today) | — | — |
 | Suggest post-filter / new fields | better hints, no API change | same | — |
 | `Cache-Control: no-cache` on v2 | revalidates each load (304) | same | — |
+| B8 `targetState` + draft/record rules, `default` | `useSchemaForm` takes `targetState`; Save blocked per state; copy `evaluate.ts` again | copies `evaluate.ts`; Draft/Record choice feeds `targetState`; processing gate per state; main/child switch removed | — |
+| B9 every write checked, `METADATA_VALIDATION_FAILED` | one `ValidationErrorDialog` for every save, transition and relation change | handles the new code, incl. `state` | — |
+| B10 `parentIds` on create, `PARENT_NOT_FOUND` | only if a "create as child" flow is added | creates new items with the batch's parents and stores `parents[].version`; re-uploads still use connect; `PARENT_NOT_FOUND` stops the batch | — |
+| B11 `extent` from 215 | imported books arrive with `extent` | "Get data" fills `extent` | — |
+| B12 `asciifolding` | `Niksic` finds `Nikšić` in search and hints | same | pgsync mapping + reindex (with the rollout wipe) |
 
 ## Estimate
 
 B1 M · B2 S · B3 S · B4 S · B5 S · B6 M · B7 XS. B1–B2–B6 is the critical
 path; B3–B5 can go in any order after B1.
+B8 S · B9 M · B10 S · B11 S · B12 S — B8 → B9 → B10; B11, B12 independent.
 
 ## Key files
 
 - `backend/src/modules/schema/*` (new `v2/`, `rules/`, `publish-validator.service.ts`)
 - `backend/src/modules/import/cobiss/cobiss-util/cobiss.types.ts`, `cobiss-parser.ts`, `cobiss-code-map.ts`
-- `backend/src/modules/items/items.service.ts`, `items.controller.ts`
+- `backend/src/modules/items/items.service.ts`, `items.controller.ts`, `dto/create-item.dto.ts`, `dto/validation-query.dto.ts`
+- `backend/src/modules/relations/relations.service.ts` (B9, B10)
 - `backend/src/modules/search/search.controller.ts`, `search.service.ts`, `suggest-fields.ts`
 - `backend/test/api-test-suite.sh`
-- `infrastructure/docker/pgsync/schema.json` (only if the optional mapping is done)
+- `infrastructure/docker/pgsync/schema.json` (B12)
