@@ -319,6 +319,15 @@ Both `records` and `drafts` indices mirror the database tables via PGSync:
   first (dynamic date detection would make the field `date` or `text`
   depending on that). ISO strings sort correctly as keywords, and a prefix
   query `1905-03` finds every issue of that month.
+- **Accent-insensitive text** (since 2026-09-25, schema v2 B12): both indices
+  set a custom `default` analyzer — `standard` tokenizer, `lowercase`,
+  `asciifolding` with `preserve_original` — in the `setting` block of
+  `infrastructure/docker/pgsync/schema.json`. Every `text` field is indexed
+  and searched as both `nikšić` and `niksic`, so `Niksic` finds `Nikšić` in
+  search and suggest with no query change; an exact accented match still
+  scores higher. `.keyword` sub-fields are untouched (aggregations show the
+  stored spelling). Settings only apply to a new index — see the reindex
+  procedure in [opensearch-reindex.md](../infrastructure/opensearch-reindex.md).
 
 ### Search Queries
 
@@ -508,11 +517,10 @@ the answer is "values **already used in the data**, most common first":
   every value of every matching document, so `q=Fo` on notes `["Foo", "Bar"]`
   also suggested `Bar`. Code: `rankByQuery` in `src/shared/util/text-match.ts`.
 - The post-filter compares accent-, case- and punctuation-insensitively
-  (`Nikšić` = `niksic`, `đ` = `d`, `Beograd : Prosveta` = `beograd prosveta`),
-  but it can only filter what OpenSearch returned, and OpenSearch still matches
-  through the default analyzer with no ASCII folding: `q=Niksic` finds nothing.
-  An `asciifolding` sub-field + reindex would fix that; deliberately not done
-  yet (optional in the schema v2 plan).
+  (`Nikšić` = `niksic`, `đ` = `d`, `Beograd : Prosveta` = `beograd prosveta`).
+  Since 2026-09-25 OpenSearch itself matches accent-insensitively too (the
+  folding analyzer, [Index Structure](#index-structure)), so `q=Niksic` finds
+  documents holding `Nikšić` and the post-filter keeps the bucket.
 
 ### Vocabulary search
 
@@ -558,9 +566,9 @@ How the backend builds and guards it:
 | Vocabulary registry (from `cobiss-code-map.ts` + `collectionType`, `responsibility`, `extentUnit`); `INLINE_VOCABULARY_MAX = 50` decides `values` vs `search` | `v2/vocabularies.ts` |
 | Builder: computes `input` and `order`, attaches labels, assembles the body | `v2/build-schema.ts` |
 | Self-check, run in jest **and** in `SchemaService.onModuleInit` — a bad schema cannot boot | `v2/self-check.ts` |
-| Rule evaluator + publish check, **portable** (no imports; copied verbatim to the web frontend) | `rules/evaluate.ts` |
-| Conformance cases every port must pass (web, archive app) | `rules/conformance.json` |
-| Publish validation service | `publish-validator.service.ts` |
+| Rule evaluator + save check, **portable** (no imports; copied verbatim to the web frontend and the archive app) | `rules/evaluate.ts` |
+| Conformance cases every copy must pass (web, archive app) | `rules/conformance.json` |
+| Validation on save (every write) | `metadata-validator.service.ts` |
 
 - ~41 KB (v1: ~98 KB): `language` (449), `relator` (116) and `contentType`
   (69) are not inlined but point at [vocabulary search](#vocabulary-search);
@@ -573,12 +581,24 @@ How the backend builds and guards it:
   uses an undeclared context key in a rule or sets anything but
   `visible/required/readOnly/unit/label/help/constraints`; names an unknown
   vocabulary, a suggest field outside `SUGGEST_FIELDS`, or a unit outside
-  `extentUnit`; lacks a caption in either language.
+  `extentUnit`; lacks a caption in either language; has a `default` that is not
+  a value of its field (a code, for an enum).
 - v1's `levels: ['main']` became a rule: those 10 fields (`collectionType`,
   `isbn`, `ismn`, `textualMaterialCodes`, `titleByAnotherAuthor`, `authors`,
   `corporateBodies`, `edition`, `cartographicMathematicalData`,
   `musicEditionStatement`) are hidden **only for an issue of a serial**
   (`parentCollectionType ∋ 4`). Children of other collections keep them.
+- **Draft and record rules** (since 2026-09-25, B8): the context key
+  `targetState` (`DRAFT` | `RECORD`) is the state a save goes to. A draft
+  needs `title`, `materialType`, `collectionType`, `corporateBodies[].name`,
+  `electronicLocation[].url`; a record also `extent`, map scale
+  (`cartographicMathematicalData`), `issue.number` and `issue.date` — each
+  through a rule `when: { ref: targetState, eq: RECORD }` (`FOR_RECORD`).
+- `default` on a field (since 2026-09-25): the value a new item starts with;
+  only `collectionType` has one (`0`). The self-check refuses a default that is
+  not a value of its field.
+- `numberingAndDates` (207) is no longer `issueIdentifying` — it is the
+  serial's own statement; an issue uses `issue`.
 - Rules follow the contract's initial rule table (still to be confirmed by the
   library). Changing a rule = edit `record-fields.ts` + the matching cases in
   `conformance.json`; `evaluate.spec.ts` runs them.
@@ -656,8 +676,11 @@ curl -X POST http://localhost:3000/api/items \
       "edition": "2. Aufl.",
       "dimensions": "18 cm",
       "physicalDescription": "253 str."
-    }
+    },
+    "parentIds": ["collection-id"]
   }'
+# -> 201 { …the item…, "parents": [ { "parentId": "collection-id", "version": 5,
+#                                    "childrenInDrafts": 3, "childrenInRecords": 0 } ] }
 
 # Update item
 curl -X PATCH http://localhost:3000/api/items/<item_id> \
@@ -687,44 +710,79 @@ curl -X POST http://localhost:3000/api/items/transition \
   }'
 # -> 201 [ { "id": "id-1", "version": 4 }, { "id": "id-2", "version": 2 } ]
 
-# Dry run of the publish check for one item. Gated like reading the item
-# (404, not 403, when the caller cannot see it); anonymous works on a public record.
+# Dry run of the save check for one item: RECORD (default — can it be
+# published?) or DRAFT. Gated like reading the item (404, not 403, when the
+# caller cannot see it); anonymous works on a public record.
 curl 'http://localhost:3000/api/items/<id>/validation?target=RECORD'
 # -> 200 { "ok": false,
 #          "missing":    [ { "path": "extent", "label": { "en": "Number of pages", "cnr": "Broj strana" } } ],
 #          "violations": [] }
 ```
 
-**Publish validation** (metadata schema v2, since 2026-09-24): every path that
-makes an item a RECORD — `POST /items/transition` to `RECORD` (single or bulk)
-and `POST /items` with `targetState: RECORD` — runs the schema v2 check first:
-each field is evaluated with the item's context (material type, collectionType,
-parents' collectionType); **missing** = visible + required + empty (`null`,
-blank string, `[]`, `{}`), **violations** = a value that breaks its
-`constraints`, or a `quantity` whose stored unit is not the evaluated one
-(`extent` in pages on a video). Hidden fields are never checked. Repeatable
-objects are checked per element (`corporateBodies[1].name`). Failure is
-all-or-nothing, inside the transition's transaction, before any row moves:
+**`parentIds` on create** (since 2026-09-25, schema v2 B10): optional array of
+item ids. The item is checked with those parents (an issue of a serial needs
+its issue data as a RECORD), then the item, one relation per parent, the
+item's `CREATE` revision and each parent's `RELATION_ADDED` revision are
+written in one transaction. Duplicates are linked once. The response adds
+`parents` — one entry per parent, the same shape `relations/connect` returns —
+always present (`[]` without `parentIds`). Linking changes the parent, so the
+caller needs manage rights on each parent's collection (403 otherwise, e.g. a
+cataloguer under a RECORD parent). A parent that does not exist:
 
 ```json
-{ "statusCode": 400, "code": "PUBLISH_VALIDATION_FAILED",
+{ "statusCode": 400, "code": "PARENT_NOT_FOUND",
+  "message": "Parent not found: clx…", "parentIds": [ "clx…" ] }
+```
+
+`parentIds` lists only the missing ids; nothing is created.
+
+**Validation on save** (metadata schema v2; publish-only since 2026-09-24,
+every write since 2026-09-25): each write is checked against the rules of the
+state the item ends up in (`targetState`):
+
+| Write | Rules of | Parents |
+|---|---|---|
+| `POST /items` | the requested `targetState` | `parentIds` |
+| `PATCH /items/:id` with non-empty `metadata` (the stored metadata with the patch applied) | the item's current state — a RECORD stays complete | `item_relations` |
+| `POST /items/transition` (single, bulk, or through a REVIEW_PUBLISH task) | the new state, both directions | `item_relations` |
+| `POST /relations/connect` / `disconnect` | each child, in its current state | after the change |
+
+Each field is evaluated with the item's context (material type,
+collectionType, parents' collectionType, `targetState`); **missing** = visible
++ required + empty (`null`, blank string, `[]`, `{}`), **violations** = a
+value that breaks its `constraints`, or a `quantity` whose stored unit is not
+the evaluated one (`extent` in pages on a video). An empty field is never
+format-checked, so one path is either missing or a violation. Hidden fields are
+never checked. Repeatable objects are checked per element
+(`corporateBodies[1].name`). Failure is all-or-nothing, inside the write's
+transaction, before anything is written:
+
+```json
+{ "statusCode": 400, "code": "METADATA_VALIDATION_FAILED",
   "message": "1 of 2 items are not ready to publish",
-  "items": [ { "id": "clx…",
-               "missing": [ { "path": "materialType", "label": { "en": "Material type", "cnr": "Vrsta građe" } } ],
-               "violations": [ { "path": "extent", "label": { … }, "constraint": "unit", "limit": "minutes" } ] } ] }
+  "items": [ { "id": "clx…", "state": "RECORD",
+               "missing": [ { "path": "extent", "label": { "en": "Number of pages", "cnr": "Broj strana" } } ],
+               "violations": [ { "path": "publication.year", "label": { … }, "constraint": "pattern", "hint": { … } } ] } ] }
 ```
 
 `items` lists only the failing items; `id` is `null` for a `POST /items` that
-created nothing. A violation carries `constraint` (a `constraints` key or
-`unit`), plus `limit` (the broken bound / expected unit) or `hint` (a
-`patternHint`) when there is one. Not validated: draft create/update, `PATCH`
-of an existing RECORD (old COBISS records would demand new fields on every
-edit), the COBISS import worker (it reports would-fail records as
-[warnings](#import-cobiss) instead). What is required today: `title`,
-`collectionType`, `materialType`, plus per type `extent` (books, manuscripts,
-video, sound — not on a collection), map scale (`cartographicMathematicalData`
-for maps), `issue.number` + `issue.date` (an issue of a serial). The rule table
-lives in `src/modules/schema/v2/record-fields.ts`.
+created nothing; `state` is whose rules the item failed. `message` says "not
+ready to publish" when every failing item is a RECORD, "cannot be saved"
+otherwise (`1 of 1 item cannot be saved`). A violation carries `constraint` (a
+`constraints` key or `unit`), plus `limit` (the broken bound / expected unit)
+or `hint` (a `patternHint`) when there is one. Until 2026-09-25 the code was
+`PUBLISH_VALIDATION_FAILED`, without `state`.
+
+Not checked: a `PATCH` that only changes `visibilityStatus`; children when
+their parent's metadata changes or the parent is deleted (each child is checked
+on its own next save); the COBISS import worker (it reports would-fail items as
+[warnings](#import-cobiss) instead). What is required: for a **draft**
+`title`, `materialType`, `collectionType` (`POST /items` fills in `0`), a
+`name` in each `corporateBodies` entry, a `url` in each `electronicLocation`
+entry; for a **record** also `extent` (books, video, sound — not on a
+collection), map scale (`cartographicMathematicalData`, maps), `issue.number`
++ `issue.date` (an issue of a serial). The rule table lives in
+`src/modules/schema/v2/record-fields.ts`.
 
 **What `version` means:**
 
@@ -752,6 +810,7 @@ client, every endpoint that bumps a version reports the resulting value:
 
 | Endpoint | Returns |
 |---|---|
+| `POST /api/items` | the item, plus `parents: { parentId, version, childrenInDrafts, childrenInRecords }[]` for `parentIds` |
 | `PATCH /api/items/:id` | `{ version }` — the new version, or the unchanged one when the payload had nothing to write |
 | `POST /api/relations/connect` | `{ parentId, version, childrenInDrafts, childrenInRecords }` |
 | `POST /api/relations/disconnect` | same as `connect` |
@@ -778,26 +837,28 @@ exactly as strictly as a real one: it still returns `404` for a missing id and
   `PATCH` that sends any other value, including `null` or a first value for an
   item created without one, gets `400 cobissId cannot be changed after
   creation`. Sending the stored value again is fine.
-- `title` must be a non-empty string on create, and on `PATCH` whenever it is
-  sent, so `title: null` gets `400 title must not be empty`.
+- `title` is required by the schema in both states, so a create without one,
+  or a `PATCH` sending `title: null` / `""`, gets `400
+  METADATA_VALIDATION_FAILED` naming `title` (was `400 title must not be empty`
+  until 2026-09-25).
 
 **Metadata fields:**
 | Field                   | Type             | Notes                              |
 |-------------------------|------------------|------------------------------------|
-| `title`                 | string           | Required, must not be empty        |
+| `title`                 | string           | Required (draft and record)        |
 | `subtitle`              | string           |                                    |
 | `authors`               | Author[]         | `{familyName, firstName, responsibility, role}` |
 | `cobissId`              | string           | If set, generates deterministic ID; cannot change after creation |
 | `language`              | CodedValue[]     | `{en, cnr, code}`                  |
 | `country`               | CodedValue[]     | `{en, cnr, code}`                  |
-| `materialType`          | CodedValue       | `{en, cnr, code}`                  |
+| `materialType`          | CodedValue       | `{en, cnr, code}` — required (draft and record) |
 | `recordType`            | CodedValue       | `{en, cnr, code}`                  |
 | `bibliographicLevel`    | CodedValue       | `{en, cnr, code}`                  |
 | `publication`           | object           | `{year, place, publisher, manufacturerName, placeOfManufacture}` |
 | `edition`               | string           |                                    |
 | `dimensions`            | string           |                                    |
 | `physicalDescription`   | string           | 215/a free text, e.g. `"253 str."` |
-| `extent`                | object           | `{value, unit}` — integer ≥ 0 + an `extentUnit` code (`pages`, `sheets`, `volumes`, `items`, `minutes`); schema v2 |
+| `extent`                | object           | `{value, unit}` — integer ≥ 0 + an `extentUnit` code (`pages`, `sheets`, `volumes`, `items`, `minutes`); schema v2; COBISS import fills it from 215/a when the unit fits the type |
 | `issue`                 | object           | `{volume, number, date}` — `date` is `YYYY`, `YYYY-MM` or `YYYY-MM-DD` (a real calendar date); one issue of a serial; schema v2 |
 | `keywords`              | string[]         | 610/a free keywords; parsed from COBISS; schema v2 |
 | `summaryNote`           | string           | 330/a summary; parsed from COBISS; schema v2 (was dropped silently before) |
@@ -805,7 +866,7 @@ exactly as strictly as a real one: it still returns `404` for a missing id and
 | `isbn`                  | string[]         |                                    |
 | `issn`                  | string[]         |                                    |
 | `seriesTitle` …         | string           | `seriesTitle`, `seriesSubtitle`, `seriesResponsibility`, `seriesIssn`, `seriesVolume` |
-| `collectionType`        | number           | Auto-set to 0                      |
+| `collectionType`        | number           | Required; set to 0 when not sent (schema `default: 0`) |
 | `jeGlavnoGradivo`       | boolean          | Auto-set to true                   |
 | `childrenInDrafts`      | number           | Auto-managed via DB triggers       |
 | `childrenInRecords`     | number           | Auto-managed via DB triggers       |
@@ -1014,8 +1075,8 @@ writes no history row.
 Completing a review of a draft calls `ItemsService.transition([itemId], RECORD,
 actor, { note })` — the same code path and checks as any publish. The caller's
 **own token** must allow publishing (`assertCanTransition`, 403 otherwise — the
-directory is not asked). Publish validation runs inside the transition; its
-`400 PUBLISH_VALIDATION_FAILED` comes back unchanged and the task stays OPEN
+directory is not asked). The save check runs inside the transition; its
+`400 METADATA_VALIDATION_FAILED` comes back unchanged and the task stays OPEN
 (the whole transaction rolls back). The transition's observer closes the task,
 so there is exactly one closing path whether the publish came from the task or
 not.
@@ -1121,6 +1182,21 @@ not have to re-read a version it just invalidated:
 // connect -> 201, disconnect -> 200
 { "parentId": "…", "version": 7, "childrenInDrafts": 3, "childrenInRecords": 0 }
 ```
+
+Since 2026-09-25 (schema v2 B9/B10):
+
+- The relation change, the re-check of **every child** in its current state
+  with its parents after the change, and the parent's `RELATION_ADDED` /
+  `RELATION_REMOVED` revision are one transaction. A child the change makes
+  invalid is `400 METADATA_VALIDATION_FAILED` and nothing is linked or
+  unlinked — e.g. a complete book RECORD connected under a serial collection
+  without `issue` data, or a disconnect that leaves an issue without the
+  `collectionType` its serial parent was hiding.
+- `connect` with a parent that does not exist is `400 PARENT_NOT_FOUND`
+  (`{ code, message, parentIds }`, same as `parentIds` on `POST /items`); it
+  was a plain `404 Item not found`. Anonymous still gets `401` first.
+- New items can be linked at creation instead: `parentIds` on
+  [`POST /items`](#items).
 
 ---
 
@@ -1232,7 +1308,7 @@ curl http://localhost:3000/api/import/jobs/<jobId>
       { "id": "123456", "reason": "No data returned from COBISS for id..." }
     ],
     "warnings": [
-      { "id": "36797700", "reason": "Imported as a record, but would not pass publish validation: missing extent" }
+      { "id": "36797700", "reason": "Imported as a record, but would not pass validation: missing extent" }
     ]
   },
   "failedReason": null,
@@ -1240,11 +1316,21 @@ curl http://localhost:3000/api/import/jobs/<jobId>
 }
 ```
 
-`warnings` (schema v2): an import with `target: RECORD` is **never** blocked by
-publish validation — COBISS is the catalogue of record — but each imported
-record that a hand-publish would have refused is listed here, so it can be
-fixed later. Counted in `succeeded`, not `failed`. Absent on jobs queued
-before schema v2.
+`warnings` (schema v2): an import is **never** blocked by the save check —
+COBISS is the catalogue of record — but each imported item that a hand-made
+item in the same state would have been refused for is listed here, so it can
+be fixed later (since 2026-09-25 for `target: DRAFT` too, against the draft
+rules). Counted in `succeeded`, not `failed`. Absent on jobs queued before
+schema v2.
+
+`extent` from 215/a (since 2026-09-25, B11; `parseExtent` in
+`cobiss-parser.ts`, so the preview and "Get data" get it too): best effort,
+only in the unit the material type's rule uses — pages for `a b c d` (the
+largest arabic number; bracketed unnumbered pages only when there is nothing
+else; a leading volume count like `2 sv.` gives nothing), minutes for `g i j`
+(`95 min`, `1 h 35 min`, `2 sata`), sheets for `e f k` (`1 zemljovid`, `1
+geogr. karta`, `24 lista`). Anything else leaves `extent` empty; 215/a itself
+is always kept in `physicalDescription`.
 
 ---
 
@@ -1296,7 +1382,8 @@ redis-cli -p 6379 KEYS "bull:user-sync:*"
 10. **Relations**: self-references and circular relations (direct or transitive) are rejected with `400`
 11. **Timestamps**: all timestamp columns are `timestamptz`, so REST (`…Z`) and the indexed `_source` copy (`…+00:00`) denote the same instant and parse identically
 12. **`version` is a write counter, not a change counter** — see [Versioning](#items) above before using it as a change signal
-13. **Publishing is validated**: DRAFT → RECORD and create-as-RECORD run the schema v2 publish check; drafts, record edits and imports do not — see [Publish validation](#items)
+13. **Every write is validated** (since 2026-09-25): create, metadata `PATCH`, transition (both directions) and relation changes run the schema v2 check for the state the item ends up in — draft rules or record rules; only visibility-only `PATCH` and the COBISS import are exempt — see [Validation on save](#items)
+14. **Parents on create**: `POST /items` takes `parentIds`; an unknown parent there or on `relations/connect` is `400 PARENT_NOT_FOUND`
 
 ---
 

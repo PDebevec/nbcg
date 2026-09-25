@@ -7,6 +7,7 @@ import {
   type ConstraintViolation,
   type ItemState,
   type MissingField,
+  type TargetState,
 } from './rules/evaluate';
 import { SchemaService } from './schema.service';
 
@@ -14,31 +15,42 @@ import { SchemaService } from './schema.service';
 type Reader = PrismaService | Prisma.TransactionClient;
 
 export interface ItemToValidate {
-  /** `null` for an item that does not exist yet (`POST /items` straight to RECORD). */
+  /** `null` for an item that does not exist yet (`POST /items`). */
   id: string | null;
   metadata: unknown;
   /** Where the item is now — rules may depend on it (`cobissId` is read-only once it exists). */
   itemState: ItemState;
+  /** The state the write leaves it in: whose rules apply. */
+  targetState: TargetState;
+  /**
+   * The parents' metadata when the caller already has it (`POST /items` with
+   * `parentIds`). Omitted → loaded from `item_relations` for an existing item,
+   * `[]` for a new one.
+   */
+  parents?: Array<Record<string, unknown>>;
 }
 
 export interface ValidationResult {
   id: string | null;
+  /** The rules the item was checked against. */
+  state: TargetState;
   ok: boolean;
   missing: MissingField[];
   violations: ConstraintViolation[];
 }
 
 /**
- * The publish check: every visible + required field filled, every value within
+ * The save check: every visible + required field filled, every value within
  * its constraints, evaluated with the item's own context (material type,
- * collectionType, parents). The same `checkMetadata` the web editor runs for
- * its "cannot be published yet" summary, so the two cannot disagree.
+ * collectionType, parents, target state). The same `checkMetadata` the editors
+ * run before they let the user save, so the two cannot disagree.
  *
- * Run on every path that makes an item a RECORD. Deliberately NOT on draft
- * saves, PATCH of an existing record, or the COBISS import worker.
+ * Run on every write that leaves item metadata behind: create, PATCH with
+ * metadata, transition (both directions), relation connect/disconnect.
+ * Deliberately NOT on the COBISS import worker (it only reports warnings).
  */
 @Injectable()
-export class PublishValidatorService {
+export class MetadataValidatorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly schema: SchemaService,
@@ -46,10 +58,12 @@ export class PublishValidatorService {
 
   async validate(items: ItemToValidate[], db: Reader = this.prisma): Promise<ValidationResult[]> {
     const parentsOf = await this.loadParents(
-      items.map((i) => i.id).filter((id): id is string => id !== null),
+      items.filter((i) => i.id !== null && !i.parents).map((i) => i.id!),
       db,
     );
-    return items.map((item) => this.check(item, item.id ? (parentsOf.get(item.id) ?? []) : []));
+    return items.map((item) =>
+      this.check(item, item.parents ?? (item.id ? (parentsOf.get(item.id) ?? []) : [])),
+    );
   }
 
   /** No database: the caller already knows the parents' metadata (`[]` for none). */
@@ -58,30 +72,54 @@ export class PublishValidatorService {
     const result = checkMetadata(
       this.schema.getRecordSchemaV2(),
       metadata,
-      buildContext(metadata, parents, item.itemState),
+      buildContext(metadata, parents, item.itemState, item.targetState),
     );
     return {
       id: item.id,
+      state: item.targetState,
       ok: result.missing.length === 0 && result.violations.length === 0,
       ...result,
     };
   }
 
   /**
-   * Throws `400 PUBLISH_VALIDATION_FAILED` naming every item that fails and
-   * why. All-or-nothing: one bad item in a bulk publish stops the whole batch.
+   * Throws `400 METADATA_VALIDATION_FAILED` naming every item that fails, why,
+   * and whose rules it failed (`state`). All-or-nothing: one bad item in a bulk
+   * write stops the whole batch.
    */
-  async assertPublishable(items: ItemToValidate[], db: Reader = this.prisma): Promise<void> {
+  async assertValid(items: ItemToValidate[], db: Reader = this.prisma): Promise<void> {
     const failed = (await this.validate(items, db)).filter((r) => !r.ok);
     if (failed.length === 0) return;
 
-    const noun = items.length === 1 ? 'item is' : 'items are';
+    const one = items.length === 1;
+    const message = failed.every((r) => r.state === 'RECORD')
+      ? `${failed.length} of ${items.length} ${one ? 'item is' : 'items are'} not ready to publish`
+      : `${failed.length} of ${items.length} ${one ? 'item' : 'items'} cannot be saved`;
+
     throw new BadRequestException({
       statusCode: 400,
-      code: 'PUBLISH_VALIDATION_FAILED',
-      message: `${failed.length} of ${items.length} ${noun} not ready to publish`,
-      items: failed.map(({ id, missing, violations }) => ({ id, missing, violations })),
+      code: 'METADATA_VALIDATION_FAILED',
+      message,
+      items: failed.map(({ id, state, missing, violations }) => ({ id, state, missing, violations })),
     });
+  }
+
+  /**
+   * Re-check existing items as they are stored, each in its current state, with
+   * the parents `db` sees — inside a relation change's transaction that is the
+   * parents *after* the change. Unknown ids are skipped.
+   */
+  async assertStoredValid(ids: string[], db: Reader = this.prisma): Promise<void> {
+    if (ids.length === 0) return;
+    const unique = [...new Set(ids)];
+    const [drafts, records] = await Promise.all([
+      db.draft.findMany({ where: { id: { in: unique } }, select: { id: true, metadata: true } }),
+      db.record.findMany({ where: { id: { in: unique } }, select: { id: true, metadata: true } }),
+    ]);
+    const stored = (rows: Array<{ id: string; metadata: unknown }>, state: 'DRAFT' | 'RECORD') =>
+      rows.map((r) => ({ id: r.id, metadata: r.metadata, itemState: state, targetState: state }));
+
+    await this.assertValid([...stored(drafts, 'DRAFT'), ...stored(records, 'RECORD')], db);
   }
 
   /** childId → metadata of each of its parents, in one round trip per table. */

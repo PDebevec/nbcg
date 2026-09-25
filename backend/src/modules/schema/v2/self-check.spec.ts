@@ -124,6 +124,24 @@ describe('schema v2 self-check', () => {
       expect(errorsFor(broken)).toMatch(/unit furlongs is not an extentUnit code/);
     });
 
+    it('a default that is not a code of its vocabulary', () => {
+      const s = schemaWith((specs) => {
+        specs.find((f) => f.key === 'collectionType')!.default = 2;
+        return specs;
+      });
+      expect(errorsFor(s)).toMatch(/collectionType: default 2 is not a collectionType code/);
+    });
+
+    it('a default of the wrong type, or on a repeatable field', () => {
+      const s = schemaWith((specs) => {
+        specs.find((f) => f.key === 'title')!.default = 0;
+        specs.find((f) => f.key === 'keywords')!.default = 'x';
+        return specs;
+      });
+      expect(errorsFor(s)).toMatch(/title: default 0 is not a string/);
+      expect(errorsFor(s)).toMatch(/keywords: a default is only allowed on a single scalar field/);
+    });
+
     it('and assertSchemaV2 throws with the whole list', () => {
       const broken = structuredClone(schema);
       field(broken, 'title').label = { en: '', cnr: '' };
@@ -182,6 +200,19 @@ describe('schema v2 shape', () => {
       strict: false,
     });
     expect(field(schema, 'authors').suggest!.path).toBe('/search/suggest?field=author&limit=5');
+  });
+
+  it('starts collectionType at 0; no other field has a default', () => {
+    const walk = (fields: FieldV2[]): FieldV2[] => fields.flatMap((f) => [f, ...walk(f.objectShape ?? [])]);
+    expect(walk(schema.fields).filter((f) => f.default !== null).map((f) => [f.key, f.default])).toEqual([
+      ['collectionType', 0],
+    ]);
+  });
+
+  it('declares targetState, and 207 is the serial\'s own numbering (not per issue)', () => {
+    expect(schema.context.map((c) => c.key)).toContain('targetState');
+    expect(field(schema, 'numberingAndDates').issueIdentifying).toBe(false);
+    expect(field(schema, 'issue.number').issueIdentifying).toBe(true);
   });
 
   it('labels every field and group in both languages', () => {

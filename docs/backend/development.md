@@ -105,8 +105,10 @@ Users `admin`, `editor`, `cataloguer`, `reader` (password = username) — see
   work counts as done** — including response-shape-only changes.
 - `npm test` — jest unit specs (`*.spec.ts`), e.g. `tasks.service.spec.ts`,
   `search.service.spec.ts`, and the schema v2 specs under `src/modules/schema/`.
-- Items that get **published** in the suite must pass publish validation: add
-  `'"$PUBLISHABLE"'` (a book with its page count) to their metadata, as the
+- Every item the suite creates must pass the schema v2 save check (every write
+  is checked since 2026-09-25): a draft needs `'"$DRAFTABLE"'` (a material
+  type) next to its title, an item that gets **published** or is created as a
+  RECORD needs `'"$PUBLISHABLE"'` (a book with its page count), as the
   existing fixtures do.
 - Some §16/§18 tests need the user directory synced first (`POST
   /api/users/sync`), otherwise they SKIP.

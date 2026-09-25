@@ -32,8 +32,8 @@ export class RevisionsService {
    * written in the same transaction as the item can disagree with it, and a
    * timeline that disagrees with the record is worse than no timeline.
    *
-   * File and relation writes are not transactional in this codebase, so those
-   * callers use {@link recordDetached} instead.
+   * Relation writes pass their transaction too. File writes are not
+   * transactional in this codebase, so those callers use {@link recordDetached}.
    */
   async record(inputs: RevisionInput | RevisionInput[], tx?: RevisionWriter): Promise<void> {
     // `changes` is omitted rather than set to null when empty — the column is
@@ -55,7 +55,7 @@ export class RevisionsService {
    * Append revisions outside any transaction, swallowing failures.
    *
    * For writes whose primary effect has already been committed (a file blob
-   * stored, a relation row inserted): losing the timeline entry is a cosmetic
+   * stored): losing the timeline entry is a cosmetic
    * gap, whereas turning a successful upload into a 500 is not.
    */
   async recordDetached(inputs: RevisionInput | RevisionInput[]): Promise<void> {

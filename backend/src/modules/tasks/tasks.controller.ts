@@ -94,8 +94,8 @@ export class TasksController {
 
   /**
    * Finish the current stage. Completing a REVIEW_PUBLISH task on a draft
-   * PUBLISHES it — including publish validation, whose
-   * `400 PUBLISH_VALIDATION_FAILED` comes back unchanged.
+   * PUBLISHES it — including the save check, whose
+   * `400 METADATA_VALIDATION_FAILED` comes back unchanged.
    */
   @Post(':id/complete')
   @HttpCode(200)

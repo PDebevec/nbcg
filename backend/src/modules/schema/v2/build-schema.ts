@@ -75,6 +75,7 @@ function toField(
       : null,
     parentInheritable: spec.parentInheritable ?? false,
     issueIdentifying: spec.issueIdentifying ?? false,
+    default: spec.default ?? null,
   };
 }
 

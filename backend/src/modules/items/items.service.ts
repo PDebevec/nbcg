@@ -19,23 +19,10 @@ import { PrismaService } from '../../core/prisma/prisma.service';
 import { RevisionsService } from '../../core/revisions/revisions.service';
 import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
 import { TaskHistoryService } from '../../core/task-history/task-history.service';
-import { PublishValidatorService } from '../schema/publish-validator.service';
+import { RelationsService } from '../relations/relations.service';
+import { MetadataValidatorService } from '../schema/metadata-validator.service';
 import { diffMetadata } from '../../shared/util/diff-metadata';
 import { generateDeterministicId } from '../../shared/util/generateUuidFromCobissId';
-
-// Required metadata field validators. `null` (unset) never passes for these.
-// Add entries here to enforce more required fields without changing service logic.
-const REQUIRED_METADATA_VALIDATORS: Array<{
-  key: string;
-  validate: (v: unknown) => boolean;
-  message: string;
-}> = [
-  {
-    key: 'title',
-    validate: (v) => typeof v === 'string' && v.trim().length > 0,
-    message: 'title must not be empty',
-  },
-];
 
 // Set at creation and baked into the item's id; a later edit must not move it.
 const IMMUTABLE_METADATA_KEYS = ['cobissId'] as const;
@@ -51,7 +38,8 @@ export class ItemsService {
     private readonly seaweedfs: SeaweedfsService,
     private readonly revisions: RevisionsService,
     private readonly taskHistory: TaskHistoryService,
-    private readonly publishValidator: PublishValidatorService,
+    private readonly validator: MetadataValidatorService,
+    private readonly relations: RelationsService,
   ) {}
 
   async stats(): Promise<{
@@ -77,20 +65,21 @@ export class ItemsService {
     return { records, drafts };
   }
 
+  /**
+   * Required fields come from the schema (title, material type, … for a
+   * draft; the publish fields too for a record), checked with the parents the
+   * item is created under. The item, its links to `parentIds` and every
+   * revision are one transaction; the response adds each parent's new version.
+   */
   async create(
     visibilityStatus: VisibilityStatus,
     targetState: ItemType,
     rawMetadata: Record<string, unknown> | undefined,
     actor: Actor,
+    parentIds: string[] = [],
   ) {
     // On create there is nothing to unset, so a `null` is just an absent field.
     const sanitizedMetadata = stripNulls(this.sanitizeMetadata(rawMetadata ?? {}));
-
-    for (const { key, validate, message } of REQUIRED_METADATA_VALIDATORS) {
-      if (!validate(sanitizedMetadata[key])) {
-        throw new BadRequestException(message);
-      }
-    }
 
     const cobissId = sanitizedMetadata.cobissId as string | undefined;
     let id: string | undefined;
@@ -119,13 +108,18 @@ export class ItemsService {
       jeGlavnoGradivo: true,
     };
 
-    // Creating straight into RECORD is publishing, so it passes the same check
-    // as a transition. A new item has no parents yet.
-    if (targetState === ItemType.RECORD) {
-      await this.publishValidator.assertPublishable([
-        { id: id ?? null, metadata: finalMetadata, itemState: 'NEW' },
-      ]);
-    }
+    // 400 PARENT_NOT_FOUND before anything is checked or written.
+    const parents = await this.relations.resolveParents(parentIds);
+
+    await this.validator.assertValid([
+      {
+        id: id ?? null,
+        metadata: finalMetadata,
+        itemState: 'NEW',
+        targetState,
+        parents: parents.map((p) => p.metadata),
+      },
+    ]);
 
     const data = {
       ...(id ? { id } : {}),
@@ -152,7 +146,8 @@ export class ItemsService {
         tx,
       );
 
-      return item;
+      const parentStates = await this.relations.linkNewChild(tx, item.id, targetState, parents, actor);
+      return { ...item, parents: parentStates };
     });
   }
 
@@ -183,15 +178,6 @@ export class ItemsService {
     expectedVersion: number,
   ) {
     const metadataUpdate = rawMetadata ? this.sanitizeMetadata(rawMetadata) : undefined;
-
-    // Validate required fields only when they are present in the incoming payload.
-    if (metadataUpdate) {
-      for (const { key, validate, message } of REQUIRED_METADATA_VALIDATORS) {
-        if (key in metadataUpdate && !validate(metadataUpdate[key])) {
-          throw new BadRequestException(message);
-        }
-      }
-    }
 
     const hasMetadataChanges =
       metadataUpdate !== undefined && Object.keys(metadataUpdate).length > 0;
@@ -262,6 +248,17 @@ export class ItemsService {
         : ChangeAction.UPDATE;
 
     await this.prisma.$transaction(async (tx) => {
+      // The stored metadata with the patch applied must still pass the rules of
+      // the state the item is in — a RECORD stays complete. A visibility-only
+      // PATCH leaves the metadata alone and is not checked.
+      if (hasMetadataChanges) {
+        const state = draft ? ItemType.DRAFT : ItemType.RECORD;
+        await this.validator.assertValid(
+          [{ id, metadata: data.metadata, itemState: state, targetState: state }],
+          tx,
+        );
+      }
+
       // Use a WHERE clause that includes version to guard against races
       // between the read above and this write.
       const result = draft
@@ -410,14 +407,26 @@ export class ItemsService {
       const fromRecords = ids.filter((id) => recordsMap.has(id));
       const now = new Date();
 
-      // Inside the transaction and before any row moves: one incomplete item
-      // fails the whole batch with a list of what is missing where.
-      if (targetState === ItemType.RECORD) {
-        await this.publishValidator.assertPublishable(
-          fromDrafts.map((id) => ({ id, metadata: draftsMap.get(id)!.metadata, itemState: 'DRAFT' as const })),
-          tx,
-        );
-      }
+      // Inside the transaction and before any row moves: one item that fails
+      // the rules of the state it moves to fails the whole batch, with a list
+      // of what is missing where. Both directions — RECORD → DRAFT uses the
+      // draft rules.
+      await this.validator.assertValid(
+        targetState === ItemType.RECORD
+          ? fromDrafts.map((id) => ({
+              id,
+              metadata: draftsMap.get(id)!.metadata,
+              itemState: ItemType.DRAFT,
+              targetState: ItemType.RECORD,
+            }))
+          : fromRecords.map((id) => ({
+              id,
+              metadata: recordsMap.get(id)!.metadata,
+              itemState: ItemType.RECORD,
+              targetState: ItemType.DRAFT,
+            })),
+        tx,
+      );
 
       if (targetState === ItemType.RECORD) {
         await tx.record.createMany({
@@ -583,11 +592,11 @@ export class ItemsService {
   }
 
   /**
-   * Dry run of the publish check for one item — the checklist a dialog shows
-   * before the user presses Publish. Also answers for an existing RECORD
-   * (what an edit would have to fix), though PATCH never enforces it.
+   * Dry run of the save check for one item against `target`'s rules — the
+   * checklist a dialog shows before the user presses Publish (RECORD), or what
+   * the item needs to stay savable as a draft (DRAFT).
    */
-  async validation(id: string) {
+  async validation(id: string, target: ItemType) {
     const [draft, record] = await Promise.all([
       this.prisma.draft.findUnique({ where: { id }, select: { metadata: true } }),
       this.prisma.record.findUnique({ where: { id }, select: { metadata: true } }),
@@ -596,8 +605,13 @@ export class ItemsService {
       throw new NotFoundException(`Item not found: ${id}`);
     }
 
-    const [result] = await this.publishValidator.validate([
-      { id, metadata: (draft ?? record)!.metadata, itemState: draft ? 'DRAFT' : 'RECORD' },
+    const [result] = await this.validator.validate([
+      {
+        id,
+        metadata: (draft ?? record)!.metadata,
+        itemState: draft ? ItemType.DRAFT : ItemType.RECORD,
+        targetState: target,
+      },
     ]);
     return { ok: result.ok, missing: result.missing, violations: result.violations };
   }

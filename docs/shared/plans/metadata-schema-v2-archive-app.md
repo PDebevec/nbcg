@@ -1,6 +1,6 @@
 # Archive app → metadata schema v2: migration guide
 
-## Status: PLANNED — decisions settled 2026-09-25 · backend B1–B6 on dev, B8–B12 open (the app needs B8–B10)
+## Status: PLANNED (app side) — backend B1–B12 on dev since 2026-09-25, so the app can start · decisions settled 2026-09-25
 
 For the desktop archive application (TypeScript/Vue, runs at the client on
 `nbcg-dc`, source not in this repo). It builds its whole metadata editor from
@@ -30,9 +30,11 @@ came out of reviewing the app against the contract.
 ## No compatibility window
 
 All data is test data (2026-09-25). The backend changes ship when they are
-ready; until the app runs v2 its uploads may fail with a 400 (a book as Record
-without `extent`, which v1 cannot express). That's accepted: wipe, move the
-processed batches back to "scanned", test again on v2.
+ready; until the app runs v2 its uploads may fail with a 400. On dev that is
+already the case (B8–B12, 2026-09-25): a book as Record without `extent`
+(which v1 cannot express), and any item — Draft too — without a material type
+(v1 has `materialType` as optional). That's accepted: wipe, move the processed
+batches back to "scanned", test again on v2.
 
 v1 (`GET /api/schema/record`) stays until the app has moved, then it is
 deleted (backend B7).
@@ -206,7 +208,9 @@ POST /api/items
 
 The backend checks the item with those parents and creates the links in the
 same transaction (backend B10). Then upload the files. No separate
-`POST /api/relations/connect` for items this upload creates.
+`POST /api/relations/connect` for items this upload creates. Linking changes
+the parent, so the app's account needs manage rights on each parent's
+collection, the same as for connect today (otherwise 403).
 
 Store each `parents[].version` on the local parent, as the app does today with
 connect's answer — otherwise the next edit of that parent fails with a 409. If
@@ -251,8 +255,9 @@ A field is either missing or has a violation, never both — an empty field is
 not format-checked. `id` is `null` on create (nothing was created), the item's
 id on a re-upload. `state` says whose rules failed. Paths inside repeatable objects carry the index:
 `corporateBodies[1].name`. Show the `label`s and let the user jump to the
-field. (Before backend B9 the code is `PUBLISH_VALIDATION_FAILED`, without
-`state`, and only for Record.) `PARENT_NOT_FOUND` is a different error — step 8.
+field. (Until backend B9 — on dev since 2026-09-25 — the code was
+`PUBLISH_VALIDATION_FAILED`, without `state`, and only for Record.)
+`PARENT_NOT_FOUND` is a different error — step 8.
 
 ### 10. New things to support
 

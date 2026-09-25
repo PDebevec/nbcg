@@ -9,6 +9,13 @@ Legend: ✅ already in SEARCH_FIELDS · 🔍 good search candidate · — not us
 > backend done 2026-09-24). Schema v2 added `extent`, `issue`, `keywords` and
 > `summaryNote` (below). The web editor still uses its interim visibility map
 > until it switches to v2: [material-type field visibility](../frontend/plans/material-type-field-visibility.md).
+>
+> **Required fields (since 2026-09-25, checked on every write):** a **draft**
+> needs `title`, `materialType`, `collectionType` (set to 0 when not sent), a
+> `name` in each `corporateBodies` entry and a `url` in each
+> `electronicLocation` entry; a **record** also needs the publish fields below
+> where they apply — `extent`, `cartographicMathematicalData` (maps),
+> `issue.number` + `issue.date` (an issue of a serial).
 
 ---
 
@@ -38,7 +45,7 @@ Legend: ✅ already in SEARCH_FIELDS · 🔍 good search candidate · — not us
 | `subsequentResponsibility` | `string[]` | 200/g | 🔍 |
 | `edition` | `string` | 205/a | — e.g. "2nd edition" |
 | `musicEditionStatement` | `string` | 208/a | — |
-| `numberingAndDates` | `string` | 207/a | — serials numbering |
+| `numberingAndDates` | `string` | 207/a | — the serial's own numbering ("God. 1, br. 1 (1944)-"); an issue uses `issue` |
 
 ---
 
@@ -143,17 +150,18 @@ These are objects/arrays. To search human-readable labels use `.en` or `.cnr` su
 | Field | Type | COMARC | Search |
 |-------|------|--------|--------|
 | `physicalDescription` | `string` | 215/a | — free text, e.g. `"253 str."` |
-| `extent` | `{ value: number, unit: string }` | — (NBCG) | — schema v2: the number from 215/a, unit `pages`/`sheets`/`volumes`/`items`/`minutes`; caption and unit follow the material type |
+| `extent` | `{ value: number, unit: string }` | — (NBCG) | — schema v2: the number from 215/a, unit `pages`/`sheets`/`volumes`/`items`/`minutes`; caption and unit follow the material type. Required to publish books, video and sound (not collections). COBISS import fills it from 215/a when the unit fits the type (2026-09-25) |
 | `otherPhysicalDetails` | `string` | 215/c | — |
 | `dimensions` | `string` | 215/d | — |
-| `cartographicMathematicalData` | `string` | 206/a | — |
+| `cartographicMathematicalData` | `string` | 206/a | — map scale; required to publish a map (not an issue of a serial) |
 
 ---
 
 ## Serial issue (NBCG)
 
 Shown only on an item whose parent is a serial collection (`collectionType` 4);
-`number` and `date` are then required to publish. No COMARC source.
+`number` and `date` are then required to publish (not for a draft). No COMARC
+source.
 
 | Field | Type | Search |
 |-------|------|--------|

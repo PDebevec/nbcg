@@ -2,6 +2,16 @@
   {
     "database": "nbcg",
     "index": "records",
+    "setting": {
+      "analysis": {
+        "filter": {
+          "folding": { "type": "asciifolding", "preserve_original": true }
+        },
+        "analyzer": {
+          "default": { "type": "custom", "tokenizer": "standard", "filter": ["lowercase", "folding"] }
+        }
+      }
+    },
     "nodes": {
       "table": "records",
       "columns": [
@@ -101,6 +111,16 @@
   {
     "database": "nbcg",
     "index": "drafts",
+    "setting": {
+      "analysis": {
+        "filter": {
+          "folding": { "type": "asciifolding", "preserve_original": true }
+        },
+        "analyzer": {
+          "default": { "type": "custom", "tokenizer": "standard", "filter": ["lowercase", "folding"] }
+        }
+      }
+    },
     "nodes": {
       "table": "drafts",
       "columns": [

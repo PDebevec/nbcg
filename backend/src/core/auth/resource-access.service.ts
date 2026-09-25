@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { VisibilityStatus } from '../../../generated/prisma/enums';
+import { parentNotFound } from '../../shared/errors/parent-not-found';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Principal, VisibilityFilter } from './principal.type';
 
@@ -132,6 +133,32 @@ export class ResourceAccessService {
 
     if (draftIds.size > 0) this.assertCanManageCollection(principal, 'drafts');
     if (recordIds.size > 0) this.assertCanManageCollection(principal, 'records');
+  }
+
+  /**
+   * Linking a child changes its parent (version, children counts, timeline),
+   * so it needs manage on every parent's collection — for `relations/connect`
+   * and for `POST /items` with `parentIds`. A parent that does not exist is
+   * `400 PARENT_NOT_FOUND` (not a 404), so a client can tell "your parent is
+   * gone" from "the item you addressed is gone".
+   */
+  async assertCanManageParents(principal: Principal, parentIds: string[]): Promise<void> {
+    if (principal.isAnonymous) {
+      throw new UnauthorizedException();
+    }
+    if (parentIds.length === 0) return;
+
+    const [drafts, records] = await Promise.all([
+      this.prisma.draft.findMany({ where: { id: { in: parentIds } }, select: { id: true } }),
+      this.prisma.record.findMany({ where: { id: { in: parentIds } }, select: { id: true } }),
+    ]);
+
+    const found = new Set([...drafts, ...records].map((p) => p.id));
+    const missing = [...new Set(parentIds)].filter((id) => !found.has(id));
+    if (missing.length > 0) throw parentNotFound(missing);
+
+    if (drafts.length > 0) this.assertCanManageCollection(principal, 'drafts');
+    if (records.length > 0) this.assertCanManageCollection(principal, 'records');
   }
 
   /**

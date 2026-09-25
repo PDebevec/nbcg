@@ -1,12 +1,13 @@
 # Metadata schema v2 — the contract
 
-## Status: backend B1–B6 DONE (2026-09-24, dev) · decisions of 2026-09-25 → backend B8–B12 OPEN · then web and archive app
+## Status: backend B1–B6 DONE (2026-09-24) · B8–B12 DONE (2026-09-25) — both on dev, not production · next: web and archive app
 
 The backend implements this contract as written, with the refinements marked
 **(as built)** below; details and the decisions taken on the way are in the
 [backend plan](../../backend/plans/metadata-schema-v2.md#done--what-was-built-2026-09-24).
 The review against the archive app (2026-09-25) changed the contract: marked
-**(2026-09-25)** below, not built yet — backend phases B8–B12.
+**(2026-09-25)** below, built the same day as backend phases B8–B12
+([what was built](../../backend/plans/metadata-schema-v2.md#done--b8b12-2026-09-25)).
 
 | Doc | What it covers |
 |---|---|
@@ -87,7 +88,7 @@ since `cd8e5bd`). What is missing:
 | `GET /api/search/vocabularies/:name?q=&limit=` | Search a controlled vocabulary too big to inline. | public |
 | `GET /api/search/suggest?field=&q=&limit=` | Existing endpoint: most common existing values. | public (visibility-filtered) |
 | `GET /api/items/:id/validation?target=RECORD` | Dry run of the check; **(2026-09-25)** also `target=DRAFT`. | same as reading the item |
-| `POST /api/items` | **(2026-09-25)** new optional `parentIds: string[]`: checked with these parents, linked in the same transaction. The response adds `parents: [ { parentId, version, childrenInDrafts, childrenInRecords } ]` (what `connect` returns, one per parent). An unknown parent → `400 PARENT_NOT_FOUND`. | as today |
+| `POST /api/items` | **(2026-09-25)** new optional `parentIds: string[]`: checked with these parents, linked in the same transaction. The response adds `parents: [ { parentId, version, childrenInDrafts, childrenInRecords } ]` (what `connect` returns, one per parent). An unknown parent → `400 PARENT_NOT_FOUND`. | as today, plus manage on each parent's collection (as `connect`) |
 | `POST /api/relations/connect` | **(2026-09-25)** re-checks each child ([Validation on save](#validation-on-save)); an unknown parent → `400 PARENT_NOT_FOUND` (was a plain 400). | as today |
 
 **v1 stays frozen** at `GET /api/schema/record` until the archive app has moved
@@ -437,7 +438,7 @@ or linked) and says which item and which field:
 {
   "statusCode": 400,
   "code": "METADATA_VALIDATION_FAILED",
-  "message": "1 of 2 items is not ready to publish",
+  "message": "1 of 2 items are not ready to publish",
   "items": [
     { "id": "clx…",
       "state": "RECORD",
@@ -451,7 +452,9 @@ or linked) and says which item and which field:
 **(2026-09-25)** `code` was `PUBLISH_VALIDATION_FAILED` (as built in B6); it
 becomes `METADATA_VALIDATION_FAILED` because drafts fail too, and each item
 says whose rules it failed (`state`). `message` says "not ready to publish"
-when every failing item is a RECORD, "cannot be saved" otherwise.
+when every failing item is a RECORD, "cannot be saved" otherwise ("1 of 1 item
+cannot be saved"). An empty field is never format-checked, so one path is
+either in `missing` or in `violations`, never both.
 
 **(as built)** Each violation also carries the field's evaluated `label`, and
 `limit` for a broken bound (`minLength: 3` → `3`). A `quantity` whose stored
@@ -466,6 +469,12 @@ separate error, checked before the metadata:
 { "statusCode": 400, "code": "PARENT_NOT_FOUND",
   "message": "Parent not found: clx…", "parentIds": [ "clx…" ] }
 ```
+
+`parentIds` lists only the missing ids. **(as built)** Linking changes the
+parent (version, children counts, timeline), so `parentIds` on create needs
+the same rights as `relations/connect`: manage on each parent's collection
+(403 otherwise — a cataloguer cannot create a draft under a RECORD).
+Anonymous gets 401 before any parent is looked up.
 
 `GET /api/items/:id/validation?target=RECORD|DRAFT` returns the same `missing` /
 `violations` for one item with `200 { ok: boolean, … }`, so a dialog can show
@@ -540,8 +549,9 @@ date picker ([collection views](../../frontend/plans/collection-views.md)).
       [reference](../../backend/reference.md#schema-v2)).
 - [x] Accent-insensitive matching inside OpenSearch (`asciifolding` + reindex):
       suggest filters accent-insensitively, but `Niksic` still finds nothing.
-      Skipped on 2026-09-24. **Planned 2026-09-25** as backend B12 — the data
-      is wiped and reindexed anyway.
+      Skipped on 2026-09-24. **Done 2026-09-25** (backend B12) as a folding
+      default analyzer on both indices: search and suggest match `Niksic` ↔
+      `Nikšić` with no API change. Production needs the reindex (rollout wipe).
 
 - [ ] The rule table above — confirm with the library, especially what is
       required for which material type.
@@ -549,9 +559,11 @@ date picker ([collection views](../../frontend/plans/collection-views.md)).
       [collection views](../../frontend/plans/collection-views.md) plan has the
       same question.)
 - [x] Parse `extent` out of COBISS `physicalDescription` (`"253 str."`,
-      `"1 video disk (95 min)"`) on import? **Yes, planned 2026-09-25** as
-      backend B11: editing a RECORD is now checked, so an imported book without
-      `extent` could not be edited until someone typed it in.
+      `"1 video disk (95 min)"`) on import? **Yes, done 2026-09-25** (backend
+      B11): editing a RECORD is now checked, so an imported book without
+      `extent` could not be edited until someone typed it in. Best effort, only
+      in the unit the material type expects; the COBISS preview ("Get data")
+      gets it too.
 - [ ] Merge the web editor's interim visibility rules into the rule table
       above? (2026-09-24: not for now — the contract table was built as is.) They make series, `edition`, original/translation languages,
       place/name of manufacture, `titleByAnotherAuthor` and

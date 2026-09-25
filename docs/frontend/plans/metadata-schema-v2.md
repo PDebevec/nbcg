@@ -1,6 +1,6 @@
 # Frontend: schema-driven metadata editor (schema v2)
 
-## Status: PLANNED (2026-09-23) — backend B1–B6 done (2026-09-24); start after backend B8–B10 (decided 2026-09-25)
+## Status: PLANNED (2026-09-23) — every backend phase it needs is on dev (B1–B6 2026-09-24, B8–B12 2026-09-25): ready to start
 
 Contract: [shared/plans/metadata-schema-v2.md](../../shared/plans/metadata-schema-v2.md).
 Backend: [backend/plans/metadata-schema-v2.md](../../backend/plans/metadata-schema-v2.md).
@@ -11,8 +11,8 @@ a static visibility map in the current form that switches to F1's `useSchemaForm
 drafts have their own required fields (title + material type), selected by a
 new context key `targetState`; the backend checks every save, not only
 publishing; the error code becomes `METADATA_VALIDATION_FAILED`. F1, F4 and F5
-below are updated for it. Build against B8–B10, not the B6 behaviour described
-in the next section.
+below are updated for it. Backend B8–B12 are built (2026-09-25, dev): build
+against them — the table below is updated to what is live now.
 
 ---
 
@@ -24,12 +24,15 @@ Everything F1–F5 needs is live on dev ([backend plan](../../backend/plans/meta
 |---|---|
 | Schema | `GET /api/schema/v2/record` — `Cache-Control: no-cache` + `ETag` |
 | Types to mirror in `src/api/schema.ts` | `backend/src/modules/schema/v2/schema-v2.types.ts` + the rule types at the top of `evaluate.ts` |
-| File to copy verbatim to `src/utils/schemaRules.ts` | `backend/src/modules/schema/rules/evaluate.ts` — besides `evaluateField` / `evaluateAll` / `matches` / `isEmpty` it has `buildContext(metadata, parentsMetadata, itemState)` and **`checkMetadata(schema, metadata, ctx)`**, the exact function the backend's publish check runs. Use it for F4's banner, so "N required fields missing" and the backend's 400 can never disagree. The backend jest test `evaluate.spec.ts` starts checking the copy byte-for-byte as soon as the file exists (skipped until then). |
+| File to copy verbatim to `src/utils/schemaRules.ts` | `backend/src/modules/schema/rules/evaluate.ts` — besides `evaluateField` / `evaluateAll` / `matches` / `isEmpty` it has `buildContext(metadata, parentsMetadata, itemState, targetState)` and **`checkMetadata(schema, metadata, ctx)`**, the exact function the backend's save check runs. Use it for F4's banner, so "N required fields missing" and the backend's 400 can never disagree. The backend jest test `evaluate.spec.ts` starts checking the copy byte-for-byte as soon as the file exists (skipped until then). |
 | Conformance cases for the web's own tests (optional) | `backend/src/modules/schema/rules/conformance.json` |
 | Vocabulary search | `GET /api/search/vocabularies/:name?q=&limit=5` — same response shape as suggest, without `count` |
-| Publish check | `400 { code: "PUBLISH_VALIDATION_FAILED", message, items: [{ id, missing: [{ path, label }], violations: [{ path, label, constraint, limit?, hint? }] }] }`; dry run `GET /api/items/:id/validation?target=RECORD` → `{ ok, missing, violations }` |
+| Save check (every write, since 2026-09-25) | `400 { code: "METADATA_VALIDATION_FAILED", message, items: [{ id, state, missing: [{ path, label }], violations: [{ path, label, constraint, limit?, hint? }] }] }` (was `PUBLISH_VALIDATION_FAILED`, publish only, no `state`); dry run `GET /api/items/:id/validation?target=RECORD\|DRAFT` → `{ ok, missing, violations }` |
+| Parents on create | `POST /api/items` `parentIds: string[]` → response adds `parents: [{ parentId, version, childrenInDrafts, childrenInRecords }]`; unknown parent → `400 { code: "PARENT_NOT_FOUND", parentIds }` (also on `relations/connect`) |
+| Accent-insensitive search | since 2026-09-25 search and suggest match `Niksic` ↔ `Nikšić` in OpenSearch itself — nothing to do on the web side |
 | New fields accepted | `summaryNote` (330), `keywords` (610), `extent` `{ value, unit }`, `issue` `{ volume, number, date }` |
-| Import warnings | `GET /api/import/jobs/:id` → `progress.warnings[]` (records imported that would fail the publish check) |
+| Import warnings | `GET /api/import/jobs/:id` → `progress.warnings[]` (items imported that would fail the check for their state) |
+| `extent` from COBISS | imports and the COBISS preview fill `extent` from 215/a when the unit fits the material type |
 
 Label changes to know about: 215/a `physicalDescription` is now "Extent
 statement" / "Podatak o obimu" in the schema, because the new numeric `extent`
@@ -38,7 +41,12 @@ sheets" by material type).
 
 ### ⚠ Already affects the current web app
 
-Publish validation is **on** in the backend (every client, every publish):
+Validation is **on** in the backend for every write (every client; publish
+since 2026-09-24, every save since 2026-09-25):
+
+- **A draft can no longer be saved without a material type** (create or edit),
+  nor a record edited into an incomplete state (e.g. clearing its `extent`).
+  The current form shows the 400's `message` only.
 
 - **A book (`am`, and any `a b g i j` type that is not a collection) can no
   longer be published without `extent`, and the current form has no field for
@@ -191,7 +199,7 @@ saved to (the contract's editor rule 2).
   while any record-required field is empty (the backend refuses the PATCH
   otherwise).
 - A shared `ValidationErrorDialog.vue` for `400 METADATA_VALIDATION_FAILED`
-  (`PUBLISH_VALIDATION_FAILED` until backend B9): per item → its `state`,
+  (live since backend B9, 2026-09-25): per item → its `state`,
   missing labels + violations, link to `/admin/items/:id`. Used by the editor's
   own save as a fallback, and by:
   - bulk publish on `AdminItemsPage.vue` (the whole batch is rejected — say so);
@@ -211,10 +219,12 @@ reads `parent_relations` from the loaded item, fetches each parent with
 The web app has no "create as child of…" flow today (relations are made via the
 API/archive app), so a new item has no parents; if such a flow is added, pass
 the chosen parent to `useSchemaForm` and send it as `parentIds` on
-`POST /api/items` (backend B10) — the check then uses it and the link is made
-in the same call.
+`POST /api/items` (backend B10, built) — the check then uses it and the link
+is made in the same call. The user needs manage rights on the parent (a
+cataloguer cannot create under a RECORD — 403); a deleted parent is `400
+PARENT_NOT_FOUND`.
 
-Linking or unlinking a parent re-checks each child from backend B9 on, so the
+Linking or unlinking a parent re-checks each child (backend B9, built), so the
 relations UI (if any) must show `METADATA_VALIDATION_FAILED` too.
 
 ### F6 — optional: public record page
@@ -237,10 +247,10 @@ Field and group labels come from the schema (`en`/`cnr`), so
 |---|---|---|
 | F1–F3 | B1 (v2 endpoint), B2 (evaluator to copy), B5 (vocabulary search) | done 2026-09-24 |
 | F2 alone | B1 + B5 | done |
-| F4 | B6 (`PUBLISH_VALIDATION_FAILED`, `/items/:id/validation`) | done — and already enforced, see ⚠ above |
-| F1/F4 draft vs record rules | B8 (`targetState` context key, draft/record rule table) | open (2026-09-25) |
-| F4 every save checked, one error code | B9 (`METADATA_VALIDATION_FAILED`, PATCH/relations checked, `?target=DRAFT`) | open (2026-09-25) |
-| F5 create as child | B10 (`parentIds` on `POST /api/items`) | open (2026-09-25) |
+| F4 | B6 (`/items/:id/validation`, publish check) | done — and already enforced, see ⚠ above |
+| F1/F4 draft vs record rules | B8 (`targetState` context key, draft/record rule table) | done 2026-09-25 |
+| F4 every save checked, one error code | B9 (`METADATA_VALIDATION_FAILED`, PATCH/relations checked, `?target=DRAFT`) | done 2026-09-25 — already enforced |
+| F5 create as child | B10 (`parentIds` on `POST /api/items`) | done 2026-09-25 |
 | New fields render | B3 (else the backend drops them, like `summaryNote`) | done |
 | Import page shows `progress.warnings` | B6 import warnings | done (web renders only `errors` today) |
 | Nothing | the archive app — independent client of the same contract | — |

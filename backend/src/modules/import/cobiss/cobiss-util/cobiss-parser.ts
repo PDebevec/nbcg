@@ -63,6 +63,71 @@ function allFromFirst(raw: RawRecord, tag: string, code: string): string[] {
   return raw[tag]?.[0]?.subfields?.[code] ?? [];
 }
 
+// ---------------------------------------------------------------------------
+// 215/a → numeric extent (metadata schema v2)
+// ---------------------------------------------------------------------------
+
+type ExtentUnit = 'pages' | 'minutes' | 'sheets';
+
+/**
+ * The unit the schema's `extent` rule uses for a record type (first letter of
+ * the material type) — the same grouping as `schema/v2/record-fields.ts`.
+ */
+function extentUnitFor(recordType: string | undefined): ExtentUnit | null {
+  switch (recordType) {
+    case 'a': case 'b': case 'c': case 'd': return 'pages';
+    case 'g': case 'i': case 'j': return 'minutes';
+    case 'e': case 'f': case 'k': return 'sheets';
+    default: return null;
+  }
+}
+
+const PAGE_WORD = /\b(?:str|s|p|pp|pages?|strana|stranica)\b\.?/i;
+const VOLUMES_FIRST = /^\s*\d+\s*(?:sv|knj|vol|vols|t)\b\.?/i;
+const DURATION = /(?:(\d+)\s*(?:h|sat[ai]?)\b\.?\s*,?\s*)?(\d+)\s*min/i;
+const HOURS_ONLY = /(\d+)\s*(?:h|sat[ai]?)\b/i;
+const SHEETS =
+  /(\d+)\s+(?:[\p{L}.]+\s+){0,2}?(?:zemljovid|kart|plan|list|map|sheet|plakat|grafi|crte|razglednic|fotografij|reprodukcij)/iu;
+
+/**
+ * Best effort: the number in the free-text extent (215/a) as `{ value, unit }`,
+ * only in the unit the material type's rule expects; otherwise undefined and
+ * the item is left for a person (the import lists it as a warning).
+ *   "XII, 253 str."           + book  → 253 pages   (roman prelims are not counted)
+ *   "[4], 120, [8] str."      + book  → 120 pages   (bracketed = unnumbered)
+ *   "1 video disk (1 h 35 min)" + video → 95 minutes
+ *   "1 geogr. karta"          + map   → 1 sheet
+ *   "2 sv."                   + book  → undefined   (volumes, not pages)
+ */
+export function parseExtent(
+  text: string | undefined,
+  recordType: string | undefined,
+): { value: number; unit: ExtentUnit } | undefined {
+  const unit = extentUnitFor(recordType);
+  if (!text || !unit) return undefined;
+
+  let value: number | undefined;
+  if (unit === 'pages') {
+    if (!PAGE_WORD.test(text) || VOLUMES_FIRST.test(text)) return undefined;
+    const plain = [...text.matchAll(/(?<!\[)\b\d+\b(?!\])/g)].map((m) => Number(m[0]));
+    const bracketed = [...text.matchAll(/\[(\d+)\]/g)].map((m) => Number(m[1]));
+    const numbers = plain.length > 0 ? plain : bracketed;
+    value = numbers.length > 0 ? Math.max(...numbers) : undefined;
+  } else if (unit === 'minutes') {
+    const d = DURATION.exec(text);
+    if (d) value = Number(d[1] ?? 0) * 60 + Number(d[2]);
+    else {
+      const h = HOURS_ONLY.exec(text);
+      if (h) value = Number(h[1]) * 60;
+    }
+  } else {
+    const m = SHEETS.exec(text);
+    if (m) value = Number(m[1]);
+  }
+
+  return value !== undefined && Number.isSafeInteger(value) ? { value, unit } : undefined;
+}
+
 /**
  * Parse a 4-digit year out of strings like "1999", "c1999", "1999-2000".
  */
@@ -207,8 +272,10 @@ export function recordXmlToJson(xml: string, cobissId?: string): DomainRecord {
       manufacturerName: first(raw, '210', 'g'),
     } : undefined,
 
-    // 215 – Physical description (non-repeatable field)
+    // 215 – Physical description (non-repeatable field). 215/a stays as
+    // written; its number also becomes `extent` when the unit fits the type.
     physicalDescription: first(raw, '215', 'a'),
+    extent: parseExtent(first(raw, '215', 'a'), field001['b']?.[0]?.toLowerCase()),
     otherPhysicalDetails: first(raw, '215', 'c'),
     dimensions:          first(raw, '215', 'd'),
 

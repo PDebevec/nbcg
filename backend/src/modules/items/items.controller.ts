@@ -40,21 +40,24 @@ export class ItemsController {
   async validation(
     @GetPrincipal() principal: Principal,
     @Param('id') id: string,
-    @Query() _dto: ValidationQueryDto,
+    @Query() dto: ValidationQueryDto,
   ) {
     await this.access.assertCanView(principal, id);
-    return this.itemsService.validation(id);
+    return this.itemsService.validation(id, dto.target ?? ItemType.RECORD);
   }
 
   @Post()
-  create(@GetPrincipal() principal: Principal, @Body() dto: CreateItemDto) {
+  async create(@GetPrincipal() principal: Principal, @Body() dto: CreateItemDto) {
     const collection = dto.targetState === ItemType.RECORD ? 'records' : 'drafts';
     this.access.assertCanManageCollection(principal, collection);
+    // Linking changes each parent, so it needs the same rights as relations/connect.
+    await this.access.assertCanManageParents(principal, dto.parentIds ?? []);
     return this.itemsService.create(
       dto.visibilityStatus,
       dto.targetState,
       dto.metadata,
       actorOf(principal),
+      dto.parentIds ?? [],
     );
   }
 

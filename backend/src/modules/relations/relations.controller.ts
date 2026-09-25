@@ -13,9 +13,10 @@ export class RelationsController {
     private readonly access: ResourceAccessService,
   ) {}
 
+  // An unknown parent is 400 PARENT_NOT_FOUND, like `parentIds` on POST /items.
   @Post('connect')
   async connect(@GetPrincipal() principal: Principal, @Body() dto: ModifyRelationsDto) {
-    await this.access.assertCanManage(principal, dto.parentId);
+    await this.access.assertCanManageParents(principal, [dto.parentId]);
     return this.relationsService.connect(dto.parentId, dto.childIds, actorOf(principal));
   }
 

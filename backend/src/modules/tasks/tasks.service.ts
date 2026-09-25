@@ -319,7 +319,7 @@ export class TasksService {
    *   the caller → ADVANCED.
    * - FIX_METADATA → `next` required, REVIEW_PUBLISH only → ADVANCED.
    * - REVIEW_PUBLISH on a DRAFT → publishes it through ItemsService.transition(),
-   *   the same path and checks as any publish (publish validation included).
+   *   the same path and checks as any publish (the save check included).
    *   The transition's observer closes this task and writes CLOSED_ON_PUBLISH
    *   with the note, so a task-driven publish and any other publish share one
    *   closing path. Any failure rolls the whole thing back: the task stays OPEN.

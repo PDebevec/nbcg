@@ -2,8 +2,8 @@ import { IsIn, IsOptional } from 'class-validator';
 import { ItemType } from '../../../../generated/prisma/enums';
 
 export class ValidationQueryDto {
-  /** The state to check against. Only publishing is validated today. */
+  /** Whose rules to check against: RECORD (can it be published?) or DRAFT. */
   @IsOptional()
-  @IsIn([ItemType.RECORD])
-  target?: typeof ItemType.RECORD = ItemType.RECORD;
+  @IsIn([ItemType.DRAFT, ItemType.RECORD])
+  target?: ItemType = ItemType.RECORD;
 }

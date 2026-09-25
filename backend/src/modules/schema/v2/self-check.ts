@@ -30,7 +30,7 @@ export function selfCheckSchema(schema: SchemaV2, deps: SelfCheckDeps = DEFAULT_
   const unitCodes = new Set((VOCABULARIES.extentUnit?.values ?? []).map((v) => String(v.code)));
 
   // ── context: exactly what buildContext() computes ──
-  const computed = Object.keys(buildContext({}, [], 'NEW')).sort();
+  const computed = Object.keys(buildContext({}, [], 'NEW', 'DRAFT')).sort();
   const declared = [...contextKeys].sort();
   if (computed.join() !== declared.join()) {
     errors.push(`context keys [${declared.join(', ')}] differ from buildContext() [${computed.join(', ')}]`);
@@ -80,6 +80,30 @@ export function selfCheckSchema(schema: SchemaV2, deps: SelfCheckDeps = DEFAULT_
     if (rule.set.label && (!rule.set.label.en || !rule.set.label.cnr)) errors.push(`${where}: rule label incomplete`);
   };
 
+  // A new item starts with it, so it must be a value the field can hold.
+  const checkDefault = (field: FieldV2, path: string) => {
+    const value = field.default;
+    if (value === null) return;
+    if (field.multiple || field.type === 'object' || field.type === 'quantity') {
+      errors.push(`${path}: a default is only allowed on a single scalar field`);
+      return;
+    }
+    if (field.type === 'enum') {
+      if (field.values?.storeAs !== 'code') {
+        errors.push(`${path}: a default on an enum needs storeAs "code"`);
+        return;
+      }
+      const codes = VOCABULARIES[field.values.vocabulary]?.values.map((v) => v.code) ?? [];
+      if (!codes.includes(value as string | number)) {
+        errors.push(`${path}: default ${JSON.stringify(value)} is not a ${field.values.vocabulary} code`);
+      }
+      return;
+    }
+    const expected =
+      field.type === 'boolean' ? 'boolean' : field.type === 'integer' || field.type === 'number' ? 'number' : 'string';
+    if (typeof value !== expected) errors.push(`${path}: default ${JSON.stringify(value)} is not a ${field.type}`);
+  };
+
   const checkField = (field: FieldV2, path: string, topLevel: boolean) => {
     if (!field.label?.en || !field.label?.cnr) errors.push(`${path}: no label in every language`);
     if (topLevel && !groupKeys.has(field.group)) errors.push(`${path}: unknown group "${field.group}"`);
@@ -113,6 +137,7 @@ export function selfCheckSchema(schema: SchemaV2, deps: SelfCheckDeps = DEFAULT_
     }
 
     field.rules.forEach((rule, i) => checkRule(`${path} rule ${i}`, field, rule));
+    checkDefault(field, path);
 
     const seen = new Set<string>();
     for (const child of field.objectShape ?? []) {

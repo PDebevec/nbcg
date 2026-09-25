@@ -6,7 +6,7 @@ import { fetchCobissRecord } from '../cobiss/cobiss-util/cobiss-fetch';
 import { SYSTEM_ACTOR } from '../../../core/auth/actor.type';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 import { RevisionsService } from '../../../core/revisions/revisions.service';
-import { PublishValidatorService } from '../../schema/publish-validator.service';
+import { MetadataValidatorService } from '../../schema/metadata-validator.service';
 import { generateDeterministicId } from '../../../shared/util/generateUuidFromCobissId';
 import type { CobissMetadata } from '../../../core/types/metadata.types';
 import { ChangeAction, ItemType, VisibilityStatus } from '../../../../generated/prisma/enums';
@@ -20,7 +20,7 @@ export class ImportQueueProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly revisions: RevisionsService,
-    private readonly publishValidator: PublishValidatorService,
+    private readonly validator: MetadataValidatorService,
   ) {
     super();
   }
@@ -127,22 +127,23 @@ export class ImportQueueProcessor extends WorkerHost {
       );
     });
 
-    return target === ItemType.RECORD ? this.publishWarning(recordId, metadata) : null;
+    return this.saveWarning(recordId, metadata, target);
   }
 
   /**
-   * Imports bypass publish validation on purpose (COBISS is the catalogue of
-   * record); this says what a hand-publish would have demanded, or null. A new
-   * import has no parents yet.
+   * Imports bypass the save check on purpose (COBISS is the catalogue of
+   * record); this says what a hand-made item in the same state would have
+   * needed, or null. A new import has no parents yet.
    */
-  private publishWarning(recordId: string, metadata: CobissMetadata): string | null {
-    const result = this.publishValidator.check({ id: recordId, metadata, itemState: 'NEW' }, []);
+  private saveWarning(recordId: string, metadata: CobissMetadata, target: ItemType): string | null {
+    const result = this.validator.check({ id: recordId, metadata, itemState: 'NEW', targetState: target }, []);
     if (result.ok) return null;
     const problems = [
       ...result.missing.map((m) => `missing ${m.path}`),
       ...result.violations.map((v) => `${v.path} breaks ${v.constraint}`),
     ];
-    return `Imported as a record, but would not pass publish validation: ${problems.join(', ')}`;
+    const state = target === ItemType.RECORD ? 'a record' : 'a draft';
+    return `Imported as ${state}, but would not pass validation: ${problems.join(', ')}`;
   }
 
   /**

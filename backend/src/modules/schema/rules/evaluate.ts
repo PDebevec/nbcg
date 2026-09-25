@@ -1,14 +1,13 @@
 /**
- * Metadata schema v2 — rule evaluator and publish check.
+ * Metadata schema v2 — rule evaluator and save check.
  *
  * PORTABLE BY DESIGN: no imports, no framework, no I/O. This file is copied
- * verbatim to the web frontend (`frontend/src/utils/schemaRules.ts`), and
- * `evaluate.spec.ts` fails if the two copies differ — change it here, then copy
- * it over. The archive app ports it to its own language and tests the port
- * against `conformance.json` next to this file.
+ * verbatim to the web frontend (`frontend/src/utils/schemaRules.ts`) and to the
+ * archive app, and `evaluate.spec.ts` fails if the web copy differs — change it
+ * here, then copy it over. Every copy runs `conformance.json` next to this file.
  *
  * Contract: docs/shared/plans/metadata-schema-v2.md ("Rule", "Evaluation",
- * "Publish validation").
+ * "Validation on save").
  */
 
 // ─── Types (the rule-related part of the contract) ──────────────────────────
@@ -86,7 +85,11 @@ export interface FieldState {
   constraints: Constraints;
 }
 
+/** Where the item is now — `NEW` when it does not exist yet. */
 export type ItemState = 'NEW' | 'DRAFT' | 'RECORD';
+
+/** The state a save goes to: the chosen one on create, the current one on an edit, the new one on a transition. */
+export type TargetState = 'DRAFT' | 'RECORD';
 
 export type ContextValue = string | number | boolean | null | Array<string | number>;
 
@@ -123,6 +126,7 @@ export function buildContext(
   metadata: Record<string, unknown> | null | undefined,
   parents: Array<Record<string, unknown> | null | undefined>,
   itemState: ItemState,
+  targetState: TargetState,
 ): RuleContext {
   const m = metadata ?? {};
   const materialType = codeOf(m.materialType);
@@ -136,6 +140,7 @@ export function buildContext(
     isChild: parents.length > 0,
     parentCollectionType: parents.map((p) => collectionTypeOf(p?.collectionType)),
     itemState,
+    targetState,
   };
 }
 
@@ -153,7 +158,7 @@ function collectionTypeOf(value: unknown): number {
 
 /**
  * `null`, `undefined`, a blank string, `[]` and `{}` are empty. Used both by the
- * `empty` condition and by the "required but empty" publish check.
+ * `empty` condition and by the "required but empty" save check.
  */
 export function isEmpty(value: unknown): boolean {
   if (value === null || value === undefined) return true;
@@ -234,13 +239,14 @@ export function evaluateAll(
   return out;
 }
 
-// ─── Publish check ──────────────────────────────────────────────────────────
+// ─── Save check ─────────────────────────────────────────────────────────────
 
 /**
- * What stands between this metadata and publishing: fields that are visible,
- * required and empty (`missing`), and values that break their `constraints`
- * (`violations`). Hidden fields are skipped entirely — a rule never makes old
- * data an error. Repeatable objects are checked per element
+ * What stands between this metadata and saving it in the context's
+ * `targetState`: fields that are visible, required and empty (`missing`), and
+ * values that break their `constraints` (`violations`). An empty field is never
+ * format-checked, so one path is missing or violating, not both. Hidden fields
+ * are skipped entirely — a rule never makes old data an error. Repeatable objects are checked per element
  * (`corporateBodies[1].name`); a single object that is absent is checked as
  * `{}`, so its required sub-fields still count as missing.
  */

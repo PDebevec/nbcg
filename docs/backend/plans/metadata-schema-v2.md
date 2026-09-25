@@ -1,13 +1,13 @@
 # Backend: metadata schema v2
 
-## Status: B1–B6 DONE (2026-09-24) · B8–B12 OPEN (decided 2026-09-25) · B7 waits for the archive app
+## Status: B1–B6 DONE (2026-09-24) · B8–B12 DONE (2026-09-25, dev) · B7 waits for the archive app
 
 **Not yet deployed to production.** No release ordering is needed any more: all
 data is test data (2026-09-25) — see [Deploy notes](#deploy-notes). B1–B7 below
 "Phases" is the original plan, each phase marked with what was actually done;
 B8–B12 come from the [contract decisions of 2026-09-25](../../shared/plans/metadata-schema-v2.md#decisions-2026-09-25-review-against-the-archive-app)
-(review against the archive app). Order: B8 → B9 → B10; B11 and B12 any time,
-at the latest with the rollout.
+(review against the archive app) and were built the same day — see
+[Done — B8–B12](#done--b8b12-2026-09-25).
 
 The contract is in [shared/plans/metadata-schema-v2.md](../../shared/plans/metadata-schema-v2.md)
 — read it first; this file is only "what changes in NestJS and in which order".
@@ -73,7 +73,7 @@ editor must add its field back when B3 lands.
 | `v2/vocabulary-search.ts` | B5 in-memory search |
 | `rules/evaluate.ts` | Portable evaluator: `buildContext`, `isEmpty`, `matches`, `evaluateField`, `evaluateAll`, **`checkMetadata`** (the publish check itself — so the web banner and the backend 400 run the same code) |
 | `rules/conformance.json` | 10 `isEmpty`, 4 `buildContext`, 12 rule-language, 21 record-table and 9 publish-check cases |
-| `publish-validator.service.ts` | B6: `validate`, `check` (no DB), `assertPublishable` |
+| `publish-validator.service.ts` | B6: `validate`, `check` (no DB), `assertPublishable` — **renamed `metadata-validator.service.ts` / `assertValid` in B9** |
 
 Outside the module: `METADATA_VALIDATORS` moved from `items.service.ts` to
 `core/types/metadata.types.ts` (the self-check needs it);
@@ -120,15 +120,84 @@ suggest post-filter and vocabulary search.
   issue / unit violation / PATCH not validated, validation endpoint access,
   COBISS import warning, `issue.date` mapping). 530/530 pass on dev.
 
+## Done — B8–B12 (2026-09-25)
+
+### What changed where
+
+| Phase | Where |
+|---|---|
+| B8 draft/record rules | `rules/evaluate.ts`: `TargetState`, `buildContext(metadata, parents, itemState, targetState)`. `v2/record-fields.ts`: context key `targetState`, `FOR_RECORD` helper, `extent` / map scale / `issue.number` / `issue.date` required only `FOR_RECORD`, `collectionType` `default: 0`, 207 no longer `issueIdentifying`. `FieldV2.default` (`null` when absent), built in `v2/build-schema.ts`, checked in `v2/self-check.ts` |
+| B9 every write | `publish-validator.service.ts` → **`metadata-validator.service.ts`** (`MetadataValidatorService`): `validate` / `check` / `assertValid`, items carry `itemState` + `targetState` (+ optional `parents`); `assertStoredValid(ids, tx)` re-checks stored items in their current state. `ItemsService`: `create` (both targets; `REQUIRED_METADATA_VALIDATORS` deleted), `update` (metadata PATCH, inside the transaction), `transition` (both directions), `validation(id, target)`. `RelationsService.connect` / `disconnect`: one transaction with the re-check and the parent's revision. Import worker: warning per target |
+| B10 `parentIds` | `CreateItemDto.parentIds`; `RelationsService.resolveParents` (→ `PARENT_NOT_FOUND`) and `linkNewChild(tx, …)`; `ResourceAccessService.assertCanManageParents` (manage rights on every parent, `PARENT_NOT_FOUND` for a missing one — also used by `relations/connect`); `shared/errors/parent-not-found.ts` |
+| B11 `extent` from 215 | `parseExtent` in `cobiss-parser.ts`, called for 215/a |
+| B12 accent folding | `setting` block in `infrastructure/docker/pgsync/schema.json` (both indices) |
+
+### Deviations from the plan, and why
+
+- **B12 is a `default` analyzer, not an `asciifolding` sub-field.** A sub-field
+  would have needed every search and suggest query to name it; a folding
+  default analyzer (`lowercase` + `asciifolding` with `preserve_original`)
+  makes every `text` field match `Niksic` ↔ `Nikšić` with no query change, and
+  keeps exact accented matches scoring higher. `.keyword` is untouched.
+- **`parentIds` needs manage rights on each parent** (not in the plan):
+  linking bumps the parent's version and writes its timeline, which
+  `relations/connect` already guards with `assertCanManage` on the parent. A
+  cataloguer cannot hang a draft under a RECORD. The same check
+  (`assertCanManageParents`) now serves `connect`, so an unknown parent is
+  `PARENT_NOT_FOUND` there too (it was a `404 Item not found` from the access
+  check, before the service ever ran), and anonymous gets 401 first.
+- **Relation revisions are written in the relation's transaction** (`record`
+  with `tx`), no longer `recordDetached` after the fact: the edge is now
+  committed together with the re-check, so the timeline can be too.
+- **`disconnect` re-checks the children as well.** The plan said so; worth
+  noting that it can fail: an issue whose `collectionType` was cleared while
+  its serial parent hid it cannot leave the serial until it has one again.
+- **`message`**: "N of M items are not ready to publish" when every failing
+  item is a RECORD, "N of M items cannot be saved" otherwise (singular "1 of 1
+  item is / item cannot be saved").
+- **Import warnings for drafts too**: `target: DRAFT` imports are checked
+  against the draft rules and listed the same way ("Imported as a draft, but
+  would not pass validation: …"). COBISS records always carry a title and a
+  material type, so this rarely fires.
+- **B11 heuristics** (215/a is free text): pages = the largest arabic number
+  (bracketed unnumbered pages only when there is nothing else; a leading
+  volume count `2 sv.` / `2 knj.` gives nothing); minutes from `95 min`,
+  `1 h 35 min`, `2 sata`; sheets from a number before a map / graphics word
+  (`zemljovid`, `karta`, `plan`, `list`, `plakat`, `fotografija`, …). A unit
+  that does not fit the material type leaves `extent` empty.
+
+### Tests
+
+- Jest (`npx jest`): 265 pass, 1 skipped (the frontend-copy identity, until
+  `frontend/src/utils/schemaRules.ts` exists). New: `conformance.json` has 5
+  `buildContext`, 25 record-table and 18 check cases (draft and record);
+  `metadata-validator.service.spec.ts` (state, messages, given parents,
+  `assertStoredValid`); self-check cases for `default`; 22 `parseExtent` cases
+  in `cobiss-parser.spec.ts`.
+- API suite (`backend/test/api-test-suite.sh`): every fixture carries
+  `DRAFTABLE` (a material type); section 19 rewritten — 19e validation on save
+  (draft/record, PATCH, both transition directions, a record damaged through
+  SQL for the visibility-only case), 19g `parentIds` / `PARENT_NOT_FOUND` /
+  relation re-checks / parent rights, 19i accent folding (search, suggest,
+  live index settings). **689 pass, 0 fail** on dev (4 skipped: pgsync-lag
+  warnings in 7b, unrelated). Repeat runs against a `nest start --watch`
+  process that had stopped reloading failed 11 tests in §18/§19i with a 500;
+  after restarting it, **691 pass, 1 fail** — the fail is §14 "Viewed item
+  appears in top items", crowded out of the top 10 by items earlier suite runs
+  deleted ([usage metrics outlive their items](usage-metrics-orphans.md), a
+  known open issue, not this work).
+
 ### Deploy notes
 
 **Rewritten 2026-09-25.** All data is test data, so no release ordering: the web
 editor and the archive app may be unable to publish some types until they are
 on v2, and that's accepted. (Was: web first; confirm the archive app's
-`targetState` — it sends both.) Rollout once B8–B12 are on dev:
+`targetState` — it sends both.) Rollout (B8–B12 are on dev since 2026-09-25;
+the dev indices were already rebuilt with B12's analyzer, the dev items were
+not wiped):
 
 1. Wipe the items (drafts, records, relations, files, revisions, tasks) and the
-   OpenSearch indices; recreate the indices with B12's mapping and the
+   OpenSearch indices; recreate the indices with B12's analyzer and the
    `metadata.issue.date` = `keyword` mapping, following
    [opensearch-reindex.md](../../infrastructure/opensearch-reindex.md).
 2. Import **a few examples**, not everything: e.g. a book, a map, a video or
@@ -243,8 +312,9 @@ name → 404. Public, like `/schema`.
 - Call it in `ItemsService.create()` when `targetState === RECORD`.
 - Not called: draft create/update, PATCH of a record, the import worker (it
   bypasses `ItemsService` anyway — keep it that way and report would-fail items
-  in the job's `progress.errors` as warnings instead). **Superseded by B9:**
-  only the import worker stays unchecked.
+  in the job's `progress.errors` as warnings instead). **Superseded by B9
+  (built 2026-09-25):** only the import worker stays unchecked, and the service
+  is now `MetadataValidatorService`.
 - `GET /items/:id/validation?target=RECORD` → `200 { ok, missing, violations }`;
   gated like reading the item (`assertCanView`, 404 for hidden).
 - The task workflow's "complete REVIEW_PUBLISH" goes through `transition()`, so
@@ -257,7 +327,7 @@ After the archive app confirms it runs on v2: delete `buildRecordFields()`,
 `FieldDescriptor`, `RecordSchemaQueryDto`, the v1 route and its tests; update
 the reference.
 
-### B8 — `targetState`: draft and record rules (S) — OPEN (2026-09-25)
+### B8 — `targetState`: draft and record rules (S) — DONE (2026-09-25)
 
 - `v2/record-fields.ts`: context key `targetState` (`DRAFT | RECORD`, source
   `item`); `itemState` description "where the item is now". Helper
@@ -281,7 +351,7 @@ the reference.
   record book without `extent` → missing; draft issue without `issue.number` →
   ok. Every existing case gets `targetState: RECORD` (what B6 checked).
 
-### B9 — check every write (M) — OPEN (2026-09-25)
+### B9 — check every write (M) — DONE (2026-09-25)
 
 - Rename `PublishValidatorService` → `MetadataValidatorService`
   (`metadata-validator.service.ts`); `assertValid(items, db)` where each item
@@ -307,9 +377,9 @@ the reference.
 - Import worker unchanged: warnings for items that fail their target's rules.
 - Docs when built: `reference.md` (endpoint + error shape), the backend and
   shared task-workflow docs (they name `PUBLISH_VALIDATION_FAILED`),
-  `shared/metadata-fields.md`.
+  `shared/metadata-fields.md` — **updated 2026-09-25**.
 
-### B10 — `parentIds` on `POST /items` (S) — OPEN (2026-09-25)
+### B10 — `parentIds` on `POST /items` (S) — DONE (2026-09-25)
 
 - `CreateItemDto.parentIds?: string[]` (`IsArray`, `IsString({ each })`,
   deduplicated).
@@ -326,9 +396,9 @@ the reference.
   plain 400 today) throws the same `PARENT_NOT_FOUND` shape — the archive app
   still links re-uploaded items with `connect` and shows one message for both.
 - Docs when built: `reference.md` (`parentIds`, the `parents` response,
-  `PARENT_NOT_FOUND`).
+  `PARENT_NOT_FOUND`) — **updated 2026-09-25**.
 
-### B11 — `extent` from COBISS 215 (S) — OPEN (2026-09-25)
+### B11 — `extent` from COBISS 215 (S) — DONE (2026-09-25)
 
 Because editing a RECORD is checked (B9), an imported book without `extent`
 could not be edited until someone typed it in. In `cobiss-parser.ts`, next to
@@ -339,11 +409,13 @@ material type's rule expects; otherwise leave `extent` empty (the import lists
 the item as a warning). The COBISS preview uses the same parser, so the
 archive app's "Get data" fills `extent` too. Cases in `cobiss-parser.spec.ts`.
 
-### B12 — accent-insensitive OpenSearch matching (S) — OPEN (2026-09-25)
+### B12 — accent-insensitive OpenSearch matching (S) — DONE (2026-09-25)
 
 The `asciifolding` sub-field skipped in B4 (`Niksic` → `Nikšić`), in
 `infrastructure/docker/pgsync/schema.json`, used by suggest and search. Needs a
-reindex — done as part of the rollout wipe (Deploy notes).
+reindex — done as part of the rollout wipe (Deploy notes). **As built:** a
+folding `default` analyzer instead of a sub-field (see Deviations); dev
+reindexed 2026-09-25.
 
 ---
 
@@ -371,8 +443,9 @@ New section **"Schema v2"** (keep the v1 section as is until B7):
 - `GET /items/:id/validation?target=RECORD`: 200 with `ok:false` and the missing
   list; reader on a hidden draft → 404.
 
-**B8–B10 (2026-09-25)** — change section 19 accordingly (the B6 cases expecting
-`PUBLISH_VALIDATION_FAILED`, and "PATCH of a record not validated", flip):
+**B8–B12 (2026-09-25) — done**, section 19 changed accordingly (the B6 cases
+expecting `PUBLISH_VALIDATION_FAILED`, and "PATCH of a record not validated",
+flipped):
 
 - Draft create without `materialType` → 400 `METADATA_VALIDATION_FAILED`,
   `items[0].state == DRAFT`; draft book without `extent` → 201.
@@ -388,7 +461,13 @@ New section **"Schema v2"** (keep the v1 section as is until B7):
   parent id → 400 `PARENT_NOT_FOUND` with that id in `parentIds`, nothing
   created; `relations/connect` with an unknown parent → the same code.
 - `relations/connect` of a complete book RECORD under a serial (no `issue`) →
-  400, no relation; the same book as a DRAFT → 200.
+  400, no relation; the same book as a DRAFT → 201. `disconnect` that would
+  leave a child invalid → 400, nothing unlinked.
+- `parentIds` rights: anonymous 401, reader 403, cataloguer under a RECORD
+  parent 403; duplicates linked once; not an array → 400.
+- Accent folding: `Niksic…` finds `Nikšić…` in search, `Durdevica…` finds
+  `Đurđevića…` in suggest; `schema.json` and the live indices carry the
+  analyzer.
 - `GET /items/:id/validation?target=DRAFT` → 200.
 - Schema: `collectionType.default == 0`; `numberingAndDates.issueIdentifying ==
   false`; `targetState` among the context keys.
@@ -404,13 +483,13 @@ spec, B11 parser cases.
 |---|---|---|---|
 | `summaryNote` accepted (done) | add the Summary field back to the editor and the record page (removed in `cd8e5bd`) | — | — |
 | v2 endpoint | adopts it ([plan](../../frontend/plans/metadata-schema-v2.md)) | migrates at its own pace; **v1 frozen** | — |
-| Publish validation | must render `PUBLISH_VALIDATION_FAILED` in the editor, the items-list bulk publish and the task "Complete" dialog | affected: it creates items as `RECORD` too (confirmed 2026-09-25) — accepted, test data only | — |
+| Publish validation (B6; code renamed by B9) | must render `METADATA_VALIDATION_FAILED` in the editor, the items-list bulk publish and the task "Complete" dialog | affected: it creates items as `RECORD` too (confirmed 2026-09-25) — accepted, test data only | — |
 | New fields | rendered by the schema-driven form; **until then the web cannot enter `extent`, so it cannot publish books** | must support `quantity` | `metadata.issue.date` = `keyword`: one `PUT _mapping` on production, no reindex |
 | Import `progress.warnings` | import page could list them (renders only `errors` today) | — | — |
 | Suggest post-filter / new fields | better hints, no API change | same | — |
 | `Cache-Control: no-cache` on v2 | revalidates each load (304) | same | — |
 | B8 `targetState` + draft/record rules, `default` | `useSchemaForm` takes `targetState`; Save blocked per state; copy `evaluate.ts` again | copies `evaluate.ts`; Draft/Record choice feeds `targetState`; processing gate per state; main/child switch removed | — |
-| B9 every write checked, `METADATA_VALIDATION_FAILED` | one `ValidationErrorDialog` for every save, transition and relation change | handles the new code, incl. `state` | — |
+| B9 every write checked, `METADATA_VALIDATION_FAILED` | one `ValidationErrorDialog` for every save, transition and relation change. **Until F1–F5 land, the current editor cannot save a draft without a material type** (400, shown as a generic error) | handles the new code, incl. `state` | — |
 | B10 `parentIds` on create, `PARENT_NOT_FOUND` | only if a "create as child" flow is added | creates new items with the batch's parents and stores `parents[].version`; re-uploads still use connect; `PARENT_NOT_FOUND` stops the batch | — |
 | B11 `extent` from 215 | imported books arrive with `extent` | "Get data" fills `extent` | — |
 | B12 `asciifolding` | `Niksic` finds `Nikšić` in search and hints | same | pgsync mapping + reindex (with the rollout wipe) |
@@ -423,10 +502,11 @@ B8 S · B9 M · B10 S · B11 S · B12 S — B8 → B9 → B10; B11, B12 independ
 
 ## Key files
 
-- `backend/src/modules/schema/*` (new `v2/`, `rules/`, `publish-validator.service.ts`)
+- `backend/src/modules/schema/*` (new `v2/`, `rules/`, `metadata-validator.service.ts` — was `publish-validator.service.ts`)
 - `backend/src/modules/import/cobiss/cobiss-util/cobiss.types.ts`, `cobiss-parser.ts`, `cobiss-code-map.ts`
 - `backend/src/modules/items/items.service.ts`, `items.controller.ts`, `dto/create-item.dto.ts`, `dto/validation-query.dto.ts`
-- `backend/src/modules/relations/relations.service.ts` (B9, B10)
+- `backend/src/modules/relations/relations.service.ts`, `relations.controller.ts` (B9, B10)
+- `backend/src/core/auth/resource-access.service.ts` (`assertCanManageParents`), `backend/src/shared/errors/parent-not-found.ts` (B10)
 - `backend/src/modules/search/search.controller.ts`, `search.service.ts`, `suggest-fields.ts`
 - `backend/test/api-test-suite.sh`
 - `infrastructure/docker/pgsync/schema.json` (B12)

@@ -101,7 +101,8 @@ the v1 API as admin, as the plan prescribes.
   `CREATED,ADVANCED,ADVANCED,RETURNED,ADVANCED,ASSIGNED,CLOSED_ON_PUBLISH`);
   return variants (to requester → FIX, stack of one → 400, override person →
   previous stage); REVIEW complete by a non-assignee and by a stale-directory
-  cataloguer assignee → 403; incomplete draft → `PUBLISH_VALIDATION_FAILED`,
+  cataloguer assignee → 403; incomplete draft → `PUBLISH_VALIDATION_FAILED`
+  (`METADATA_VALIDATION_FAILED` since schema v2 B9, 2026-09-25),
   task still OPEN, no history row; FIX on a record → "reviewed, already
   published"; bulk publish closes the review task, leaves a FIX task open;
   `returned=true/false`; `capability=drafts/records`; the delete asymmetry.
@@ -247,10 +248,10 @@ otherwise same stage".
   The existing observer closes the task and logs `CLOSED_ON_PUBLISH` by the real
   publisher — so there is exactly one closing path whether the publish came from
   the task or not. Pass the optional `note` through to that row.
-  Publish validation (metadata schema v2, B6 — built 2026-09-24) runs inside
-  `transition()`, in its transaction before any row moves; its 400 reaches the
-  task dialog unchanged, and the task stays OPEN because the whole transaction
-  rolls back.
+  Publish validation (metadata schema v2, B6 — built 2026-09-24; the save
+  check of B9 since 2026-09-25) runs inside `transition()`, in its transaction
+  before any row moves; its 400 reaches the task dialog unchanged, and the task
+  stays OPEN because the whole transaction rolls back.
 - item is already a RECORD → `COMPLETED` with a `changes` entry noting
   "reviewed, already published".
 
@@ -307,7 +308,8 @@ Add, per persona where it matters (anonymous 401, reader 403 on all):
 - REVIEW complete by a cataloguer (cannot publish, even if assignee) → 403, item
   still a draft.
 - REVIEW complete on an item missing required metadata → 400
-  `PUBLISH_VALIDATION_FAILED`, task still OPEN.
+  `PUBLISH_VALIDATION_FAILED` (now `METADATA_VALIDATION_FAILED`, state
+  RECORD), task still OPEN.
 - Return without note → 400; return on a fresh task (stack depth 1) → 400;
   return to creator from REVIEW → stage FIX_METADATA; return with override
   person → that person, previous stage.
@@ -331,7 +333,7 @@ Add, per persona where it matters (anonymous 401, reader 403 on all):
 | PATCH no longer moves status/assignee | every button on the task detail page switches to the action routes |
 | `returnTo` → `returnTarget` | return dialog prefill + shows the target stage |
 | 409 `ITEM_HAS_OPEN_TASK` | "Assign task" dialog + bulk-assign idea (A9 in nice-to-have) |
-| Complete REVIEW = publish | new dialog, must render `PUBLISH_VALIDATION_FAILED` |
+| Complete REVIEW = publish | new dialog, must render `METADATA_VALIDATION_FAILED` (was `PUBLISH_VALIDATION_FAILED` until 2026-09-25) |
 | `lastHandoff` | "Returned" chip in inbox/dashboard |
 | New history actions | `TaskHistoryList` icons/labels; legacy ones stay |
 

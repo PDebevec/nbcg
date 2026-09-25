@@ -103,6 +103,8 @@ export interface FieldV2 {
 
   parentInheritable: boolean;
   issueIdentifying: boolean;
+  /** The value a new item starts with, `null` for none (`collectionType` → 0). */
+  default: string | number | boolean | null;
 }
 
 export interface SchemaV2 {

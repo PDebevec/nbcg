@@ -1,8 +1,9 @@
 # Rebuilding the OpenSearch indices
 
-Needed after a mapping change in `infrastructure/docker/pgsync/schema.json`
-(pgsync only creates mappings when an index does not exist). Verified
-2026-07-06 with pgsync 7.0.1; dev container names shown.
+Needed after a mapping or index-settings change in
+`infrastructure/docker/pgsync/schema.json` (pgsync only creates mappings and
+settings when an index does not exist). Verified 2026-07-06 with pgsync 7.0.1,
+again 2026-09-25 for the analyzer change below; dev container names shown.
 
 1. Delete the indices:
    ```bash
@@ -26,6 +27,23 @@ Needed after a mapping change in `infrastructure/docker/pgsync/schema.json`
    2026-08-13) and looks like duplication when nothing is wrong.
 
 Small datasets re-sync in seconds.
+
+## Index settings: the accent-folding analyzer (2026-09-25)
+
+Each index entry in `schema.json` has a `setting` block, which pgsync sends as
+`settings.index` when it creates the index. Both indices define a `default`
+analyzer (`standard` tokenizer, `lowercase`, `asciifolding` with
+`preserve_original`), so every text field matches `Niksic` ↔ `Nikšić` (metadata
+schema v2 B12). Changing it needs the full reindex above. **Production: still
+to do** — part of the schema v2 rollout wipe
+([backend plan, Deploy notes](../backend/plans/metadata-schema-v2.md#deploy-notes)).
+Check a live index:
+
+```bash
+curl 'localhost:9200/records/_settings' | grep -o '"analysis":{[^}]*}[^}]*}'
+curl -XPOST 'localhost:9200/records/_analyze' -H 'Content-Type: application/json' -d '{"text":"Nikšić"}'
+# -> tokens "niksic" and "nikšić"
+```
 
 ## Adding a mapping for a field that does not exist yet — no reindex
 

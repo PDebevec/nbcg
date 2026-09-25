@@ -9,6 +9,7 @@ import {
   type FieldState,
   type ItemState,
   type RuleContext,
+  type TargetState,
   type RuleField,
 } from './evaluate';
 
@@ -45,7 +46,7 @@ describe('schema rules — conformance fixture', () => {
 
   describe('buildContext', () => {
     it.each(fixture.buildContext.map((c: any) => [c.name, c]))('%s', (_name, c: any) => {
-      const ctx = buildContext(c.metadata, c.parents, c.itemState as ItemState);
+      const ctx = buildContext(c.metadata, c.parents, c.itemState as ItemState, c.targetState as TargetState);
       expect(ctx).toMatchObject(c.expected);
     });
   });
@@ -67,7 +68,7 @@ describe('schema rules — conformance fixture', () => {
   describe('checkMetadata', () => {
     const schema = buildRecordSchemaV2();
     it.each(fixture.check.cases.map((c: any) => [c.name, c]))('%s', (_name, c: any) => {
-      const ctx = buildContext(c.metadata, c.parents, c.itemState);
+      const ctx = buildContext(c.metadata, c.parents, c.itemState, c.targetState);
       const result = checkMetadata(schema, c.metadata, ctx);
       expect({
         missing: result.missing.map((m) => m.path),
@@ -77,7 +78,7 @@ describe('schema rules — conformance fixture', () => {
 
     it('reports the evaluated label, not the base one', () => {
       const metadata = { title: 'T', collectionType: 0, materialType: { code: 'gm', en: 'Video / Film', cnr: 'Video / Film' } };
-      const result = checkMetadata(schema, metadata, buildContext(metadata, [], 'DRAFT'));
+      const result = checkMetadata(schema, metadata, buildContext(metadata, [], 'DRAFT', 'RECORD'));
       expect(result.missing).toEqual([{ path: 'extent', label: { en: 'Duration', cnr: 'Trajanje' } }]);
     });
   });

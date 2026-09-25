@@ -17,8 +17,8 @@ export interface ImportJobProgress {
   failed: number;
   errors: { id: string; reason: string }[];
   /**
-   * Imported, but as a RECORD that would not pass publish validation (metadata
-   * schema v2) — listed so it can be fixed later. COBISS is the catalogue of
+   * Imported, but would not pass the save check for the state it was imported
+   * as (metadata schema v2) — listed so it can be fixed later. COBISS is the catalogue of
    * record, so the import itself is never blocked. Absent on jobs queued before
    * schema v2.
    */

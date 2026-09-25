@@ -25,7 +25,10 @@ export const CONTEXT_KEYS: ContextKey[] = [
     description: 'the item has at least one parent' },
   { key: 'parentCollectionType', type: 'number[]', source: 'parent', path: 'collectionType',
     description: 'collectionType of every parent; [] when there is none' },
-  { key: 'itemState', type: 'string', source: 'item', description: 'NEW | DRAFT | RECORD' },
+  { key: 'itemState', type: 'string', source: 'item',
+    description: 'NEW | DRAFT | RECORD — where the item is now (NEW = not created yet)' },
+  { key: 'targetState', type: 'string', source: 'item',
+    description: 'DRAFT | RECORD — the state it is being saved as' },
 ];
 
 /** Sections, in display order. Labels in `labels.ts`. */
@@ -56,6 +59,8 @@ export interface FieldSpec {
   objectShape?: FieldSpec[];
   parentInheritable?: boolean;
   issueIdentifying?: boolean;
+  /** The value a new item starts with — a stored value (a code for a `storeAs: code` enum). */
+  default?: string | number | boolean;
 }
 
 // ─── rule helpers ───────────────────────────────────────────────────────────
@@ -64,6 +69,12 @@ const recordTypeIn = (...codes: string[]): Condition => ({ ref: 'recordType', in
 
 /** The item is an issue of a serial collection. */
 const UNDER_SERIAL: Condition = { ref: 'parentCollectionType', eq: 4 };
+
+/**
+ * The save goes to RECORD. The publish fields are required only then; a draft
+ * needs only what the base `required` flags ask for (title, material type, …).
+ */
+const FOR_RECORD: Condition = { ref: 'targetState', eq: 'RECORD' };
 
 /**
  * v1's `levels: ['main']`. An issue of a serial takes these from its parent;
@@ -84,6 +95,7 @@ export const RECORD_FIELD_SPECS: FieldSpec[] = [
   { key: 'title', type: 'string', group: 'basic', required: true, parentInheritable: true },
   {
     key: 'collectionType', type: 'enum', vocabulary: 'collectionType', group: 'basic', required: true,
+    default: 0,
     // An issue is not a collection.
     rules: [HIDE_UNDER_SERIAL],
   },
@@ -94,10 +106,11 @@ export const RECORD_FIELD_SPECS: FieldSpec[] = [
     rules: [{ when: UNDER_SERIAL, set: { visible: true } }],
     objectShape: [
       { key: 'volume', type: 'string', issueIdentifying: true },
-      { key: 'number', type: 'string', required: true, issueIdentifying: true },
+      { key: 'number', type: 'string', issueIdentifying: true, rules: [{ when: FOR_RECORD, set: { required: true } }] },
       {
-        key: 'date', type: 'date', required: true, issueIdentifying: true,
+        key: 'date', type: 'date', issueIdentifying: true,
         constraints: { pattern: '^\\d{4}(-\\d{2}(-\\d{2})?)?$', patternHint: RULE_LABELS.partialDate },
+        rules: [{ when: FOR_RECORD, set: { required: true } }],
       },
     ],
   },
@@ -110,7 +123,7 @@ export const RECORD_FIELD_SPECS: FieldSpec[] = [
   },
   { key: 'recordType', type: 'enum', vocabulary: 'recordType', group: 'identification', parentInheritable: true },
   { key: 'bibliographicLevel', type: 'enum', vocabulary: 'bibliographicLevel', group: 'identification', parentInheritable: true },
-  // Drives every other rule, hence required for publishing.
+  // Drives every other rule, hence required for drafts too.
   { key: 'materialType', type: 'enum', vocabulary: 'materialType', group: 'identification', required: true, parentInheritable: true },
   { key: 'documentTypology', type: 'string', group: 'identification' },
   {
@@ -166,15 +179,14 @@ export const RECORD_FIELD_SPECS: FieldSpec[] = [
   {
     key: 'cartographicMathematicalData', type: 'string', group: 'edition', visible: false,
     rules: [
-      {
-        when: recordTypeIn('e', 'f'),
-        set: { visible: true, required: true, label: RULE_LABELS.scale, help: RULE_LABELS.scaleHelp },
-      },
+      { when: recordTypeIn('e', 'f'), set: { visible: true, label: RULE_LABELS.scale, help: RULE_LABELS.scaleHelp } },
+      { when: { all: [recordTypeIn('e', 'f'), FOR_RECORD] }, set: { required: true } },
       HIDE_UNDER_SERIAL,
     ],
   },
   {
-    key: 'numberingAndDates', type: 'string', group: 'edition', visible: false, issueIdentifying: true,
+    // The serial's own numbering ("God. 1, br. 1 (1944)-"); an issue uses `issue`.
+    key: 'numberingAndDates', type: 'string', group: 'edition', visible: false,
     rules: [{
       when: { any: [{ ref: 'bibliographicLevel', in: ['s', 'i'] }, { ref: 'collectionType', eq: 4 }] },
       set: { visible: true },
@@ -200,15 +212,16 @@ export const RECORD_FIELD_SPECS: FieldSpec[] = [
   // ── physical description (215) ──
   { key: 'physicalDescription', type: 'string', group: 'physical', suggest: 'physicalDescription' },
   {
-    // The same number for every type; only the unit and caption change. Never
-    // required on a collection: the extent lives on its children.
+    // The same number for every type; only the unit and caption change.
+    // Required only to publish, and never on a collection: the extent lives on
+    // its children.
     key: 'extent', type: 'quantity', group: 'physical', visible: false, constraints: { min: 0 },
     rules: [
       { when: recordTypeIn('a', 'b', 'c', 'd'), set: { visible: true, unit: unit('pages'), label: RULE_LABELS.extentPages } },
       { when: recordTypeIn('g', 'i', 'j'), set: { visible: true, unit: unit('minutes'), label: RULE_LABELS.extentMinutes } },
       { when: recordTypeIn('e', 'f', 'k'), set: { visible: true, unit: unit('sheets'), label: RULE_LABELS.extentSheets } },
       {
-        when: { all: [{ ref: 'collectionType', eq: 0 }, recordTypeIn('a', 'b', 'g', 'i', 'j')] },
+        when: { all: [{ ref: 'collectionType', eq: 0 }, recordTypeIn('a', 'b', 'g', 'i', 'j'), FOR_RECORD] },
         set: { required: true },
       },
     ],

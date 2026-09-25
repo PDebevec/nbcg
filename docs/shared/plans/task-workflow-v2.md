@@ -189,9 +189,10 @@ The four action routes answer **200** with the task view (as in a list row — n
 `history`, no `returnTarget`). Errors: 400 for a rule (body, stage, guard,
 terminal task), 403 when the caller may not do this action on this task (or,
 completing a review of a draft, when their token cannot publish), 404 for an
-unknown task. Completing a review of a draft passes publish validation's
-`400 PUBLISH_VALIDATION_FAILED` through unchanged (renamed `METADATA_VALIDATION_FAILED` by
-schema v2 B9 — same body plus each item's `state`).
+unknown task. Completing a review of a draft passes the schema v2 save check's
+`400 METADATA_VALIDATION_FAILED` through unchanged (named
+`PUBLISH_VALIDATION_FAILED` until schema v2 B9, 2026-09-25 — same body, now
+with each item's `state`).
 
 Response changes on the task view:
 
