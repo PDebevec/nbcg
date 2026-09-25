@@ -1,6 +1,10 @@
 # Task workflow v2 — stages instead of statuses
 
-## Status: PLANNED (2026-09-23)
+## Status: BACKEND DONE (2026-09-25) · web frontend open · deploy together
+
+The backend implements everything below (details it pinned down are marked
+*built 2026-09-25*). Not deployed: the current web frontend's task buttons send
+PATCHes v2 rejects, so both go out together.
 
 | Doc | What it covers |
 |---|---|
@@ -81,6 +85,12 @@ FIX_METADATA if it was REVIEW_PUBLISH (the requester must fix what the reviewer
 found), otherwise it stays. A task whose stack has one entry cannot be returned
 (there is nobody to return it to) — cancel or complete it instead.
 
+*Built 2026-09-25:* that resolved stage is **written into the creator's entry**,
+so from then on the creator is "a holder with a stage" like everyone else. It
+matters when the task leaves them again: A files GENERAL for B → B returns (A
+now holds GENERAL) → A completes with next FIX_METADATA for C → C returns → A
+gets it back in **GENERAL**, the stage A had it in.
+
 ---
 
 ## Actions
@@ -115,9 +125,11 @@ GENERAL/FIX_METADATA task is left alone.
 ### Return — `{ note, assignedToUserId? }`
 
 `note` is **required** (a return without a reason is a bug report without a
-body). Goes back one step on the stack; `assignedToUserId` overrides the person
-(e.g. the previous holder has left) but not the stage. 400 when the stack has
-one entry.
+body; a blank one is rejected too). Goes back one step on the stack;
+`assignedToUserId` overrides the person (e.g. the previous holder has left) but
+not the stage. 400 when the stack has one entry, when the target cannot hold the
+stage it lands in (same guard as everywhere), and when the return would leave
+the task exactly where it is (override = current holder, same stage).
 
 ### Reassign — `{ assignedToUserId, note? }`
 
@@ -128,7 +140,8 @@ current assignee.
 
 CANCELLED, terminal.
 
-`COMPLETED` is terminal too — there is no reopen any more. If a publish went out
+Every action on a COMPLETED or CANCELLED task is a 400. `COMPLETED` is terminal
+too — there is no reopen any more. If a publish went out
 wrong: unpublish if needed and file a new FIX_METADATA task; the old one stays in
 the item's task history. (Reopen made sense with several tasks per item; with at
 most one open task it would have to fight whatever task was filed since.)
@@ -147,6 +160,12 @@ a day; the authoritative check is the token at publish time):
 | `FIX_METADATA` | RECORD | write records (`records:manage`) — a cataloguer cannot edit a published record |
 | `REVIEW_PUBLISH` | any | publish (`records:manage` and `drafts:manage`) |
 
+The matching assignee picker is `GET /api/users?capability=…`: `staff` for
+GENERAL, `drafts` / `records` for FIX_METADATA on a draft / record, `publish`
+for REVIEW_PUBLISH. The 400 names what is missing, e.g. "A FIX_METADATA task on
+a RECORD needs an assignee who can edit published records (records:manage)",
+and says to run `POST /api/users/sync` if roles changed recently.
+
 Today's rule is keyed on `(kind, status)` because a RETURNED review task sat with
 a cataloguer. In v2 a returned review task *becomes* FIX_METADATA, so the rule is
 keyed on `(kind, itemType)` instead.
@@ -157,14 +176,21 @@ keyed on `(kind, itemType)` instead.
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| POST | `/api/tasks` | `{ itemId, kind, title, description?, assignedToUserId, dueAt? }` | **409** `{ code: "ITEM_HAS_OPEN_TASK", taskId }` when the item already has an open task |
+| POST | `/api/tasks` | `{ itemId, kind, title, description?, assignedToUserId, dueAt? }` | **409** `{ statusCode: 409, code: "ITEM_HAS_OPEN_TASK", message, taskId }` when the item already has an open task (checked before the assignee guard) |
 | POST | `/api/tasks/:id/complete` | see table above | |
 | POST | `/api/tasks/:id/return` | `{ note, assignedToUserId? }` | |
 | POST | `/api/tasks/:id/reassign` | `{ assignedToUserId, note? }` | |
 | POST | `/api/tasks/:id/cancel` | `{ note? }` | |
-| PATCH | `/api/tasks/:id` | `{ title?, description?, dueAt? }` | `status` / `kind` / `assignedToUserId` → 400 "use the action endpoints" |
+| PATCH | `/api/tasks/:id` | `{ title?, description?, dueAt? }` | `status` / `kind` / `assignedToUserId` → 400 "use the action endpoints"; `note` → 400 "use /comments" |
 | POST | `/api/tasks/:id/comments` | `{ body }` | unchanged |
-| GET | `/api/tasks`, `/api/tasks/:id`, `/api/tasks/item/:itemId/history` | | unchanged filters; `status` accepts only the three values; new filter `returned=true` |
+| GET | `/api/tasks`, `/api/tasks/:id`, `/api/tasks/item/:itemId/history` | | unchanged filters; `status` accepts only the three values; new filter `returned=true` (`false` = everything else) |
+
+The four action routes answer **200** with the task view (as in a list row — no
+`history`, no `returnTarget`). Errors: 400 for a rule (body, stage, guard,
+terminal task), 403 when the caller may not do this action on this task (or,
+completing a review of a draft, when their token cannot publish), 404 for an
+unknown task. Completing a review of a draft passes publish validation's
+`400 PUBLISH_VALIDATION_FAILED` through unchanged.
 
 Response changes on the task view:
 
@@ -179,6 +205,22 @@ New history actions: `ADVANCED` (a stage completed and handed on), `COMPLETED`,
 `CANCELLED`. `STATUS_CHANGED` and the old `IN_PROGRESS`/`RETURNED` values stay
 readable in old log rows — the log is never rewritten.
 
+What each action writes (one row each):
+
+| Action | `action` | `changes` |
+|---|---|---|
+| create | `CREATED` | `kind`, `assignedToUserId` (before `null`); `note` = the description |
+| complete with next | `ADVANCED` | whichever of `kind` / `assignedToUserId` moved |
+| complete without next | `COMPLETED` | `status` OPEN → COMPLETED |
+| complete REVIEW_PUBLISH on a record | `COMPLETED` | `status`, plus `{ path: "outcome", before: null, after: "ALREADY_PUBLISHED" }` |
+| complete REVIEW_PUBLISH on a draft | `CLOSED_ON_PUBLISH` (by the observer, with the note) | `status` OPEN → COMPLETED |
+| return | `RETURNED` | `kind` and/or `assignedToUserId` |
+| reassign | `ASSIGNED` | `assignedToUserId` |
+| cancel | `CANCELLED` | `status` OPEN → CANCELLED |
+| PATCH | `UPDATED` | `title` / `description` / `dueAt` — nothing moved, no row |
+
+`completedAt` is set on COMPLETED (either way), not on CANCELLED.
+
 ---
 
 ## Decisions
@@ -191,3 +233,6 @@ readable in old log rows — the log is never rewritten.
 | May FIX_METADATA → REVIEW_PUBLISH go to yourself? | Yes, if you can publish (editor fixes and publishes). Change to "someone else" if four-eyes review is wanted. | 2026-09-23 (proposed) |
 | FIX_METADATA on a published RECORD | Assignee needs `records:manage`; its REVIEW_PUBLISH completes as "reviewed" | 2026-09-23 (proposed) |
 | Reopen a completed task | Removed — file a new task | 2026-09-23 (proposed) |
+| The creator's stage after a return to them | Written into their stack entry (see "Handoff stack") | 2026-09-25 (built) |
+| Return that changes nothing | 400; a return to yourself that changes the stage is fine | 2026-09-25 (built) |
+| Where the one-open-task rule lives | Partial unique index `tasks_one_open_per_item`, declared in `schema.prisma`; the service pre-checks for the 409 body | 2026-09-25 (built) |

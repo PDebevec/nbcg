@@ -60,9 +60,11 @@ COMARC/B-based metadata, attach scans, and publish them to a public catalogue.
   what". **Metrics**: daily view/download counters in their own tables.
 - **Users directory** (`user_profiles`): a daily shadow of the Keycloak realm for
   pickers and names — never an authorization source.
-- **Tasks**: staff handoffs about one item (review & publish, fix metadata,
-  general) with an append-only log — being redesigned:
-  [task workflow v2](plans/task-workflow-v2.md).
+- **Tasks**: staff handoffs about one item with an append-only log. A task's
+  `kind` is its stage (general → fix metadata → review & publish), at most one
+  task per item is open, and completing a review publishes the item —
+  [task workflow v2](plans/task-workflow-v2.md) (backend built 2026-09-25, web
+  pending; they deploy together).
 
 ## Data flow of a typical edit
 

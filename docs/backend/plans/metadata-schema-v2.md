@@ -240,7 +240,8 @@ name → 404. Public, like `/schema`.
 - `GET /items/:id/validation?target=RECORD` → `200 { ok, missing, violations }`;
   gated like reading the item (`assertCanView`, 404 for hidden).
 - The task workflow's "complete REVIEW_PUBLISH" goes through `transition()`, so
-  it gets this for free.
+  it gets this for free — confirmed when task workflow v2 was built
+  (2026-09-25; §18 of the API suite completes a review of an incomplete draft).
 
 ### B7 — retire v1 (XS, later) — OPEN, waits for the archive app
 

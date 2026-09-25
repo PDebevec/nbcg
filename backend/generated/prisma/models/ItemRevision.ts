@@ -474,7 +474,7 @@ export type $ItemRevisionPayload<ExtArgs extends runtime.Types.Extensions.Intern
     itemId: string
     /**
      * The item's version *after* this change. Not a change counter — see
-     * "What `version` means" in BACKEND_REFERENCE.md.
+     * "What `version` means" in docs/backend/reference.md.
      */
     version: number
     action: $Enums.ChangeAction

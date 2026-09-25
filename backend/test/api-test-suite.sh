@@ -5,8 +5,10 @@
 #
 # Tests every API endpoint with all auth personas (admin, editor, cataloguer,
 # reader, anonymous). Covers: health, search visibility, items CRUD,
-# transitions, relations, files, COBISS import/preview, metadata schema v2
-# (schema, vocabularies, suggest, publish validation), and auth edge cases.
+# transitions, relations, files, COBISS import/preview, task delegation
+# (workflow v2: stages, handoff stack, one open task per item), metadata
+# schema v2 (schema, vocabularies, suggest, publish validation), and auth edge
+# cases.
 #
 # Prerequisites:
 #   - Backend running at localhost:3000
@@ -153,6 +155,19 @@ assert_json_field() {
 # Get JSON field from last response
 json_field() {
   echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)$1)" 2>/dev/null
+}
+
+# Pass/fail on a Python expression over the parsed body (`d`).
+assert_json_true() {
+  local test_name=$1 expr=$2
+  if echo "$HTTP_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if ($expr) else 1)" 2>/dev/null; then
+    echo -e "  ${GREEN}PASS${NC} $test_name"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} $test_name (body: $(echo "$HTTP_BODY" | head -c 300))"
+    ((FAILED++))
+    ERRORS+=("$test_name")
+  fi
 }
 
 section() {
@@ -2296,13 +2311,18 @@ else
 fi
 
 # ============================================================================
-# 18. TASK DELEGATION
+# 18. TASK DELEGATION (task workflow v2)
 # ============================================================================
+# docs/shared/plans/task-workflow-v2.md. A task is OPEN until it ends and its
+# `kind` is the STAGE it is in. State moves only through
+# POST /tasks/:id/complete | return | reassign | cancel; PATCH edits details.
+# At most one OPEN task per item — so every task below gets its own item.
 section "18. Task Delegation"
 
 # Persona facts relied on here, all asserted in §16 and §3:
 #   editor, admin  -> can publish (records:manage AND drafts:manage)
-#   cataloguer     -> drafts:manage only; staff, but CANNOT publish
+#   cataloguer     -> drafts:manage only; staff, but CANNOT publish and cannot
+#                     edit a published record
 #   reader         -> holds nothing relevant; not staff
 # Note the terminology trap: the group called `editors` publishes and the one
 # called `cataloguers` does not. Never key a test off the group name.
@@ -2328,11 +2348,34 @@ if [ -z "$UID_EDITOR" ] || [ -z "$UID_CATALOGUER" ] || [ -z "$UID_READER" ]; the
   ((SKIPPED++))
 else
 
-# A draft owned by the cataloguer: the natural subject of "please review this".
-http POST "$API/items" "$TOKEN_CATALOGUER" '{"targetState":"DRAFT","visibilityStatus":"PRIVATE","metadata":{"title":"TEST-SUITE-TASK-DRAFT","collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+# A draft owned by the cataloguer, for one task. Sets NEW_ITEM (not echoed: a
+# $(subshell) would lose the CLEANUP_IDS append). $2 is extra metadata, e.g.
+# ",$PUBLISHABLE" for an item a task will publish.
+new_task_item() {
+  http POST "$API/items" "$TOKEN_CATALOGUER" "{\"targetState\":\"DRAFT\",\"visibilityStatus\":\"PRIVATE\",\"metadata\":{\"title\":\"TEST-SUITE-TASK-$1\"${2:-},\"collectionType\":0,\"childrenInDrafts\":0,\"childrenInRecords\":0,\"jeGlavnoGradivo\":true}}"
+  NEW_ITEM=$(json_field "['id']")
+  CLEANUP_IDS+=("$NEW_ITEM")
+}
+
+# POST /tasks. Sets NEW_TASK. Usage: new_task TOKEN ITEM KIND TITLE ASSIGNEE [EXTRA_JSON]
+new_task() {
+  http POST "$API/tasks" "$1" "{\"itemId\":\"$2\",\"kind\":\"$3\",\"title\":\"$4\",\"assignedToUserId\":\"$5\"${6:-}}"
+  NEW_TASK=$(json_field "['id']")
+}
+
+# The actions, in history order, as one comma-separated string.
+history_actions() {
+  echo "$HTTP_BODY" | python3 -c "import sys,json; print(','.join(h['action'] for h in json.load(sys.stdin)['history']))" 2>/dev/null
+}
+history_len() {
+  echo "$HTTP_BODY" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['history']))" 2>/dev/null
+}
+
+# Deliberately NOT publishable (no material type): the review task on it is the
+# one whose completion must fail publish validation in 18i.
+new_task_item REVIEW
 assert_status "Create draft for task tests" "201"
-TASK_DRAFT_ID=$(json_field "['id']")
-CLEANUP_IDS+=("$TASK_DRAFT_ID")
+TASK_DRAFT_ID=$NEW_ITEM
 
 # --- 18a: authorisation ----------------------------------------------------
 echo -e "\n  ${YELLOW}Authorisation...${NC}"
@@ -2355,36 +2398,105 @@ assert_status "Reader cannot list tasks" "403"
 http POST "$API/tasks" "$TOKEN_CATALOGUER" '{"itemId":"nonexistent-item-id","title":"ghost","assignedToUserId":"'"$UID_EDITOR"'"}'
 assert_status "Task against an unknown item is 404" "404"
 
-# --- 18b: the (kind, status) assignee guard --------------------------------
+new_task "$TOKEN_CATALOGUER" "$TASK_DRAFT_ID" REVIEW_PUBLISH "Ready for review" "$UID_EDITOR" ',"description":"Checked against COBISS."'
+assert_status "Cataloguer files REVIEW_PUBLISH to a publisher" "201"
+TASK_REVIEW_ID=$NEW_TASK
+
+# A body valid for every action: the ValidationPipe runs before the staff
+# check, so an invalid body would be a 400 even for anonymous.
+ACTION_BODY="{\"note\":\"x\",\"assignedToUserId\":\"$UID_EDITOR\"}"
+for action in complete return reassign cancel; do
+  http POST "$API/tasks/$TASK_REVIEW_ID/$action" "" "$ACTION_BODY"
+  assert_status "Anonymous cannot $action a task" "401"
+  http POST "$API/tasks/$TASK_REVIEW_ID/$action" "$TOKEN_READER" "$ACTION_BODY"
+  assert_status "Reader cannot $action a task" "403"
+done
+
+# --- 18b: the (kind, itemType) assignee guard ------------------------------
 echo -e "\n  ${YELLOW}Assignee guard rails...${NC}"
 
-http POST "$API/tasks" "$TOKEN_CATALOGUER" "{\"itemId\":\"$TASK_DRAFT_ID\",\"kind\":\"REVIEW_PUBLISH\",\"title\":\"Ready for review\",\"description\":\"Checked against COBISS.\",\"assignedToUserId\":\"$UID_EDITOR\"}"
-assert_status "Cataloguer files REVIEW_PUBLISH to a publisher" "201"
-TASK_REVIEW_ID=$(json_field "['id']")
+new_task_item GUARD
+GUARD_DRAFT_ID=$NEW_ITEM
 
-http POST "$API/tasks" "$TOKEN_CATALOGUER" "{\"itemId\":\"$TASK_DRAFT_ID\",\"kind\":\"REVIEW_PUBLISH\",\"title\":\"self\",\"assignedToUserId\":\"$UID_CATALOGUER\"}"
+new_task "$TOKEN_CATALOGUER" "$GUARD_DRAFT_ID" REVIEW_PUBLISH "self" "$UID_CATALOGUER"
 assert_status "REVIEW_PUBLISH to a non-publisher is 400 (the headline case)" "400"
 
-http POST "$API/tasks" "$TOKEN_CATALOGUER" "{\"itemId\":\"$TASK_DRAFT_ID\",\"kind\":\"REVIEW_PUBLISH\",\"title\":\"reader\",\"assignedToUserId\":\"$UID_READER\"}"
+new_task "$TOKEN_CATALOGUER" "$GUARD_DRAFT_ID" REVIEW_PUBLISH "reader" "$UID_READER"
 assert_status "REVIEW_PUBLISH to a reader is 400" "400"
 
-http POST "$API/tasks" "$TOKEN_CATALOGUER" "{\"itemId\":\"$TASK_DRAFT_ID\",\"kind\":\"GENERAL\",\"title\":\"Have a look\",\"assignedToUserId\":\"$UID_CATALOGUER\"}"
-assert_status "GENERAL to a colleague who writes is 201" "201"
-TASK_GENERAL_ID=$(json_field "['id']")
-
-http POST "$API/tasks" "$TOKEN_CATALOGUER" "{\"itemId\":\"$TASK_DRAFT_ID\",\"kind\":\"GENERAL\",\"title\":\"reader\",\"assignedToUserId\":\"$UID_READER\"}"
+new_task "$TOKEN_CATALOGUER" "$GUARD_DRAFT_ID" GENERAL "reader" "$UID_READER"
 assert_status "GENERAL to a reader is 400 — they cannot act on it either" "400"
 
-http POST "$API/tasks" "$TOKEN_CATALOGUER" "{\"itemId\":\"$TASK_DRAFT_ID\",\"kind\":\"GENERAL\",\"title\":\"ghost\",\"assignedToUserId\":\"not-a-real-user\"}"
+new_task "$TOKEN_CATALOGUER" "$GUARD_DRAFT_ID" GENERAL "ghost" "not-a-real-user"
 assert_status "Assignee absent from the directory is 400" "400"
 assert_body_contains "Unknown-assignee error points at the sync endpoint" "users/sync"
 
-# --- 18c: reads ------------------------------------------------------------
+new_task "$TOKEN_CATALOGUER" "$GUARD_DRAFT_ID" GENERAL "Have a look" "$UID_CATALOGUER"
+assert_status "GENERAL to a colleague who writes is 201" "201"
+TASK_GENERAL_ID=$NEW_TASK
+
+# FIX_METADATA is keyed on the ITEM: a cataloguer can fix a draft but cannot
+# edit a published record. Filing it is still fine for them — a task is a
+# request, not a mutation.
+http POST "$API/items" "$TOKEN_EDITOR" '{"targetState":"RECORD","visibilityStatus":"PRIVATE","metadata":{"title":"TEST-SUITE-TASK-FIXREC",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
+assert_status "Create a published record for the FIX_METADATA guard" "201"
+FIXREC_ID=$(json_field "['id']")
+CLEANUP_IDS+=("$FIXREC_ID")
+
+new_task "$TOKEN_CATALOGUER" "$FIXREC_ID" FIX_METADATA "Typo in the title" "$UID_CATALOGUER"
+assert_status "FIX_METADATA on a RECORD to a cataloguer is 400" "400"
+assert_body_contains "…and says it needs records:manage" "records:manage"
+
+new_task "$TOKEN_CATALOGUER" "$FIXREC_ID" FIX_METADATA "Typo in the title" "$UID_EDITOR"
+assert_status "FIX_METADATA on a RECORD to an editor is 201" "201"
+TASK_FIXREC_ID=$NEW_TASK
+
+# --- 18c: one open task per item -------------------------------------------
+echo -e "\n  ${YELLOW}One open task per item...${NC}"
+
+new_task "$TOKEN_EDITOR" "$TASK_DRAFT_ID" GENERAL "Second opinion" "$UID_ADMIN"
+assert_status "A second open task on the same item is 409" "409"
+assert_json_field "…with code ITEM_HAS_OPEN_TASK" "['code']" "ITEM_HAS_OPEN_TASK"
+assert_json_field "…naming the task in the way" "['taskId']" "$TASK_REVIEW_ID"
+
+new_task_item ONE
+ONE_ID=$NEW_ITEM
+new_task "$TOKEN_EDITOR" "$ONE_ID" GENERAL "First" "$UID_ADMIN"
+ONE_FIRST=$NEW_TASK
+new_task "$TOKEN_EDITOR" "$ONE_ID" GENERAL "Second" "$UID_ADMIN"
+assert_status "Still 409 on a fresh item with one open task" "409"
+
+http POST "$API/tasks/$ONE_FIRST/cancel" "$TOKEN_EDITOR" '{"note":"Filed by mistake."}'
+assert_status "The creator cancels it" "200"
+assert_json_field "Cancelled" "['status']" "CANCELLED"
+assert_json_field "Cancelling does not set completedAt" "['completedAt']" "None"
+
+new_task "$TOKEN_EDITOR" "$ONE_ID" GENERAL "editor to admin" "$UID_ADMIN"
+assert_status "Once cancelled, a new task on the item is 201" "201"
+TASK_THIRDPARTY_ID=$NEW_TASK
+
+http GET "$API/tasks/$ONE_FIRST" "$TOKEN_EDITOR"
+assert_json_field "Cancel is one CANCELLED row" "['history'][-1]['action']" "CANCELLED"
+assert_json_field "…carrying its note" "['history'][-1]['note']" "Filed by mistake."
+
+if [ "$PSQL_OK" = "1" ]; then
+  assert_metric "The rule is a partial unique index in the database" \
+    "$(psql_query "SELECT count(*) FROM pg_indexes WHERE indexname = 'tasks_one_open_per_item' AND indexdef LIKE '%UNIQUE%WHERE%OPEN%'")" "1"
+  assert_metric "TaskStatus has exactly OPEN, COMPLETED, CANCELLED" \
+    "$(psql_query "SELECT string_agg(e.enumlabel, ',' ORDER BY e.enumsortorder) FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'TaskStatus'")" \
+    "OPEN,COMPLETED,CANCELLED"
+fi
+
+# --- 18d: reads ------------------------------------------------------------
 echo -e "\n  ${YELLOW}Reads...${NC}"
 
 http GET "$API/tasks?assignedTo=me&status=OPEN" "$TOKEN_EDITOR"
 assert_status "Editor lists their inbox" "200"
 assert_body_contains "Inbox contains the review task" "$TASK_REVIEW_ID"
+assert_json_true "List rows carry lastHandoff" "len(d['tasks']) > 0 and all('lastHandoff' in t for t in d['tasks'])"
+
+http GET "$API/tasks?status=IN_PROGRESS" "$TOKEN_EDITOR"
+assert_status "The v1 statuses are gone from the filter" "400"
 
 http GET "$API/tasks?createdBy=me" "$TOKEN_EDITOR"
 assert_status "Editor lists what they filed" "200"
@@ -2400,8 +2512,8 @@ fi
 http GET "$API/tasks?createdBy=me" "$TOKEN_CATALOGUER"
 assert_body_contains "Cataloguer sees the task they filed" "$TASK_REVIEW_ID"
 
-http GET "$API/tasks?itemId=$TASK_DRAFT_ID&kind=REVIEW_PUBLISH" "$TOKEN_EDITOR"
-assert_status "Filter by itemId and kind" "200"
+http GET "$API/tasks?itemIds=$TASK_DRAFT_ID,$GUARD_DRAFT_ID&kind=REVIEW_PUBLISH" "$TOKEN_EDITOR"
+assert_status "Filter by itemIds and kind" "200"
 assert_body_contains "kind filter keeps the review task" "$TASK_REVIEW_ID"
 if echo "$HTTP_BODY" | grep -q "$TASK_GENERAL_ID"; then
   echo -e "  ${RED}FAIL${NC} kind=REVIEW_PUBLISH also returned the GENERAL task"
@@ -2417,13 +2529,14 @@ assert_status "Task detail returns 200" "200"
 assert_json_field "Assignee renders as a name, not a UUID" "['assignedToName']" "editor editor"
 assert_json_field "Creator renders as a name" "['createdByName']" "cataloguer cataloguer"
 assert_json_field "itemType is resolved at read time" "['itemType']" "DRAFT"
-FRESH_HIST=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['history']))" 2>/dev/null)
-assert_metric "A fresh task's log holds only its CREATED row" "$FRESH_HIST" "1"
-
-# The prefill while the editor is holding it: back to the cataloguer who asked
-# for it. Asserted here rather than only after the return, because this is the
-# state the "return with notes" dialog actually opens in.
-assert_json_field "returnTo is the requester who filed it" "['returnTo']['displayName']" "cataloguer cataloguer"
+assert_json_field "A new task's lastHandoff is CREATED" "['lastHandoff']" "CREATED"
+assert_metric "A fresh task's log holds only its CREATED row" "$(history_len)" "1"
+# The state the Return dialog actually opens in: back to the cataloguer who
+# asked for it — as a FIX_METADATA task, because they must fix what the
+# reviewer found.
+assert_json_field "returnTarget is the requester who filed it" "['returnTarget']['displayName']" "cataloguer cataloguer"
+assert_json_field "…in stage FIX_METADATA (a returned review is a fix)" "['returnTarget']['kind']" "FIX_METADATA"
+assert_json_true "returnTo (v1) is gone" "'returnTo' not in d"
 
 TASK_TS=$(json_field "['createdAt']")
 if echo "$TASK_TS" | grep -qE 'Z$|[+-][0-9]{2}:?[0-9]{2}$'; then
@@ -2435,8 +2548,8 @@ else
   ERRORS+=("task createdAt has no timezone: $TASK_TS")
 fi
 
-# --- 18d: comments and mutation --------------------------------------------
-echo -e "\n  ${YELLOW}Comments and mutation...${NC}"
+# --- 18e: comments and PATCH -----------------------------------------------
+echo -e "\n  ${YELLOW}Comments and PATCH...${NC}"
 
 # A comment is not its own kind of object: it is one of the things that can
 # happen to a task, so it lands in the same log as every event.
@@ -2450,103 +2563,239 @@ http GET "$API/tasks/$TASK_REVIEW_ID" "$TOKEN_EDITOR"
 assert_json_field "Filing the task wrote CREATED as the first history row" "['history'][0]['action']" "CREATED"
 assert_json_field "CREATED records who it was assigned to" \
   "['history'][0]['changes'][1]['after']" "$UID_EDITOR"
+assert_json_field "CREATED carries the description as its note" "['history'][0]['note']" "Checked against COBISS."
 assert_json_field "History is oldest-first and the comment is in it" "['history'][1]['action']" "COMMENTED"
-assert_json_field "Detail history interleaves comments with events" "['history'][1]['note']" "Looking at it now."
 
-# A task the cataloguer is neither assignee nor creator of, and on which they
-# hold no records:manage escape hatch.
-http POST "$API/tasks" "$TOKEN_EDITOR" "{\"itemId\":\"$TASK_DRAFT_ID\",\"kind\":\"GENERAL\",\"title\":\"editor to admin\",\"assignedToUserId\":\"$UID_ADMIN\"}"
-assert_status "Editor files a task to the admin" "201"
-TASK_THIRDPARTY_ID=$(json_field "['id']")
-
+# TASK_THIRDPARTY_ID: editor -> admin. The cataloguer is neither assignee nor
+# creator, and holds no records:manage escape hatch.
 http PATCH "$API/tasks/$TASK_THIRDPARTY_ID" "$TOKEN_CATALOGUER" '{"title":"meddling"}'
 assert_status "An unrelated staff member cannot edit a task" "403"
 
 http PATCH "$API/tasks/$TASK_THIRDPARTY_ID" "$TOKEN_ADMIN" '{"title":"admin can"}'
 assert_status "records:manage is the unstick-it escape hatch" "200"
+http GET "$API/tasks/$TASK_THIRDPARTY_ID" "$TOKEN_ADMIN"
+assert_json_field "A PATCH of the title is one UPDATED row" "['history'][-1]['action']" "UPDATED"
+assert_json_field "…recording the title change" "['history'][-1]['changes'][0]['path']" "title"
+NOOP_BEFORE=$(history_len)
 
-http PATCH "$API/tasks/$TASK_GENERAL_ID" "$TOKEN_CATALOGUER" '{"status":"COMPLETED"}'
-assert_status "Completing a task returns 200" "200"
-if echo "$HTTP_BODY" | grep -q '"completedAt":null'; then
-  echo -e "  ${RED}FAIL${NC} Entering COMPLETED did not set completedAt"
-  ((FAILED++))
-  ERRORS+=("completedAt not set on COMPLETED")
-else
-  echo -e "  ${GREEN}PASS${NC} Entering COMPLETED sets completedAt"
-  ((PASSED++))
-fi
-
-# COMPLETED is deliberately NOT terminal: a publish that went out wrong needs
-# pulling back, and that is a status change on the existing task.
-http PATCH "$API/tasks/$TASK_GENERAL_ID" "$TOKEN_CATALOGUER" '{"status":"IN_PROGRESS"}'
-assert_status "COMPLETED is not terminal" "200"
-assert_json_field "Leaving COMPLETED clears completedAt" "['completedAt']" "None"
-
-http PATCH "$API/tasks/$TASK_GENERAL_ID" "$TOKEN_CATALOGUER" '{"status":"CANCELLED"}'
-assert_status "Cancelling a task returns 200" "200"
-http PATCH "$API/tasks/$TASK_GENERAL_ID" "$TOKEN_CATALOGUER" '{"status":"OPEN"}'
-assert_status "CANCELLED is terminal — reopening is 400" "400"
-
-http PATCH "$API/tasks/$TASK_REVIEW_ID" "$TOKEN_EDITOR" "{\"assignedToUserId\":\"$UID_CATALOGUER\"}"
-assert_status "Reassigning an OPEN REVIEW_PUBLISH to a non-publisher is 400" "400"
+# Where a task is moves only through the action routes. A v1 client's PATCH
+# must fail loudly, not quietly return 200 having done nothing.
+http PATCH "$API/tasks/$TASK_THIRDPARTY_ID" "$TOKEN_ADMIN" '{"status":"COMPLETED"}'
+assert_status "PATCH with status is 400" "400"
+assert_body_contains "…pointing at the action routes" "/complete"
+http PATCH "$API/tasks/$TASK_THIRDPARTY_ID" "$TOKEN_ADMIN" '{"kind":"REVIEW_PUBLISH"}'
+assert_status "PATCH with kind is 400" "400"
+http PATCH "$API/tasks/$TASK_THIRDPARTY_ID" "$TOKEN_ADMIN" "{\"assignedToUserId\":\"$UID_EDITOR\"}"
+assert_status "PATCH with assignedToUserId is 400" "400"
+http PATCH "$API/tasks/$TASK_THIRDPARTY_ID" "$TOKEN_ADMIN" '{"note":"hello"}'
+assert_status "PATCH with a note is 400 — comments have their own route" "400"
 
 # A PATCH that moves nothing writes nothing: the GUI sends idempotent saves, and
 # an audit log of non-events is noise.
-http GET "$API/tasks/$TASK_THIRDPARTY_ID" "$TOKEN_ADMIN"
-NOOP_BEFORE=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['history']))" 2>/dev/null)
 http PATCH "$API/tasks/$TASK_THIRDPARTY_ID" "$TOKEN_ADMIN" '{"title":"admin can"}'
 assert_status "A no-op PATCH still returns 200" "200"
 http GET "$API/tasks/$TASK_THIRDPARTY_ID" "$TOKEN_ADMIN"
-NOOP_AFTER=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['history']))" 2>/dev/null)
-assert_metric "A PATCH that changes nothing writes no history row" "$NOOP_AFTER" "$NOOP_BEFORE"
+assert_metric "A PATCH that changes nothing (or is rejected) writes no history row" "$(history_len)" "$NOOP_BEFORE"
 
-# --- 18e: the return flow --------------------------------------------------
-# One task ping-pongs; the thread accumulates in one place. This is the block
-# the naive kind-only guard would have broken, so none of it may be dropped.
-echo -e "\n  ${YELLOW}The return flow...${NC}"
+# --- 18f: GENERAL, completed without a next stage ---------------------------
+echo -e "\n  ${YELLOW}Complete a GENERAL task...${NC}"
 
-http PATCH "$API/tasks/$TASK_REVIEW_ID" "$TOKEN_EDITOR" '{"status":"RETURNED"}'
-assert_status "RETURNED without a new assignee is 400" "400"
+# TASK_GENERAL_ID: the cataloguer filed it for themselves — never handed over.
+http GET "$API/tasks/$TASK_GENERAL_ID" "$TOKEN_CATALOGUER"
+assert_json_field "A task never handed over has no return target" "['returnTarget']" "None"
+http POST "$API/tasks/$TASK_GENERAL_ID/return" "$TOKEN_CATALOGUER" '{"note":"back"}'
+assert_status "…and returning it is 400 (nobody to return it to)" "400"
 
-# The reason travels with the return, in the same request — it is a fact about
-# one handover, not a property of the task.
-http PATCH "$API/tasks/$TASK_REVIEW_ID" "$TOKEN_EDITOR" "{\"status\":\"RETURNED\",\"assignedToUserId\":\"$UID_CATALOGUER\",\"note\":\"The author field is wrong.\"}"
-assert_status "Returning to a cataloguer moves status and assignee together" "200"
-assert_json_field "Returned task sits with the cataloguer" "['assignedToName']" "cataloguer cataloguer"
-assert_json_field "Returned task keeps its REVIEW_PUBLISH goal" "['kind']" "REVIEW_PUBLISH"
+http POST "$API/tasks/$TASK_GENERAL_ID/complete" "$TOKEN_CATALOGUER" '{"note":"Looked, all fine."}'
+assert_status "GENERAL complete without next returns 200" "200"
+assert_json_field "…and the task is COMPLETED" "['status']" "COMPLETED"
+assert_json_true "Completing sets completedAt" "d['completedAt'] is not None"
+http GET "$API/tasks/$TASK_GENERAL_ID" "$TOKEN_CATALOGUER"
+assert_json_field "One COMPLETED row" "['history'][-1]['action']" "COMPLETED"
+assert_json_field "…with the note" "['history'][-1]['note']" "Looked, all fine."
+assert_json_field "A finished task has no return target" "['returnTarget']" "None"
 
-# ONE row for one user action. Splitting it into RETURNED plus ASSIGNED would
-# record two events that never separately happened — the API forces status and
-# assignee to travel together.
-http GET "$API/tasks/$TASK_REVIEW_ID" "$TOKEN_EDITOR"
+# COMPLETED is terminal in v2 — no reopen. A publish that went out wrong gets a
+# new FIX_METADATA task.
+http POST "$API/tasks/$TASK_GENERAL_ID/complete" "$TOKEN_CATALOGUER" '{}'
+assert_status "Completing a COMPLETED task is 400" "400"
+http POST "$API/tasks/$TASK_GENERAL_ID/cancel" "$TOKEN_CATALOGUER" '{}'
+assert_status "Cancelling a COMPLETED task is 400" "400"
+http POST "$API/tasks/$ONE_FIRST/reassign" "$TOKEN_EDITOR" "{\"assignedToUserId\":\"$UID_EDITOR\"}"
+assert_status "A CANCELLED task cannot be reassigned" "400"
+
+# --- 18g: the stage flow (the contract's worked example) --------------------
+# admin files GENERAL for the cataloguer, who fixes it and hands it to the
+# editor for review; the editor sends it back; it comes round again, admin
+# passes it to the editor, and completing the review publishes the item.
+echo -e "\n  ${YELLOW}The stage flow...${NC}"
+
+new_task_item FLOW ",$PUBLISHABLE"
+FLOW_ITEM=$NEW_ITEM
+new_task "$TOKEN_ADMIN" "$FLOW_ITEM" GENERAL "Please look at this scan" "$UID_CATALOGUER"
+assert_status "admin files GENERAL for the cataloguer" "201"
+FLOW_ID=$NEW_TASK
+
+http POST "$API/tasks/$FLOW_ID/complete" "$TOKEN_CATALOGUER" "{\"next\":{\"kind\":\"FIX_METADATA\",\"assignedToUserId\":\"$UID_CATALOGUER\"}}"
+assert_status "GENERAL → FIX_METADATA with next to yourself is 200" "200"
+assert_json_field "…the task moves stage" "['kind']" "FIX_METADATA"
+assert_json_field "…and stays OPEN" "['status']" "OPEN"
+assert_json_field "…lastHandoff ADVANCED" "['lastHandoff']" "ADVANCED"
+
+http POST "$API/tasks/$FLOW_ID/complete" "$TOKEN_CATALOGUER" '{}'
+assert_status "FIX_METADATA complete without next is 400" "400"
+http POST "$API/tasks/$FLOW_ID/complete" "$TOKEN_CATALOGUER" "{\"next\":{\"kind\":\"REVIEW_PUBLISH\",\"assignedToUserId\":\"$UID_CATALOGUER\"}}"
+assert_status "FIX_METADATA → REVIEW_PUBLISH to a non-publisher (yourself) is 400" "400"
+http POST "$API/tasks/$FLOW_ID/complete" "$TOKEN_CATALOGUER" "{\"next\":{\"kind\":\"GENERAL\",\"assignedToUserId\":\"$UID_EDITOR\"}}"
+assert_status "FIX_METADATA cannot move back to GENERAL" "400"
+
+http POST "$API/tasks/$FLOW_ID/complete" "$TOKEN_CATALOGUER" "{\"note\":\"Ready.\",\"next\":{\"kind\":\"REVIEW_PUBLISH\",\"assignedToUserId\":\"$UID_EDITOR\"}}"
+assert_status "FIX_METADATA → REVIEW_PUBLISH for the editor" "200"
+assert_json_field "…now with the editor" "['assignedToName']" "editor editor"
+assert_json_field "…in REVIEW_PUBLISH" "['kind']" "REVIEW_PUBLISH"
+
+http GET "$API/tasks/$FLOW_ID" "$TOKEN_EDITOR"
+assert_json_field "Return would go back to the fixer" "['returnTarget']['displayName']" "cataloguer cataloguer"
+assert_json_field "…in the stage they had it" "['returnTarget']['kind']" "FIX_METADATA"
+
+http POST "$API/tasks/$FLOW_ID/return" "$TOKEN_EDITOR" '{}'
+assert_status "Return without a note is 400" "400"
+http POST "$API/tasks/$FLOW_ID/return" "$TOKEN_EDITOR" '{"note":"   "}'
+assert_status "Return with a blank note is 400" "400"
+
+http POST "$API/tasks/$FLOW_ID/return" "$TOKEN_EDITOR" '{"note":"The author field is wrong."}'
+assert_status "The editor returns it with a reason" "200"
+assert_json_field "Back with the cataloguer" "['assignedToName']" "cataloguer cataloguer"
+assert_json_field "…in FIX_METADATA" "['kind']" "FIX_METADATA"
+assert_json_field "…flagged as returned" "['lastHandoff']" "RETURNED"
+
+http GET "$API/tasks/$FLOW_ID" "$TOKEN_CATALOGUER"
 assert_json_field "The return is a single RETURNED row" "['history'][-1]['action']" "RETURNED"
-assert_json_field "The return carries its reason" "['history'][-1]['note']" "The author field is wrong."
-assert_json_field "The return records the status move" "['history'][-1]['changes'][0]['path']" "status"
-assert_json_field "…and the assignee move, in the same row" "['history'][-1]['changes'][1]['path']" "assignedToUserId"
-RETURN_ROWS=$(echo "$HTTP_BODY" | python3 -c "
-import sys, json
-h = json.load(sys.stdin)['history']
-print(sum(1 for r in h if r['action'] in ('RETURNED', 'ASSIGNED')))
-" 2>/dev/null)
-assert_metric "A return writes exactly one row, not RETURNED plus ASSIGNED" "$RETURN_ROWS" "1"
+assert_json_field "…carrying its reason" "['history'][-1]['note']" "The author field is wrong."
+assert_json_true "…recording the stage AND the assignee move in the same row" \
+  "[c['path'] for c in d['history'][-1]['changes']] == ['kind', 'assignedToUserId']"
 
-# returnTo tracks whoever is holding the task. Now that it sits with the
-# cataloguer — who is also its creator, and so cannot be returned to themselves —
-# it falls through to the last handover: the editor who sent it back.
-assert_json_field "returnTo follows the holder, falling back past the creator" "['returnTo']['displayName']" "editor editor"
+http GET "$API/tasks?assignedTo=me&returned=true" "$TOKEN_CATALOGUER"
+assert_status "returned=true filter returns 200" "200"
+assert_body_contains "returned=true lists the returned task" "$FLOW_ID"
+http GET "$API/tasks?assignedTo=me&returned=false" "$TOKEN_CATALOGUER"
+if echo "$HTTP_BODY" | grep -q "$FLOW_ID"; then
+  echo -e "  ${RED}FAIL${NC} returned=false still lists the returned task"
+  ((FAILED++))
+  ERRORS+=("returned=false not applied")
+else
+  echo -e "  ${GREEN}PASS${NC} returned=false excludes it"
+  ((PASSED++))
+fi
 
-http PATCH "$API/tasks/$TASK_REVIEW_ID" "$TOKEN_CATALOGUER" "{\"status\":\"OPEN\",\"assignedToUserId\":\"$UID_EDITOR\",\"note\":\"Fixed.\"}"
-assert_status "Cataloguer sends it back after fixing" "200"
+http POST "$API/tasks/$FLOW_ID/complete" "$TOKEN_CATALOGUER" "{\"note\":\"Fixed.\",\"next\":{\"kind\":\"REVIEW_PUBLISH\",\"assignedToUserId\":\"$UID_ADMIN\"}}"
+assert_status "Fixed, and on to review again (admin this time)" "200"
+
+http POST "$API/tasks/$FLOW_ID/reassign" "$TOKEN_ADMIN" "{\"assignedToUserId\":\"$UID_ADMIN\"}"
+assert_status "Reassign to yourself is 400" "400"
+http POST "$API/tasks/$FLOW_ID/reassign" "$TOKEN_EDITOR" "{\"assignedToUserId\":\"$UID_ADMIN\"}"
+assert_status "Reassign to the current assignee is 400" "400"
+http POST "$API/tasks/$FLOW_ID/reassign" "$TOKEN_ADMIN" "{\"assignedToUserId\":\"$UID_CATALOGUER\"}"
+assert_status "Reassign a REVIEW_PUBLISH task to a cataloguer is 400" "400"
+
+http POST "$API/tasks/$FLOW_ID/reassign" "$TOKEN_ADMIN" "{\"assignedToUserId\":\"$UID_EDITOR\",\"note\":\"Editor has time today.\"}"
+assert_status "admin reassigns to the editor" "200"
+assert_json_field "…same stage" "['kind']" "REVIEW_PUBLISH"
+assert_json_field "…other person" "['assignedToName']" "editor editor"
+assert_json_field "…lastHandoff ASSIGNED" "['lastHandoff']" "ASSIGNED"
+
+http GET "$API/tasks/$FLOW_ID" "$TOKEN_EDITOR"
+assert_json_field "Reassign pushes: Return would go to whoever handed it on" "['returnTarget']['displayName']" "admin admin"
+assert_json_field "…in the same stage" "['returnTarget']['kind']" "REVIEW_PUBLISH"
+
+http POST "$API/tasks/$FLOW_ID/complete" "$TOKEN_EDITOR" '{"note":"Published."}'
+assert_status "Completing the review returns 200" "200"
+assert_json_field "…the task is COMPLETED" "['status']" "COMPLETED"
+assert_json_field "…and the item is now a RECORD" "['itemType']" "RECORD"
+
+http GET "$API/tasks/$FLOW_ID" "$TOKEN_EDITOR"
+assert_json_field "It closed through the publish observer" "['history'][-1]['action']" "CLOSED_ON_PUBLISH"
+assert_json_field "…by the editor, the real publisher" "['history'][-1]['userName']" "editor editor"
+assert_json_field "…with the note from complete" "['history'][-1]['note']" "Published."
+assert_json_field "The whole journey is one task, one row per action" "['history'][-1]['changes'][0]['before']" "OPEN"
+HIST=$(history_actions)
+if [ "$HIST" = "CREATED,ADVANCED,ADVANCED,RETURNED,ADVANCED,ASSIGNED,CLOSED_ON_PUBLISH" ]; then
+  echo -e "  ${GREEN}PASS${NC} History: $HIST"
+  ((PASSED++))
+else
+  echo -e "  ${RED}FAIL${NC} Unexpected history: $HIST"
+  ((FAILED++))
+  ERRORS+=("stage flow history: $HIST")
+fi
+
+http GET "$API/search/$FLOW_ITEM" "$TOKEN_EDITOR"
+assert_status "The published item is readable" "200"
+
+# --- 18h: return — the other landings ---------------------------------------
+echo -e "\n  ${YELLOW}Return variants...${NC}"
+
+new_task_item RET
+new_task "$TOKEN_CATALOGUER" "$NEW_ITEM" REVIEW_PUBLISH "Ready" "$UID_EDITOR"
+RET_ID=$NEW_TASK
+http POST "$API/tasks/$RET_ID/return" "$TOKEN_CATALOGUER" '{"note":"mine"}'
+assert_status "The creator may not return a task they do not hold" "403"
+http POST "$API/tasks/$RET_ID/return" "$TOKEN_EDITOR" '{"note":"Missing the year."}'
+assert_status "Return a review straight to its requester" "200"
+assert_json_field "…it lands with the requester" "['assignedToName']" "cataloguer cataloguer"
+assert_json_field "…as FIX_METADATA: they fix what the reviewer found" "['kind']" "FIX_METADATA"
+http POST "$API/tasks/$RET_ID/return" "$TOKEN_CATALOGUER" '{"note":"again"}'
+assert_status "Back at the bottom of the stack, there is nobody to return it to" "400"
+
+new_task_item OVR
+new_task "$TOKEN_ADMIN" "$NEW_ITEM" GENERAL "Check it" "$UID_CATALOGUER"
+OVR_ID=$NEW_TASK
+http POST "$API/tasks/$OVR_ID/complete" "$TOKEN_CATALOGUER" "{\"next\":{\"kind\":\"REVIEW_PUBLISH\",\"assignedToUserId\":\"$UID_EDITOR\"}}"
+assert_status "GENERAL → REVIEW_PUBLISH directly" "200"
+http POST "$API/tasks/$OVR_ID/return" "$TOKEN_EDITOR" "{\"note\":\"x\",\"assignedToUserId\":\"$UID_READER\"}"
+assert_status "Return to someone who cannot hold the stage is 400" "400"
+http POST "$API/tasks/$OVR_ID/return" "$TOKEN_EDITOR" "{\"note\":\"The cataloguer is on leave.\",\"assignedToUserId\":\"$UID_ADMIN\"}"
+assert_status "Return with a person override" "200"
+assert_json_field "…goes to that person" "['assignedToName']" "admin admin"
+assert_json_field "…in the previous stage" "['kind']" "GENERAL"
+
+# --- 18i: completing a review — who, and what publish validation says -------
+echo -e "\n  ${YELLOW}Completing a review...${NC}"
+
+http POST "$API/tasks/$TASK_REVIEW_ID/complete" "$TOKEN_CATALOGUER" '{}'
+assert_status "A cataloguer who is not the assignee cannot complete it" "403"
+
+# The directory would never let a cataloguer hold a review; a stale one might.
+# The authoritative check is the caller's own token.
+if [ "$PSQL_OK" = "1" ]; then
+  psql_query "UPDATE tasks SET \"assignedToUserId\" = '$UID_CATALOGUER' WHERE id = '$TASK_REVIEW_ID'" >/dev/null
+  http POST "$API/tasks/$TASK_REVIEW_ID/complete" "$TOKEN_CATALOGUER" '{}'
+  assert_status "…nor can a cataloguer assignee: their token cannot publish" "403"
+  psql_query "UPDATE tasks SET \"assignedToUserId\" = '$UID_EDITOR' WHERE id = '$TASK_REVIEW_ID'" >/dev/null
+fi
 
 http GET "$API/tasks/$TASK_REVIEW_ID" "$TOKEN_EDITOR"
-assert_json_field "The round trip is ONE task with the whole log" "['history'][-1]['action']" "STATUS_CHANGED"
-HIST_LEN=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['history']))" 2>/dev/null)
-assert_metric "Every step of the round trip is on one task's log" "$HIST_LEN" "4"
+VALID_BEFORE=$(history_len)
+http POST "$API/tasks/$TASK_REVIEW_ID/complete" "$TOKEN_EDITOR" '{"note":"Publishing."}'
+assert_status "Completing a review of an incomplete draft is 400" "400"
+assert_json_field "…PUBLISH_VALIDATION_FAILED, unchanged from the publish" "['code']" "PUBLISH_VALIDATION_FAILED"
+assert_json_true "…naming what is missing" "any(m['path'] == 'materialType' for m in d['items'][0]['missing'])"
+http GET "$API/tasks/$TASK_REVIEW_ID" "$TOKEN_EDITOR"
+assert_json_field "The task is still OPEN" "['status']" "OPEN"
+assert_json_field "The item is still a DRAFT" "['itemType']" "DRAFT"
+assert_metric "A failed publish writes no history row" "$(history_len)" "$VALID_BEFORE"
 
-http GET "$API/tasks?itemId=$TASK_DRAFT_ID&kind=REVIEW_PUBLISH" "$TOKEN_EDITOR"
-assert_json_field "The return opened no second task" "['total']" "1"
+# FIX_METADATA on a published record ends as a review with nothing to publish.
+http POST "$API/tasks/$TASK_FIXREC_ID/complete" "$TOKEN_EDITOR" "{\"next\":{\"kind\":\"REVIEW_PUBLISH\",\"assignedToUserId\":\"$UID_EDITOR\"}}"
+assert_status "The editor fixes the record and reviews it themselves" "200"
+http POST "$API/tasks/$TASK_FIXREC_ID/complete" "$TOKEN_EDITOR" '{}'
+assert_status "Completing a review of a RECORD returns 200" "200"
+assert_json_field "…COMPLETED" "['status']" "COMPLETED"
+assert_json_field "…the item stays a RECORD" "['itemType']" "RECORD"
+http GET "$API/tasks/$TASK_FIXREC_ID" "$TOKEN_EDITOR"
+assert_json_field "…logged as COMPLETED, not CLOSED_ON_PUBLISH" "['history'][-1]['action']" "COMPLETED"
+assert_json_field "…noting it was already published" "['history'][-1]['changes'][1]['after']" "ALREADY_PUBLISHED"
 
-# --- 18e2: snapshot vs live, the naming rule asserted -----------------------
+# --- 18j: snapshot vs live, the naming rule asserted -----------------------
 # The whole reason these are two tables. Rename the cataloguer in the directory,
 # then read the same task back: the live assignee/creator names follow, the
 # history rows do not.
@@ -2565,53 +2814,39 @@ else
   ((SKIPPED++))
 fi
 
-# --- 18f: the observer -----------------------------------------------------
-# Publishing closes its review tasks however the publish happened. Without this
+# --- 18k: the observer -----------------------------------------------------
+# Publishing closes its review task however the publish happened. Without this
 # the task list lies: the draft goes out and "please review" stays OPEN forever.
 echo -e "\n  ${YELLOW}The observer...${NC}"
 
-http POST "$API/items" "$TOKEN_CATALOGUER" '{"targetState":"DRAFT","visibilityStatus":"PRIVATE","metadata":{"title":"TEST-SUITE-OBSERVER-DRAFT",'"$PUBLISHABLE"',"collectionType":0,"childrenInDrafts":0,"childrenInRecords":0,"jeGlavnoGradivo":true}}'
-assert_status "Create draft for the observer test" "201"
-OBS_ID=$(json_field "['id']")
-CLEANUP_IDS+=("$OBS_ID")
+new_task_item OBSERVER ",$PUBLISHABLE"
+OBS_ID=$NEW_ITEM
+new_task "$TOKEN_CATALOGUER" "$OBS_ID" REVIEW_PUBLISH "Please publish" "$UID_EDITOR"
+OBS_REVIEW_ID=$NEW_TASK
 
-http POST "$API/tasks" "$TOKEN_CATALOGUER" "{\"itemId\":\"$OBS_ID\",\"kind\":\"REVIEW_PUBLISH\",\"title\":\"Please publish\",\"assignedToUserId\":\"$UID_EDITOR\"}"
-OBS_REVIEW_ID=$(json_field "['id']")
-
-http POST "$API/tasks" "$TOKEN_CATALOGUER" "{\"itemId\":\"$OBS_ID\",\"kind\":\"REVIEW_PUBLISH\",\"title\":\"Second opinion\",\"assignedToUserId\":\"$UID_EDITOR\"}"
-OBS_RETURNED_ID=$(json_field "['id']")
-http PATCH "$API/tasks/$OBS_RETURNED_ID" "$TOKEN_EDITOR" "{\"status\":\"RETURNED\",\"assignedToUserId\":\"$UID_CATALOGUER\"}"
-assert_status "Park a RETURNED review task on the same item" "200"
-
-http POST "$API/tasks" "$TOKEN_CATALOGUER" "{\"itemId\":\"$OBS_ID\",\"kind\":\"FIX_METADATA\",\"title\":\"Fix the year\",\"assignedToUserId\":\"$UID_CATALOGUER\"}"
-OBS_FIX_ID=$(json_field "['id']")
+new_task_item OBSERVER-FIX ",$PUBLISHABLE"
+OBS_FIX_ITEM=$NEW_ITEM
+new_task "$TOKEN_CATALOGUER" "$OBS_FIX_ITEM" FIX_METADATA "Fix the year" "$UID_CATALOGUER"
+OBS_FIX_ID=$NEW_TASK
 
 http GET "$API/tasks/$OBS_REVIEW_ID" "$TOKEN_EDITOR"
 assert_json_field "Before publication the task reports DRAFT" "['itemType']" "DRAFT"
 
-# Straight through the transition endpoint — nobody touches /api/tasks.
-http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"ids\":[\"$OBS_ID\"],\"targetState\":\"RECORD\"}"
-assert_status "Editor publishes the item" "201"
+# Straight through the transition endpoint, both items in one bulk publish —
+# nobody touches /api/tasks.
+http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"ids\":[\"$OBS_ID\",\"$OBS_FIX_ITEM\"],\"targetState\":\"RECORD\"}"
+assert_status "Editor bulk-publishes the items" "201"
 
 http GET "$API/tasks/$OBS_REVIEW_ID" "$TOKEN_EDITOR"
 assert_json_field "Publishing closed the review task" "['status']" "COMPLETED"
-if echo "$HTTP_BODY" | grep -q '"completedAt":null'; then
-  echo -e "  ${RED}FAIL${NC} Observer closed the task without setting completedAt"
-  ((FAILED++))
-  ERRORS+=("observer left completedAt null")
-else
-  echo -e "  ${GREEN}PASS${NC} Observer set completedAt"
-  ((PASSED++))
-fi
+assert_json_true "Observer set completedAt" "d['completedAt'] is not None"
 assert_json_field "The same task id now reports RECORD (id survives publication)" "['itemType']" "RECORD"
 # Attributed to the real publisher, never to `system`: a human did this, and
 # "closed by Ana publishing it" is more use than "closed by system".
 assert_json_field "The close is logged as CLOSED_ON_PUBLISH" "['history'][-1]['action']" "CLOSED_ON_PUBLISH"
 assert_json_field "…attributed to the publisher, not to system" "['history'][-1]['userName']" "editor editor"
 assert_json_field "…and records the status it moved from" "['history'][-1]['changes'][0]['before']" "OPEN"
-
-http GET "$API/tasks/$OBS_RETURNED_ID" "$TOKEN_EDITOR"
-assert_json_field "A RETURNED review task also closes — the goal was reached" "['status']" "COMPLETED"
+assert_json_field "…with no note (none was given)" "['history'][-1]['note']" "None"
 
 http GET "$API/tasks/$OBS_FIX_ID" "$TOKEN_EDITOR"
 assert_json_field "FIX_METADATA is untouched by publication" "['status']" "OPEN"
@@ -2629,7 +2864,7 @@ CLEANUP_IDS+=("$NOTASK_ID")
 http POST "$API/items/transition" "$TOKEN_EDITOR" "{\"ids\":[\"$NOTASK_ID\"],\"targetState\":\"RECORD\"}"
 assert_status "Publishing an item with no tasks still works" "201"
 
-# --- 18g: the picker -------------------------------------------------------
+# --- 18l: the picker -------------------------------------------------------
 echo -e "\n  ${YELLOW}The assignee picker...${NC}"
 
 http GET "$API/users?capability=publish&q=editor&limit=5" "$TOKEN_CATALOGUER"
@@ -2649,7 +2884,18 @@ assert_json_field "capability=publish excludes the cataloguer" "['total']" "0"
 http GET "$API/users?capability=staff&q=reader&limit=5" "$TOKEN_CATALOGUER"
 assert_json_field "capability=staff AND q both apply — reader is excluded" "['total']" "0"
 
-# --- 18h: the design claims, asserted --------------------------------------
+# FIX_METADATA's picker: drafts on a draft, records on a published record.
+http GET "$API/users?capability=drafts&q=cataloguer&limit=5" "$TOKEN_CATALOGUER"
+assert_status "capability=drafts returns 200" "200"
+assert_body_contains "capability=drafts includes the cataloguer" '"username":"cataloguer"'
+http GET "$API/users?capability=records&q=cataloguer&limit=5" "$TOKEN_CATALOGUER"
+assert_json_field "capability=records excludes the cataloguer" "['total']" "0"
+http GET "$API/users?capability=records&q=editor&limit=5" "$TOKEN_CATALOGUER"
+assert_body_contains "capability=records includes the editor" '"username":"editor"'
+http GET "$API/users?capability=everyone" "$TOKEN_CATALOGUER"
+assert_status "An unknown capability is 400" "400"
+
+# --- 18m: the design claims, asserted --------------------------------------
 echo -e "\n  ${YELLOW}Design claims...${NC}"
 
 http GET "$API/tasks?itemIds=$TASK_DRAFT_ID,$OBS_ID&status=OPEN" "$TOKEN_EDITOR"
@@ -2677,9 +2923,9 @@ http GET "$API/tasks/item/$TASK_DRAFT_ID/history" "$TOKEN_READER"
 assert_status "Reader cannot read item task-history" "403"
 
 # ---------------------------------------------------------------------------
-# THE decision this rewrite exists for: live tasks die with the item, the audit
-# log does not. Deleting the record of what people did is the exact failure mode
-# task_history was split out to prevent.
+# THE decision the history rewrite exists for: live tasks die with the item,
+# the audit log does not. Deleting the record of what people did is the exact
+# failure mode task_history was split out to prevent.
 # ---------------------------------------------------------------------------
 if [ "$PSQL_OK" = "1" ]; then
   HIST_BEFORE=$(psql_query "SELECT COUNT(*) FROM task_history WHERE \"itemId\" = '$TASK_DRAFT_ID'")
@@ -2702,7 +2948,7 @@ fi
 # task_history carries a denormalised itemId.
 http GET "$API/tasks/item/$TASK_DRAFT_ID/history" "$TOKEN_ADMIN"
 assert_status "What happened around a deleted item is still readable" "200"
-assert_body_contains "…including the return and its reason" "The author field is wrong."
+assert_body_contains "…including the comment on it" "Looking at it now."
 
 # Neither table is CDC-tracked. If either were, a comment on a task would
 # re-index the item it names — metadata and nested extractedText included.
@@ -2729,19 +2975,6 @@ fi  # directory-synced guard
 # docs/shared/plans/metadata-schema-v2.md. v1 (/schema/record, section "Schema
 # Endpoint") stays frozen until the archive app has moved.
 section "19. Metadata Schema v2"
-
-# Pass/fail on a Python expression over the parsed body (`d`).
-assert_json_true() {
-  local test_name=$1 expr=$2
-  if echo "$HTTP_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if ($expr) else 1)" 2>/dev/null; then
-    echo -e "  ${GREEN}PASS${NC} $test_name"
-    ((PASSED++))
-  else
-    echo -e "  ${RED}FAIL${NC} $test_name (body: $(echo "$HTTP_BODY" | head -c 300))"
-    ((FAILED++))
-    ERRORS+=("$test_name")
-  fi
-}
 
 # Create a draft (as the editor) and print its id.
 create_draft() {

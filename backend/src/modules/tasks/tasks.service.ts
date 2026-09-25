@@ -1,16 +1,40 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ItemType, TaskAction, TaskKind, TaskStatus } from '../../../generated/prisma/enums';
-import type { Prisma } from '../../../generated/prisma/client';
+import type { Prisma, Task } from '../../../generated/prisma/client';
 import { actorOf } from '../../core/auth/actor.type';
 import type { Principal } from '../../core/auth/principal.type';
+import { ResourceAccessService } from '../../core/auth/resource-access.service';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { TaskHistoryService } from '../../core/task-history/task-history.service';
 import type { FieldChange } from '../../core/types/revision.types';
+import { ItemsService } from '../items/items.service';
 import { UsersService } from '../users/users.service';
+import type { CancelTaskDto } from './dto/cancel-task.dto';
+import type { CompleteTaskDto } from './dto/complete-task.dto';
 import type { CreateCommentDto } from './dto/create-comment.dto';
 import type { CreateTaskDto } from './dto/create-task.dto';
+import type { ReassignTaskDto } from './dto/reassign-task.dto';
+import type { ReturnTaskDto } from './dto/return-task.dto';
 import type { TasksQueryDto } from './dto/tasks-query.dto';
 import type { UpdateTaskDto } from './dto/update-task.dto';
+import {
+  CAPABILITY_TEXT,
+  initialStack,
+  NEXT_STAGES,
+  popForReturn,
+  push,
+  requiredCapability,
+  stackOf,
+} from './task-workflow';
+
+/** The root client or a `$transaction` client. */
+type Db = PrismaService | Prisma.TransactionClient;
 
 export interface TaskHistoryView {
   id: string;
@@ -26,6 +50,13 @@ export interface TaskHistoryView {
   createdAt: Date;
 }
 
+/** Who and which stage "Return" would send the task to. */
+export interface ReturnTarget {
+  userId: string;
+  displayName: string;
+  kind: TaskKind;
+}
+
 export interface TaskView {
   id: string;
   itemId: string;
@@ -35,6 +66,7 @@ export interface TaskView {
    * without going through delete(), which the cascade makes unreachable.
    */
   itemType: ItemType | null;
+  /** The current stage. */
   kind: TaskKind;
   title: string;
   description: string | null;
@@ -48,39 +80,32 @@ export interface TaskView {
   createdAt: Date;
   updatedAt: Date;
   completedAt: Date | null;
+  /** How the task reached its holder: CREATED, ADVANCED, RETURNED or ASSIGNED. */
+  lastHandoff: TaskAction;
   /** Detail read only. Oldest first; comments and events interleaved. */
   history?: TaskHistoryView[];
-  /** Detail read only. See {@link TasksService.deriveReturnTo}. */
-  returnTo?: { userId: string; displayName: string } | null;
+  /** Detail read only. `null` = Return is not possible. See {@link TasksService.returnTarget}. */
+  returnTarget?: ReturnTarget | null;
 }
 
-/** What the assignee must be able to do for a task to be finishable by them. */
-type RequiredCapability = 'publish' | 'write';
-
+/**
+ * Task workflow v2 — docs/shared/plans/task-workflow-v2.md.
+ *
+ * A task is OPEN until it ends; its `kind` is the stage it is in. Every state
+ * change has its own method (complete / return / reassign / cancel), each one
+ * transaction writing exactly one history row labelled with that action. PATCH
+ * edits details only. The stack arithmetic and the assignee rule live in
+ * `task-workflow.ts`, which has no I/O.
+ */
 @Injectable()
 export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
     private readonly history: TaskHistoryService,
+    private readonly items: ItemsService,
+    private readonly access: ResourceAccessService,
   ) {}
-
-  /**
-   * What the assignee of a task in this state must be able to do.
-   *
-   * Keyed on the PAIR, not on `kind` alone. `kind` is the goal ("get this
-   * published"); `status` plus assignee is where it currently sits. A RETURNED
-   * REVIEW_PUBLISH task is parked with a cataloguer who needs to *fix* it, and
-   * the naive kind-only rule would reject the return with a 400 — see the
-   * return-flow tests in §18 and in tasks.service.spec.ts, which exist to catch
-   * exactly that regression if someone "tidies" this back to a switch on `kind`.
-   */
-  private requiredCapability(kind: TaskKind, status: TaskStatus): RequiredCapability {
-    if (kind === TaskKind.REVIEW_PUBLISH) {
-      return status === TaskStatus.OPEN || status === TaskStatus.IN_PROGRESS ? 'publish' : 'write';
-    }
-    return 'write';
-  }
 
   /**
    * ADVISORY. Reads `user_profiles`, which lags Keycloak by up to one sync
@@ -89,11 +114,7 @@ export class TasksService {
    * between someone and an action they are entitled to: the authoritative check
    * at publish time is assertCanTransition(), reading the JWT.
    */
-  private async assertAssignable(
-    userId: string,
-    kind: TaskKind,
-    status: TaskStatus,
-  ): Promise<void> {
+  private async assertAssignable(userId: string, kind: TaskKind, itemType: ItemType): Promise<void> {
     const who = await this.users.assignability(userId);
     if (!who) {
       throw new BadRequestException(
@@ -104,61 +125,89 @@ export class TasksService {
       throw new BadRequestException(`User is not active and cannot be assigned work: ${userId}`);
     }
 
-    const required = this.requiredCapability(kind, status);
-    if (required === 'publish' && !who.canPublish) {
+    const required = requiredCapability(kind, itemType);
+    if (!who[required]) {
       throw new BadRequestException(
-        `A ${kind} task in status ${status} needs an assignee who can publish (records:manage and drafts:manage). ` +
-          `If their roles changed recently, run POST /api/users/sync.`,
-      );
-    }
-    if (required === 'write' && !who.canWrite) {
-      throw new BadRequestException(
-        `A ${kind} task needs an assignee who can edit (drafts:manage or records:manage). ` +
+        `A ${kind} task on a ${itemType} needs an assignee who can ${CAPABILITY_TEXT[required]}. ` +
           `If their roles changed recently, run POST /api/users/sync.`,
       );
     }
   }
 
+  // ─── Create ───────────────────────────────────────────────────────────────
+
   async create(dto: CreateTaskDto, principal: Principal): Promise<TaskView> {
     const kind = dto.kind ?? TaskKind.GENERAL;
-    await this.assertAssignable(dto.assignedToUserId, kind, TaskStatus.OPEN);
+    await this.assertNoOpenTask(dto.itemId);
+    await this.assertAssignable(dto.assignedToUserId, kind, await this.itemTypeOf(dto.itemId));
 
-    const task = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.task.create({
-        data: {
-          itemId: dto.itemId,
-          kind,
-          title: dto.title,
-          description: dto.description,
-          assignedToUserId: dto.assignedToUserId,
-          createdByUserId: principal.sub,
-          dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
-        },
+    let task: Task;
+    try {
+      task = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.task.create({
+          data: {
+            itemId: dto.itemId,
+            kind,
+            title: dto.title,
+            description: dto.description,
+            assignedToUserId: dto.assignedToUserId,
+            createdByUserId: principal.sub,
+            dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+            handoffs: initialStack(principal.sub, dto.assignedToUserId, kind),
+            lastHandoff: TaskAction.CREATED,
+          },
+        });
+
+        await this.history.record(
+          {
+            taskId: created.id,
+            itemId: created.itemId,
+            action: TaskAction.CREATED,
+            // Copied onto the log rather than referenced, so a later edit to the
+            // task's description does not rewrite what was originally asked for.
+            note: dto.description,
+            changes: [
+              { path: 'kind', before: null, after: kind },
+              { path: 'assignedToUserId', before: null, after: dto.assignedToUserId },
+            ],
+            actor: actorOf(principal),
+          },
+          tx,
+        );
+
+        return created;
       });
-
-      await this.history.record(
-        {
-          taskId: created.id,
-          itemId: created.itemId,
-          action: TaskAction.CREATED,
-          // Copied onto the log rather than referenced, so a later edit to the
-          // task's description does not rewrite what was originally asked for.
-          note: dto.description,
-          changes: [
-            { path: 'kind', before: null, after: kind },
-            { path: 'assignedToUserId', before: null, after: dto.assignedToUserId },
-          ],
-          actor: actorOf(principal),
-        },
-        tx,
-      );
-
-      return created;
-    });
+    } catch (e) {
+      // Lost the race to `tasks_one_open_per_item`: answer exactly like the
+      // pre-check would have, naming the task that won.
+      if (isUniqueViolation(e)) await this.assertNoOpenTask(dto.itemId);
+      throw e;
+    }
 
     const [view] = await this.toViews([task]);
     return view;
   }
+
+  /**
+   * At most one open task per item. The partial unique index enforces it; this
+   * turns the common case into a 409 that names the task in the way.
+   */
+  private async assertNoOpenTask(itemId: string): Promise<void> {
+    const open = await this.prisma.task.findFirst({
+      where: { itemId, status: TaskStatus.OPEN },
+      select: { id: true },
+    });
+    if (open) {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'ITEM_HAS_OPEN_TASK',
+        message: 'This item already has an open task. Finish, reassign or cancel it first.',
+        taskId: open.id,
+      });
+    }
+  }
+
+  // ─── Reads ────────────────────────────────────────────────────────────────
 
   async list(
     dto: TasksQueryDto,
@@ -179,6 +228,8 @@ export class TasksService {
         ...(dto.itemIds && dto.itemIds.length > 0 ? [{ itemId: { in: dto.itemIds } }] : []),
         ...(dto.status ? [{ status: dto.status }] : []),
         ...(dto.kind ? [{ kind: dto.kind }] : []),
+        ...(dto.returned === true ? [{ lastHandoff: TaskAction.RETURNED }] : []),
+        ...(dto.returned === false ? [{ lastHandoff: { not: TaskAction.RETURNED } }] : []),
       ],
     };
 
@@ -192,14 +243,14 @@ export class TasksService {
       }),
     ]);
 
-    // No history and no returnTo on a list: a list is for triage, and neither is
-    // free — history is a second query and returnTo a directory lookup on top.
+    // No history and no returnTarget on a list: a list is for triage, and
+    // neither is free — history is a second query and returnTarget a directory
+    // lookup on top.
     return { total, tasks: await this.toViews(rows) };
   }
 
   async get(id: string): Promise<TaskView> {
-    const task = await this.prisma.task.findUnique({ where: { id } });
-    if (!task) throw new NotFoundException(`Task not found: ${id}`);
+    const task = await this.findOrThrow(id);
 
     const history = await this.prisma.taskHistory.findMany({
       where: { taskId: id },
@@ -210,7 +261,7 @@ export class TasksService {
     return {
       ...view,
       history: history.map(toHistoryView),
-      returnTo: await this.deriveReturnTo(task, history),
+      returnTarget: await this.returnTarget(task),
     };
   }
 
@@ -240,82 +291,256 @@ export class TasksService {
     return { total, history: rows.map((r) => ({ ...toHistoryView(r), taskId: r.taskId })) };
   }
 
-  async update(id: string, dto: UpdateTaskDto, principal: Principal): Promise<TaskView> {
-    const existing = await this.prisma.task.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException(`Task not found: ${id}`);
+  /**
+   * Where "Return" would send the task: the next entry down the handoff stack,
+   * person and stage (`popForReturn`). Read straight off the stack — the
+   * derivation from history that v1 needed is gone. `null` when the task is not
+   * open or was never handed over, which is exactly when POST /return is a 400.
+   *
+   * No eligibility check: if the previous holder has since left, the return
+   * itself says so, and the dialog lets the caller pick someone else.
+   */
+  private async returnTarget(task: Task): Promise<ReturnTarget | null> {
+    if (task.status !== TaskStatus.OPEN) return null;
+    const target = popForReturn(stackOf(task), task.kind);
+    if (!target) return null;
 
-    // Assignee and creator are the two people the task is *about*; records:manage
-    // is the unstick-it-when-someone-is-on-leave escape hatch.
-    const mayEdit =
-      existing.assignedToUserId === principal.sub ||
-      existing.createdByUserId === principal.sub ||
-      principal.scopes.has('records:manage');
-    if (!mayEdit) {
-      throw new ForbiddenException('Only the assignee, the creator or records:manage may edit a task');
-    }
+    const names = await this.users.resolveNames([target.userId]);
+    return { userId: target.userId, displayName: names.get(target.userId)!, kind: target.kind };
+  }
 
-    const nextStatus = dto.status ?? existing.status;
-    const nextKind = dto.kind ?? existing.kind;
-    const nextAssignee = dto.assignedToUserId ?? existing.assignedToUserId;
+  // ─── Actions ──────────────────────────────────────────────────────────────
 
-    // CANCELLED is the "never mind" state and is terminal: reopening it would
-    // hide that something was abandoned. COMPLETED deliberately is NOT terminal
-    // — COMPLETED -> RETURNED is a real workflow when a publish went out wrong.
-    if (existing.status === TaskStatus.CANCELLED && nextStatus !== existing.status) {
-      throw new BadRequestException('A cancelled task cannot change status. Open a new task instead.');
-    }
+  /**
+   * Finish the current stage. What that means depends on the stage:
+   *
+   * - GENERAL without `next` → COMPLETED. With `next` → moves to `next.kind`
+   *   (FIX_METADATA or REVIEW_PUBLISH) with `next.assignedToUserId`, who may be
+   *   the caller → ADVANCED.
+   * - FIX_METADATA → `next` required, REVIEW_PUBLISH only → ADVANCED.
+   * - REVIEW_PUBLISH on a DRAFT → publishes it through ItemsService.transition(),
+   *   the same path and checks as any publish (publish validation included).
+   *   The transition's observer closes this task and writes CLOSED_ON_PUBLISH
+   *   with the note, so a task-driven publish and any other publish share one
+   *   closing path. Any failure rolls the whole thing back: the task stays OPEN.
+   * - REVIEW_PUBLISH on a RECORD → COMPLETED as "reviewed" (typically after a
+   *   FIX_METADATA on a published record): nothing to publish.
+   *
+   * Assignee or `records:manage`. Publishing additionally needs the caller's
+   * OWN token to allow it — the directory is not asked.
+   */
+  async complete(id: string, dto: CompleteTaskDto, principal: Principal): Promise<TaskView> {
+    const task = await this.findOrThrow(id);
+    assertOpen(task);
+    assertMayWork(task, principal, 'complete');
 
-    // RETURNED means "handed back to someone else with notes", so it is
-    // meaningless without a new assignee. This does NOT fall out of the
-    // capability guard below — a publisher also holds write, so returning a task
-    // to yourself would otherwise pass. Stated explicitly for that reason.
-    if (nextStatus === TaskStatus.RETURNED && existing.status !== TaskStatus.RETURNED) {
-      if (!dto.assignedToUserId || dto.assignedToUserId === existing.assignedToUserId) {
-        throw new BadRequestException(
-          'Returning a task must reassign it: send status and assignedToUserId together.',
-        );
+    assertNextAllowed(task.kind, dto);
+
+    if (task.kind === TaskKind.REVIEW_PUBLISH) {
+      if ((await this.itemTypeOf(task.itemId)) === ItemType.DRAFT) {
+        this.access.assertCanTransition(principal);
+        await this.items.transition([task.itemId], ItemType.RECORD, actorOf(principal), {
+          note: dto.note,
+        });
+        return this.view(await this.findOrThrow(id));
       }
     }
 
-    // Re-run against the RESULTING triple, not the incoming fields — promoting a
-    // GENERAL task to REVIEW_PUBLISH while it sits with a cataloguer is a 400 for
-    // the same reason creating it that way is.
-    if (dto.assignedToUserId || dto.status || dto.kind) {
-      await this.assertAssignable(nextAssignee, nextKind, nextStatus);
-    }
+    return this.act(id, principal, async (tx, current) => {
+      assertMayWork(current, principal, 'complete');
+      assertNextAllowed(current.kind, dto);
 
-    const changes = this.diff(existing, dto);
-    const action = this.actionFor(existing, dto, changes);
+      const reviewedOnly = current.kind === TaskKind.REVIEW_PUBLISH;
+      if (reviewedOnly && (await this.itemTypeOf(current.itemId, tx)) !== ItemType.RECORD) {
+        // Became a review of a draft since the read above: completing it now
+        // would skip the publish.
+        throw new ConflictException('The task changed while you were completing it. Reload and try again.');
+      }
 
-    const enteringCompleted =
-      nextStatus === TaskStatus.COMPLETED && existing.status !== TaskStatus.COMPLETED;
-    const leavingCompleted =
-      nextStatus !== TaskStatus.COMPLETED && existing.status === TaskStatus.COMPLETED;
+      if (!dto.next) {
+        // GENERAL with nothing to hand on, or REVIEW_PUBLISH on a published record.
+        return {
+          data: { status: TaskStatus.COMPLETED, completedAt: new Date() },
+          action: TaskAction.COMPLETED,
+          note: dto.note,
+          changes: [
+            { path: 'status', before: current.status, after: TaskStatus.COMPLETED },
+            // Tells the log apart from a publish: the item was already a record.
+            ...(reviewedOnly ? [{ path: 'outcome', before: null, after: 'ALREADY_PUBLISHED' }] : []),
+          ],
+        };
+      }
+
+      const next = dto.next;
+      await this.assertAssignable(
+        next.assignedToUserId,
+        next.kind,
+        await this.itemTypeOf(current.itemId, tx),
+      );
+      return {
+        data: {
+          kind: next.kind,
+          assignedToUserId: next.assignedToUserId,
+          handoffs: push(stackOf(current), next.assignedToUserId, next.kind),
+          lastHandoff: TaskAction.ADVANCED,
+        },
+        action: TaskAction.ADVANCED,
+        note: dto.note,
+        changes: moved(current, next.kind, next.assignedToUserId),
+      };
+    });
+  }
+
+  /**
+   * Back one step: the previous holder gets the task back, in the stage they
+   * had it (see `popForReturn`). `assignedToUserId` overrides the person, not
+   * the stage. The note is required by the DTO.
+   *
+   * Assignee or `records:manage`.
+   */
+  async returnTask(id: string, dto: ReturnTaskDto, principal: Principal): Promise<TaskView> {
+    return this.act(id, principal, async (tx, current) => {
+      assertMayWork(current, principal, 'return');
+
+      const target = popForReturn(stackOf(current), current.kind, dto.assignedToUserId);
+      if (!target) {
+        throw new BadRequestException(
+          'This task was never handed over, so there is nobody to return it to. Cancel or complete it instead.',
+        );
+      }
+      if (target.userId === current.assignedToUserId && target.kind === current.kind) {
+        throw new BadRequestException('Returning it there would leave the task where it is.');
+      }
+      await this.assertAssignable(target.userId, target.kind, await this.itemTypeOf(current.itemId, tx));
+
+      return {
+        data: {
+          kind: target.kind,
+          assignedToUserId: target.userId,
+          handoffs: target.stack,
+          lastHandoff: TaskAction.RETURNED,
+        },
+        action: TaskAction.RETURNED,
+        note: dto.note,
+        changes: moved(current, target.kind, target.userId),
+      };
+    });
+  }
+
+  /**
+   * Same stage, different person — never the caller, never the current holder.
+   * Pushes, so a return from the new holder comes back to whoever handed it on.
+   *
+   * Assignee, creator or `records:manage`.
+   */
+  async reassign(id: string, dto: ReassignTaskDto, principal: Principal): Promise<TaskView> {
+    return this.act(id, principal, async (tx, current) => {
+      assertMayManage(current, principal, 'reassign');
+
+      if (dto.assignedToUserId === principal.sub) {
+        throw new BadRequestException('You cannot reassign a task to yourself.');
+      }
+      if (dto.assignedToUserId === current.assignedToUserId) {
+        throw new BadRequestException('The task is already assigned to that person.');
+      }
+      await this.assertAssignable(
+        dto.assignedToUserId,
+        current.kind,
+        await this.itemTypeOf(current.itemId, tx),
+      );
+
+      return {
+        data: {
+          assignedToUserId: dto.assignedToUserId,
+          handoffs: push(stackOf(current), dto.assignedToUserId, current.kind),
+          lastHandoff: TaskAction.ASSIGNED,
+        },
+        action: TaskAction.ASSIGNED,
+        note: dto.note,
+        changes: moved(current, current.kind, dto.assignedToUserId),
+      };
+    });
+  }
+
+  /** CANCELLED is terminal. Assignee, creator or `records:manage`. */
+  async cancel(id: string, dto: CancelTaskDto, principal: Principal): Promise<TaskView> {
+    return this.act(id, principal, async (_tx, current) => {
+      assertMayManage(current, principal, 'cancel');
+      return {
+        data: { status: TaskStatus.CANCELLED },
+        action: TaskAction.CANCELLED,
+        note: dto.note,
+        changes: [{ path: 'status', before: current.status, after: TaskStatus.CANCELLED }],
+      };
+    });
+  }
+
+  /**
+   * One action = one transaction = one history row. Locks the task row first:
+   * two people returning the same task at once must not both pop the stack.
+   */
+  private async act(
+    id: string,
+    principal: Principal,
+    decide: (
+      tx: Prisma.TransactionClient,
+      current: Task,
+    ) => Promise<{
+      data: Prisma.TaskUpdateInput;
+      action: TaskAction;
+      note?: string;
+      changes: FieldChange[];
+    }>,
+  ): Promise<TaskView> {
+    const task = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM "tasks" WHERE "id" = ${id} FOR UPDATE`;
+      const current = await tx.task.findUnique({ where: { id } });
+      if (!current) throw new NotFoundException(`Task not found: ${id}`);
+      assertOpen(current);
+
+      const { data, action, note, changes } = await decide(tx, current);
+      const updated = await tx.task.update({ where: { id }, data });
+      await this.history.record(
+        { taskId: id, itemId: current.itemId, action, note, changes, actor: actorOf(principal) },
+        tx,
+      );
+      return updated;
+    });
+
+    return this.view(task);
+  }
+
+  // ─── Details and comments ─────────────────────────────────────────────────
+
+  /**
+   * Title, description, due date. Where the task is (status, stage, assignee)
+   * moves only through the action routes — the DTO rejects those fields with a
+   * pointer to them.
+   */
+  async updateDetails(id: string, dto: UpdateTaskDto, principal: Principal): Promise<TaskView> {
+    const existing = await this.findOrThrow(id);
+    assertMayManage(existing, principal, 'edit');
+
+    const changes = diffDetails(existing, dto);
 
     const task = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.task.update({
         where: { id },
         data: {
-          ...(dto.status ? { status: dto.status } : {}),
-          ...(dto.kind ? { kind: dto.kind } : {}),
-          ...(dto.assignedToUserId ? { assignedToUserId: dto.assignedToUserId } : {}),
           ...(dto.title !== undefined ? { title: dto.title } : {}),
           ...(dto.description !== undefined ? { description: dto.description } : {}),
           ...(dto.dueAt !== undefined ? { dueAt: dto.dueAt ? new Date(dto.dueAt) : null } : {}),
-          ...(enteringCompleted ? { completedAt: new Date() } : {}),
-          ...(leavingCompleted ? { completedAt: null } : {}),
         },
       });
 
       // A PATCH that changes nothing writes no history — an audit log of
       // non-events is noise, and the GUI sends idempotent saves.
-      if (action) {
+      if (changes.length > 0) {
         await this.history.record(
           {
             taskId: id,
             itemId: existing.itemId,
-            action,
-            note: dto.note,
+            action: TaskAction.UPDATED,
             changes,
             actor: actorOf(principal),
           },
@@ -326,8 +551,7 @@ export class TasksService {
       return updated;
     });
 
-    const [view] = await this.toViews([task]);
-    return view;
+    return this.view(task);
   }
 
   async addComment(
@@ -354,106 +578,28 @@ export class TasksService {
     return toHistoryView(row);
   }
 
-  /**
-   * Who the "return with notes" dialog should prefill as the next assignee.
-   *
-   * Derived, never stored: it is a fact about the history, and a column would be
-   * one more thing to keep in step.
-   *
-   *  1. **the creator**, because RETURNED means "sent back to the requester"
-   *     and the requester is whoever filed the task;
-   *  2. failing that, whoever last handed the task to its current holder;
-   *  3. failing that, `null` — the GUI shows an empty picker rather than a
-   *     wrong default.
-   *
-   * Each candidate is skipped unless they are active, can write, and are not
-   * already holding the task.
-   *
-   * **The creator comes first, and that ordering is the whole point.** An admin
-   * unsticking a task — reassigning it between two publishers — is "who handed
-   * it to me", but returning a REVIEW_PUBLISH task *to the admin* is wrong: the
-   * person who fixes the author field is the cataloguer who asked for it to be
-   * published. Ordering by last-handover instead would prefill the admin, which
-   * is why this is computed in the backend rather than left to each client to
-   * rediscover.
-   *
-   * Last-handover survives as a fallback for the case the creator cannot take it
-   * back — they have left, or they are the one currently holding it.
-   */
-  private async deriveReturnTo(
-    task: { assignedToUserId: string; createdByUserId: string },
-    history: Array<{ userId: string; changes: unknown }>,
-  ): Promise<{ userId: string; displayName: string } | null> {
-    const handover = [...history]
-      .reverse()
-      .find((h) => fieldChangesOf(h.changes).some(
-        (c) => c.path === 'assignedToUserId' && c.after === task.assignedToUserId,
-      ));
+  // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    for (const candidate of [task.createdByUserId, handover?.userId]) {
-      // Returning to the person already holding it is a no-op the API rejects.
-      if (!candidate || candidate === task.assignedToUserId) continue;
-      const who = await this.users.assignability(candidate);
-      if (!who || !who.isActive || !who.canWrite) continue;
-
-      const names = await this.users.resolveNames([candidate]);
-      return { userId: candidate, displayName: names.get(candidate)! };
-    }
-
-    return null;
+  private async findOrThrow(id: string): Promise<Task> {
+    const task = await this.prisma.task.findUnique({ where: { id } });
+    if (!task) throw new NotFoundException(`Task not found: ${id}`);
+    return task;
   }
 
-  /** Every field this PATCH actually moves, for the history row's `changes`. */
-  private diff(
-    existing: {
-      status: TaskStatus;
-      kind: TaskKind;
-      assignedToUserId: string;
-      title: string;
-      description: string | null;
-      dueAt: Date | null;
-    },
-    dto: UpdateTaskDto,
-  ): FieldChange[] {
-    const changes: FieldChange[] = [];
-    const add = (path: string, before: unknown, after: unknown) => {
-      if (before !== after) changes.push({ path, before, after });
-    };
-
-    if (dto.status) add('status', existing.status, dto.status);
-    if (dto.kind) add('kind', existing.kind, dto.kind);
-    if (dto.assignedToUserId) add('assignedToUserId', existing.assignedToUserId, dto.assignedToUserId);
-    if (dto.title !== undefined) add('title', existing.title, dto.title);
-    if (dto.description !== undefined) add('description', existing.description, dto.description);
-    if (dto.dueAt !== undefined) {
-      add('dueAt', existing.dueAt?.toISOString() ?? null, dto.dueAt ?? null);
-    }
-    return changes;
+  /** DRAFT or RECORD, as it is now. Tasks die with their item, so a miss is a 404. */
+  private async itemTypeOf(itemId: string, db: Db = this.prisma): Promise<ItemType> {
+    const [draft, record] = await Promise.all([
+      db.draft.findUnique({ where: { id: itemId }, select: { id: true } }),
+      db.record.findUnique({ where: { id: itemId }, select: { id: true } }),
+    ]);
+    if (draft) return ItemType.DRAFT;
+    if (record) return ItemType.RECORD;
+    throw new NotFoundException(`Item not found: ${itemId}`);
   }
 
-  /**
-   * The single action that describes what the caller did.
-   *
-   * One user action produces one history row, so when a PATCH moves several
-   * things at once the most specific label wins: a return is RETURNED, not
-   * STATUS_CHANGED plus ASSIGNED. Everything that moved is in `changes` either
-   * way, so nothing is lost by labelling it once.
-   */
-  private actionFor(
-    existing: { status: TaskStatus },
-    dto: UpdateTaskDto,
-    changes: FieldChange[],
-  ): TaskAction | null {
-    if (changes.length === 0 && !dto.note) return null;
-
-    const statusChanged = changes.some((c) => c.path === 'status');
-    if (statusChanged && dto.status === TaskStatus.RETURNED) return TaskAction.RETURNED;
-    if (statusChanged) return TaskAction.STATUS_CHANGED;
-    if (changes.some((c) => c.path === 'assignedToUserId')) return TaskAction.ASSIGNED;
-    if (changes.length > 0) return TaskAction.UPDATED;
-
-    // A note with no field change is a comment made through PATCH.
-    return TaskAction.COMMENTED;
+  private async view(task: Task): Promise<TaskView> {
+    const [view] = await this.toViews([task]);
+    return view;
   }
 
   private resolveMe(value: string, principal: Principal): string {
@@ -474,22 +620,7 @@ export class TasksService {
    * on an open task is a bug, where on a history row it is the whole point. The
    * governing rule: snapshot for a specific row, directory for a group of rows.
    */
-  private async toViews(
-    rows: Array<{
-      id: string;
-      itemId: string;
-      kind: TaskKind;
-      title: string;
-      description: string | null;
-      status: TaskStatus;
-      assignedToUserId: string;
-      createdByUserId: string;
-      dueAt: Date | null;
-      createdAt: Date;
-      updatedAt: Date;
-      completedAt: Date | null;
-    }>,
-  ): Promise<TaskView[]> {
+  private async toViews(rows: Task[]): Promise<TaskView[]> {
     const userIds = [
       ...rows.map((r) => r.assignedToUserId),
       ...rows.map((r) => r.createdByUserId),
@@ -522,8 +653,104 @@ export class TasksService {
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       completedAt: r.completedAt,
+      lastHandoff: r.lastHandoff,
     }));
   }
+}
+
+// ─── Pure helpers ───────────────────────────────────────────────────────────
+
+/** Which `next` the current stage allows — see CompleteTaskDto. */
+function assertNextAllowed(kind: TaskKind, dto: CompleteTaskDto): void {
+  if (kind === TaskKind.REVIEW_PUBLISH && dto.next) {
+    throw new BadRequestException(
+      'A REVIEW_PUBLISH task has no next stage: completing it publishes the item. Leave out next.',
+    );
+  }
+  if (kind === TaskKind.FIX_METADATA && !dto.next) {
+    throw new BadRequestException(
+      'Completing a FIX_METADATA task hands it on for publishing: send next: { kind: "REVIEW_PUBLISH", assignedToUserId }.',
+    );
+  }
+  if (dto.next && !NEXT_STAGES[kind].includes(dto.next.kind)) {
+    throw new BadRequestException(
+      `A ${kind} task can move on to ${NEXT_STAGES[kind].join(' or ')}, not ${dto.next.kind}.`,
+    );
+  }
+}
+
+/** COMPLETED and CANCELLED are terminal — there is no reopen in v2. */
+function assertOpen(task: { status: TaskStatus }): void {
+  if (task.status !== TaskStatus.OPEN) {
+    throw new BadRequestException(
+      `This task is ${task.status} and can no longer change. File a new task instead.`,
+    );
+  }
+}
+
+/**
+ * Complete and return: the work is the assignee's. `records:manage` is the
+ * unstick-it-when-someone-is-on-leave escape hatch.
+ */
+function assertMayWork(task: { assignedToUserId: string }, principal: Principal, verb: string): void {
+  if (task.assignedToUserId !== principal.sub && !principal.scopes.has('records:manage')) {
+    throw new ForbiddenException(`Only the assignee or records:manage may ${verb} a task`);
+  }
+}
+
+/**
+ * Reassign, cancel and edit: assignee and creator are the two people the task
+ * is *about*; `records:manage` is the escape hatch.
+ */
+function assertMayManage(
+  task: { assignedToUserId: string; createdByUserId: string },
+  principal: Principal,
+  verb: string,
+): void {
+  const may =
+    task.assignedToUserId === principal.sub ||
+    task.createdByUserId === principal.sub ||
+    principal.scopes.has('records:manage');
+  if (!may) {
+    throw new ForbiddenException(`Only the assignee, the creator or records:manage may ${verb} a task`);
+  }
+}
+
+/** The `changes` of a handover: whichever of stage and holder actually moved. */
+function moved(
+  current: { kind: TaskKind; assignedToUserId: string },
+  kind: TaskKind,
+  assignedToUserId: string,
+): FieldChange[] {
+  const changes: FieldChange[] = [];
+  if (kind !== current.kind) changes.push({ path: 'kind', before: current.kind, after: kind });
+  if (assignedToUserId !== current.assignedToUserId) {
+    changes.push({ path: 'assignedToUserId', before: current.assignedToUserId, after: assignedToUserId });
+  }
+  return changes;
+}
+
+/** Every detail this PATCH actually moves, for the history row's `changes`. */
+function diffDetails(
+  existing: { title: string; description: string | null; dueAt: Date | null },
+  dto: UpdateTaskDto,
+): FieldChange[] {
+  const changes: FieldChange[] = [];
+  const add = (path: string, before: unknown, after: unknown) => {
+    if (before !== after) changes.push({ path, before, after });
+  };
+
+  if (dto.title !== undefined) add('title', existing.title, dto.title);
+  if (dto.description !== undefined) add('description', existing.description, dto.description);
+  if (dto.dueAt !== undefined) {
+    add('dueAt', existing.dueAt?.toISOString() ?? null, dto.dueAt ?? null);
+  }
+  return changes;
+}
+
+/** Prisma's unique-constraint violation, without importing the runtime error class. */
+function isUniqueViolation(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 'P2002';
 }
 
 /** `changes` is JSON on the way out of Prisma; narrow it once, here. */
@@ -551,3 +778,4 @@ function toHistoryView(row: {
     createdAt: row.createdAt,
   };
 }
+

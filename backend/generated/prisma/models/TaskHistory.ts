@@ -397,10 +397,6 @@ export type TaskHistoryMinOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
 }
 
-export type EnumTaskActionFieldUpdateOperationsInput = {
-  set?: $Enums.TaskAction
-}
-
 
 
 export type TaskHistorySelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{

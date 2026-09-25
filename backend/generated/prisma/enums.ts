@@ -81,8 +81,6 @@ export type MetricKind = (typeof MetricKind)[keyof typeof MetricKind]
 
 export const TaskStatus = {
   OPEN: 'OPEN',
-  IN_PROGRESS: 'IN_PROGRESS',
-  RETURNED: 'RETURNED',
   COMPLETED: 'COMPLETED',
   CANCELLED: 'CANCELLED'
 } as const
@@ -106,7 +104,10 @@ export const TaskAction = {
   RETURNED: 'RETURNED',
   COMMENTED: 'COMMENTED',
   UPDATED: 'UPDATED',
-  CLOSED_ON_PUBLISH: 'CLOSED_ON_PUBLISH'
+  CLOSED_ON_PUBLISH: 'CLOSED_ON_PUBLISH',
+  ADVANCED: 'ADVANCED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED'
 } as const
 
 export type TaskAction = (typeof TaskAction)[keyof typeof TaskAction]

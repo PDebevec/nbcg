@@ -111,7 +111,7 @@ describe('schema v2 self-check', () => {
     });
 
     it('a field without a caption', () => {
-      const s = schemaWith((specs) => [...specs.filter((f) => f.key !== 'notes'), { key: 'notes', type: 'text', multiple: true, group: 'nowhere' }]);
+      const s = schemaWith((specs) => [...specs.filter((f) => f.key !== 'notes'), { key: 'notes', type: 'text', multiple: true, group: 'nowhere' as FieldSpec['group'] }]);
       const broken = structuredClone(s);
       field(broken, 'notes').label = { en: 'Notes', cnr: '' };
       expect(errorsFor(broken)).toMatch(/notes: no label in every language/);

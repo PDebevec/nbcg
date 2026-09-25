@@ -1,6 +1,6 @@
 # Frontend: task workflow v2
 
-## Status: PLANNED (2026-09-23) — ships together with the backend change
+## Status: PLANNED (2026-09-23) · backend DONE 2026-09-25 (dev) — ships together with it
 
 Contract: [shared/plans/task-workflow-v2.md](../../shared/plans/task-workflow-v2.md).
 Backend: [backend/plans/task-workflow-v2.md](../../backend/plans/task-workflow-v2.md).
@@ -8,6 +8,66 @@ Backend: [backend/plans/task-workflow-v2.md](../../backend/plans/task-workflow-v
 **Must deploy in the same release as the backend.** Every state-changing button
 on today's task page sends a `PATCH { status | assignedToUserId }`, which v2
 rejects with 400.
+
+---
+
+## What the backend now provides (2026-09-25)
+
+Built and tested on dev ([backend plan → Done](../../backend/plans/task-workflow-v2.md#done--what-was-built-2026-09-25),
+full reference in [reference.md → Tasks](../../backend/reference.md#tasks-delegation)).
+Nothing below is deployed; both sides go out together.
+
+### Routes
+
+| Call | Body | 200 / 201 | Errors worth a specific UI |
+|---|---|---|---|
+| `POST /api/tasks` | `{ itemId, kind, title, description?, assignedToUserId, dueAt? }` | 201 task | **409** `{ code: "ITEM_HAS_OPEN_TASK", message, taskId }` · 400 guard (message names the missing capability + "run POST /api/users/sync") |
+| `POST /api/tasks/:id/complete` | `{ note?, next?: { kind, assignedToUserId } }` | 200 task | 400 FIX_METADATA without `next`, `next` on REVIEW_PUBLISH, a `next.kind` the stage does not lead to, guard · 403 not assignee / `records:manage`, or (review of a draft) caller's token cannot publish · **400 `PUBLISH_VALIDATION_FAILED`** unchanged from publish |
+| `POST /api/tasks/:id/return` | `{ note, assignedToUserId? }` | 200 task | 400 no/blank note, never handed over (`returnTarget` was null), target fails the guard for the stage it lands in · 403 not assignee / `records:manage` (the creator may NOT return) |
+| `POST /api/tasks/:id/reassign` | `{ assignedToUserId, note? }` | 200 task | 400 yourself, current assignee, guard · 403 not assignee / creator / `records:manage` |
+| `POST /api/tasks/:id/cancel` | `{ note? }` | 200 task | 403 as reassign |
+| `PATCH /api/tasks/:id` | `{ title?, description?, dueAt? }` | 200 task | 400 for `status` / `kind` / `assignedToUserId` / `note` — **every PATCH the current page sends for a move is now a 400** |
+| `GET /api/tasks?…&returned=true` | | `{ total, tasks }` | `status` other than OPEN/COMPLETED/CANCELLED → 400 |
+| `GET /api/users?capability=drafts\|records` | | `{ total, users }` | |
+
+Any action on a COMPLETED/CANCELLED task → 400 ("can no longer change").
+
+### Shapes
+
+- Task (list rows and action responses): v1 fields + **`lastHandoff`**
+  (`CREATED | ADVANCED | RETURNED | ASSIGNED`). Action responses carry no
+  `history` and no `returnTarget` — reload the detail after an action.
+- Detail: + `history[]` + **`returnTarget: { userId, displayName, kind } | null`**
+  (`returnTo` is gone). `null` when there is nobody to return to (never handed
+  over, or the task is closed) — disable Return then. Not checked for
+  eligibility: if that person has since left, the return is a 400 and the
+  dialog's person override is the way out. It can be **you** (you completed
+  with `next` to yourself, then step back) — phrase the dialog so "Goes back to
+  you as Fix metadata" reads right.
+- Completing a review of a draft answers with `status: COMPLETED`,
+  `itemType: RECORD`.
+- `completedAt` is set on COMPLETED, not on CANCELLED.
+
+### History rows the list must render
+
+| `action` | `changes` | Suggested line |
+|---|---|---|
+| `ADVANCED` | `kind` and/or `assignedToUserId` | "handed on for {stage} to {name}" |
+| `RETURNED` | `kind` and/or `assignedToUserId`, `note` = reason | "returned to {name} as {stage}: {note}" |
+| `ASSIGNED` | `assignedToUserId` | "reassigned to {name}" |
+| `COMPLETED` | `status`; plus `{ path: "outcome", after: "ALREADY_PUBLISHED" }` when a review of a published record was confirmed | "completed" / "reviewed — already published" |
+| `CANCELLED` | `status` | "cancelled" |
+| `CLOSED_ON_PUBLISH` | `status`, optional `note` (set when the publish came from Complete) | "published by {name}" |
+| legacy `STATUS_CHANGED` | `status` with `IN_PROGRESS` / `RETURNED` values | keep today's labels |
+
+### Picker capability per stage
+
+`pickerCapability(kind, itemType)`: GENERAL → `staff`; FIX_METADATA → `drafts`
+on a DRAFT, `records` on a RECORD; REVIEW_PUBLISH → `publish`. For **return**
+use the target stage (`returnTarget.kind`), not the current one.
+
+The publish checklist in the complete dialog is `GET
+/api/items/:id/validation` (`?target=RECORD` is the default and the only value).
 
 ---
 
@@ -137,9 +197,9 @@ must report per-item 409s; **A2** (publish inside the editor) shares the
 
 | Frontend needs from the backend | Backend step |
 |---|---|
-| action routes, `returnTarget`, `lastHandoff`, `returned` filter | service/controller (§3, §5) |
-| capabilities `drafts` / `records` in `/api/users` | guard (§2) |
-| `409 ITEM_HAS_OPEN_TASK` | migration + create (§1, §3) |
+| action routes, `returnTarget`, `lastHandoff`, `returned` filter | service/controller (§3, §5) — **built 2026-09-25** |
+| capabilities `drafts` / `records` in `/api/users` | guard (§2) — **built 2026-09-25** |
+| `409 ITEM_HAS_OPEN_TASK` | migration + create (§1, §3) — **built 2026-09-25** |
 | `/items/:id/validation`, `PUBLISH_VALIDATION_FAILED` | metadata schema v2, B6 — built 2026-09-24 (dev); response shapes in the [web schema v2 plan](metadata-schema-v2.md#what-the-backend-now-provides-2026-09-24) |
 
 ## Estimate

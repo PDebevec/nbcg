@@ -59,8 +59,8 @@ imports and polls the job.
 | **Publishing needs fields the form cannot enter.** Backend publish validation (schema v2 B6, on dev since 2026-09-24) requires `extent` for books etc. and `issue.number`/`issue.date` for an issue of a serial; the form has neither (JSON tab only). Bulk publish shows only the 400's `message`, not which fields | `ItemMetadataForm.vue`, `AdminItemsPage.vue` | [web schema v2 plan ⚠](plans/metadata-schema-v2.md#-already-affects-the-current-web-app) — must land before the backend reaches production |
 | Import page lists `progress.errors` but not the new `progress.warnings` (records imported that would fail publish validation) | `AdminImportPage.vue` | web schema v2 plan |
 | Every field shows for every material type (a book gets ISSN and ISMN, a journal gets ISBN, edition and series) | `ItemMetadataForm.vue` | [material-type field visibility](plans/material-type-field-visibility.md) |
-| Open-task badge makes three calls per page (one per active status) | `AdminItemsPage.vue` | [task workflow v2](plans/task-workflow-v2.md) |
-| Inbox "hide closed" filters client-side, after pagination | `AdminTasksPage.vue` | task workflow v2 |
+| Open-task badge makes three calls per page (one per active status) | `AdminItemsPage.vue` | [task workflow v2](plans/task-workflow-v2.md) — backend has one open status since 2026-09-25 (dev) |
+| Inbox "hide closed" filters client-side, after pagination | `AdminTasksPage.vue` | task workflow v2 — `status` filter is server-side and has three values |
 | Unused `pm2` dependency (AGPL) | `package.json` | [license audit](../shared/license-audit.md) — remove |
 | Quasar starter leftovers (`EssentialLink.vue`, `ExampleComponent.vue`, `stores/example-store.ts`, `models.ts`) | `src/` | delete when convenient |
 

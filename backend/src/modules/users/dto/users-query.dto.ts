@@ -9,15 +9,17 @@ export class UsersQueryDto {
    * `publish` means `records:manage` AND `drafts:manage` — so it includes
    * `editor` and excludes `cataloguer`, which is the inverse of how those roles
    * sound. `staff` means `drafts:manage` OR `records:manage`: everyone who
-   * writes, so it includes cataloguers and excludes readers.
+   * writes, so it includes cataloguers and excludes readers. `drafts` and
+   * `records` are the single scopes.
    *
-   * The two map to the task kinds: REVIEW_PUBLISH needs `publish`, FIX_METADATA
-   * and GENERAL need `staff`. The client filter is an affordance only — the
-   * server re-derives the requirement from `kind` on every write.
+   * They map to the task stages (task workflow v2): REVIEW_PUBLISH needs
+   * `publish`, GENERAL `staff`, FIX_METADATA `drafts` on a draft and `records`
+   * on a published record. The client filter is an affordance only — the server
+   * re-derives the requirement from `(kind, itemType)` on every write.
    */
   @IsOptional()
-  @IsEnum(['publish', 'staff'])
-  capability?: 'publish' | 'staff';
+  @IsEnum(['publish', 'staff', 'drafts', 'records'])
+  capability?: 'publish' | 'staff' | 'drafts' | 'records';
 
   /**
    * Active means enabled in Keycloak and still present at the last successful

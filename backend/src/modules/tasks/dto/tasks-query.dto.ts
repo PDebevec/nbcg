@@ -1,4 +1,4 @@
-import { ArrayMaxSize, IsArray, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { TaskKind, TaskStatus } from '../../../../generated/prisma/enums';
 
@@ -43,6 +43,15 @@ export class TasksQueryDto {
   @IsOptional()
   @IsEnum(TaskKind)
   kind?: TaskKind;
+
+  /**
+   * `true`: tasks whose last handover was a return (`lastHandoff = RETURNED`) —
+   * the "Returned to you" list. `false`: everything else.
+   */
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  returned?: boolean;
 
   @IsOptional()
   @Type(() => Number)

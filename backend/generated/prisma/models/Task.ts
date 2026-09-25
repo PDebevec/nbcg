@@ -60,6 +60,7 @@ export type TaskMinAggregateOutputType = {
   createdAt: Date | null
   updatedAt: Date | null
   completedAt: Date | null
+  lastHandoff: $Enums.TaskAction | null
 }
 
 export type TaskMaxAggregateOutputType = {
@@ -75,6 +76,7 @@ export type TaskMaxAggregateOutputType = {
   createdAt: Date | null
   updatedAt: Date | null
   completedAt: Date | null
+  lastHandoff: $Enums.TaskAction | null
 }
 
 export type TaskCountAggregateOutputType = {
@@ -90,6 +92,8 @@ export type TaskCountAggregateOutputType = {
   createdAt: number
   updatedAt: number
   completedAt: number
+  handoffs:PrismaJson.TaskHandoffStack
+  lastHandoff: number
   _all: number
 }
 
@@ -107,6 +111,7 @@ export type TaskMinAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   completedAt?: true
+  lastHandoff?: true
 }
 
 export type TaskMaxAggregateInputType = {
@@ -122,6 +127,7 @@ export type TaskMaxAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   completedAt?: true
+  lastHandoff?: true
 }
 
 export type TaskCountAggregateInputType = {
@@ -137,6 +143,8 @@ export type TaskCountAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   completedAt?: true
+  handoffs?: true
+  lastHandoff?: true
   _all?: true
 }
 
@@ -225,6 +233,8 @@ export type TaskGroupByOutputType = {
   createdAt: Date
   updatedAt: Date
   completedAt: Date | null
+  handoffs:PrismaJson.TaskHandoffStack
+  lastHandoff: $Enums.TaskAction
   _count: TaskCountAggregateOutputType | null
   _min: TaskMinAggregateOutputType | null
   _max: TaskMaxAggregateOutputType | null
@@ -261,6 +271,8 @@ export type TaskWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"Task"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Task"> | Date | string
   completedAt?: Prisma.DateTimeNullableFilter<"Task"> | Date | string | null
+  handoffs?: Prisma.JsonFilter<"Task">
+  lastHandoff?: Prisma.EnumTaskActionFilter<"Task"> | $Enums.TaskAction
 }
 
 export type TaskOrderByWithRelationInput = {
@@ -276,14 +288,16 @@ export type TaskOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  handoffs?: Prisma.SortOrder
+  lastHandoff?: Prisma.SortOrder
 }
 
 export type TaskWhereUniqueInput = Prisma.AtLeast<{
   id?: string
+  itemId?: string
   AND?: Prisma.TaskWhereInput | Prisma.TaskWhereInput[]
   OR?: Prisma.TaskWhereInput[]
   NOT?: Prisma.TaskWhereInput | Prisma.TaskWhereInput[]
-  itemId?: Prisma.StringFilter<"Task"> | string
   kind?: Prisma.EnumTaskKindFilter<"Task"> | $Enums.TaskKind
   title?: Prisma.StringFilter<"Task"> | string
   description?: Prisma.StringNullableFilter<"Task"> | string | null
@@ -294,7 +308,9 @@ export type TaskWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"Task"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Task"> | Date | string
   completedAt?: Prisma.DateTimeNullableFilter<"Task"> | Date | string | null
-}, "id">
+  handoffs?: Prisma.JsonFilter<"Task">
+  lastHandoff?: Prisma.EnumTaskActionFilter<"Task"> | $Enums.TaskAction
+}, "id" | "itemId">
 
 export type TaskOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -309,6 +325,8 @@ export type TaskOrderByWithAggregationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  handoffs?: Prisma.SortOrder
+  lastHandoff?: Prisma.SortOrder
   _count?: Prisma.TaskCountOrderByAggregateInput
   _max?: Prisma.TaskMaxOrderByAggregateInput
   _min?: Prisma.TaskMinOrderByAggregateInput
@@ -330,6 +348,8 @@ export type TaskScalarWhereWithAggregatesInput = {
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Task"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Task"> | Date | string
   completedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Task"> | Date | string | null
+  handoffs?: Prisma.JsonWithAggregatesFilter<"Task">
+  lastHandoff?: Prisma.EnumTaskActionWithAggregatesFilter<"Task"> | $Enums.TaskAction
 }
 
 export type TaskCreateInput = {
@@ -345,6 +365,8 @@ export type TaskCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   completedAt?: Date | string | null
+  handoffs?:PrismaJson.TaskHandoffStack
+  lastHandoff?: $Enums.TaskAction
 }
 
 export type TaskUncheckedCreateInput = {
@@ -360,6 +382,8 @@ export type TaskUncheckedCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   completedAt?: Date | string | null
+  handoffs?:PrismaJson.TaskHandoffStack
+  lastHandoff?: $Enums.TaskAction
 }
 
 export type TaskUpdateInput = {
@@ -375,6 +399,8 @@ export type TaskUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  handoffs?:PrismaJson.TaskHandoffStack
+  lastHandoff?: Prisma.EnumTaskActionFieldUpdateOperationsInput | $Enums.TaskAction
 }
 
 export type TaskUncheckedUpdateInput = {
@@ -390,6 +416,8 @@ export type TaskUncheckedUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  handoffs?:PrismaJson.TaskHandoffStack
+  lastHandoff?: Prisma.EnumTaskActionFieldUpdateOperationsInput | $Enums.TaskAction
 }
 
 export type TaskCreateManyInput = {
@@ -405,6 +433,8 @@ export type TaskCreateManyInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   completedAt?: Date | string | null
+  handoffs?:PrismaJson.TaskHandoffStack
+  lastHandoff?: $Enums.TaskAction
 }
 
 export type TaskUpdateManyMutationInput = {
@@ -420,6 +450,8 @@ export type TaskUpdateManyMutationInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  handoffs?:PrismaJson.TaskHandoffStack
+  lastHandoff?: Prisma.EnumTaskActionFieldUpdateOperationsInput | $Enums.TaskAction
 }
 
 export type TaskUncheckedUpdateManyInput = {
@@ -435,6 +467,8 @@ export type TaskUncheckedUpdateManyInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  handoffs?:PrismaJson.TaskHandoffStack
+  lastHandoff?: Prisma.EnumTaskActionFieldUpdateOperationsInput | $Enums.TaskAction
 }
 
 export type TaskCountOrderByAggregateInput = {
@@ -450,6 +484,8 @@ export type TaskCountOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
+  handoffs?: Prisma.SortOrder
+  lastHandoff?: Prisma.SortOrder
 }
 
 export type TaskMaxOrderByAggregateInput = {
@@ -465,6 +501,7 @@ export type TaskMaxOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
+  lastHandoff?: Prisma.SortOrder
 }
 
 export type TaskMinOrderByAggregateInput = {
@@ -480,6 +517,7 @@ export type TaskMinOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
+  lastHandoff?: Prisma.SortOrder
 }
 
 export type EnumTaskKindFieldUpdateOperationsInput = {
@@ -488,6 +526,10 @@ export type EnumTaskKindFieldUpdateOperationsInput = {
 
 export type EnumTaskStatusFieldUpdateOperationsInput = {
   set?: $Enums.TaskStatus
+}
+
+export type EnumTaskActionFieldUpdateOperationsInput = {
+  set?: $Enums.TaskAction
 }
 
 
@@ -505,6 +547,8 @@ export type TaskSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   createdAt?: boolean
   updatedAt?: boolean
   completedAt?: boolean
+  handoffs?: boolean
+  lastHandoff?: boolean
 }, ExtArgs["result"]["task"]>
 
 export type TaskSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -520,6 +564,8 @@ export type TaskSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   createdAt?: boolean
   updatedAt?: boolean
   completedAt?: boolean
+  handoffs?: boolean
+  lastHandoff?: boolean
 }, ExtArgs["result"]["task"]>
 
 export type TaskSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -535,6 +581,8 @@ export type TaskSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   createdAt?: boolean
   updatedAt?: boolean
   completedAt?: boolean
+  handoffs?: boolean
+  lastHandoff?: boolean
 }, ExtArgs["result"]["task"]>
 
 export type TaskSelectScalar = {
@@ -550,9 +598,11 @@ export type TaskSelectScalar = {
   createdAt?: boolean
   updatedAt?: boolean
   completedAt?: boolean
+  handoffs?: boolean
+  lastHandoff?: boolean
 }
 
-export type TaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "itemId" | "kind" | "title" | "description" | "status" | "assignedToUserId" | "createdByUserId" | "dueAt" | "createdAt" | "updatedAt" | "completedAt", ExtArgs["result"]["task"]>
+export type TaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "itemId" | "kind" | "title" | "description" | "status" | "assignedToUserId" | "createdByUserId" | "dueAt" | "createdAt" | "updatedAt" | "completedAt" | "handoffs" | "lastHandoff", ExtArgs["result"]["task"]>
 
 export type $TaskPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Task"
@@ -573,6 +623,17 @@ export type $TaskPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     createdAt: Date
     updatedAt: Date
     completedAt: Date | null
+    /**
+     * [TaskHandoffStack] — who held the task in which stage. Bottom = the
+     * requester (`kind: null` until the task is first returned to them), top =
+     * the current holder. Complete-with-next and reassign push; return pops.
+     */
+    handoffs:PrismaJson.TaskHandoffStack
+    /**
+     * How the task reached its current holder. Drives the "returned to you"
+     * badge and `GET /tasks?returned=true`.
+     */
+    lastHandoff: $Enums.TaskAction
   }, ExtArgs["result"]["task"]>
   composites: {}
 }
@@ -1008,6 +1069,8 @@ export interface TaskFieldRefs {
   readonly createdAt: Prisma.FieldRef<"Task", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Task", 'DateTime'>
   readonly completedAt: Prisma.FieldRef<"Task", 'DateTime'>
+  readonly handoffs: Prisma.FieldRef<"Task", 'Json'>
+  readonly lastHandoff: Prisma.FieldRef<"Task", 'TaskAction'>
 }
     
 

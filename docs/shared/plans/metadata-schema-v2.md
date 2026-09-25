@@ -378,7 +378,8 @@ case-insensitive). No `count`.
 Every path that makes an item a RECORD runs the same check:
 `POST /api/items/transition` (single or bulk), `POST /api/items` with
 `targetState: RECORD`, and completing a REVIEW_PUBLISH task (see
-[task workflow v2](task-workflow-v2.md)).
+[task workflow v2](task-workflow-v2.md) — built 2026-09-25: it goes through
+`transition()`, the 400 reaches the caller unchanged and the task stays OPEN).
 
 For every field: evaluate it with the item's context; if it is **visible and
 required and empty** → missing; if it has a value that breaks `constraints` →

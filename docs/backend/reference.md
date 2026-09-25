@@ -139,14 +139,23 @@ state in one table, an append-only record of how it got there in another.**
 |--------------------|-----------|-------------------------------------------------------------|
 | `id`               | String    | CUID PK                                                      |
 | `itemId`           | String    | **No FK** — polymorphic across drafts/records, like `item_relations`. Stable across DRAFT ↔ RECORD |
-| `kind`             | Enum      | REVIEW_PUBLISH, FIX_METADATA, GENERAL                        |
+| `kind`             | Enum      | The current **stage**: GENERAL, FIX_METADATA, REVIEW_PUBLISH. Moves on complete / return |
 | `title`            | String    |                                                              |
 | `description`      | String?   |                                                              |
-| `status`           | Enum      | OPEN, IN_PROGRESS, RETURNED, COMPLETED, CANCELLED            |
+| `status`           | Enum      | OPEN, COMPLETED, CANCELLED (v2 — `IN_PROGRESS`/`RETURNED` were removed 2026-09-25) |
 | `assignedToUserId` | String    | Keycloak sub. **No FK** — see below                          |
 | `createdByUserId`  | String    | Keycloak sub                                                 |
 | `dueAt`            | DateTime? |                                                              |
-| `completedAt`      | DateTime? | Set on entering COMPLETED, cleared on leaving it             |
+| `completedAt`      | DateTime? | Set on COMPLETED (by complete or by the publish observer). Not set on CANCELLED |
+| `handoffs`         | JSONB     | The handoff stack `[{ userId, kind \| null }]`, bottom = requester, top = current holder. See [Tasks](#tasks-delegation) |
+| `lastHandoff`      | Enum (`TaskAction`) | How the task reached its holder: CREATED, ADVANCED, RETURNED, ASSIGNED. Drives `?returned=true` |
+
+**At most one `OPEN` task per item** — the partial unique index
+`tasks_one_open_per_item` on `("itemId") WHERE status = 'OPEN'`, declared in
+`schema.prisma` with Prisma's `partialIndexes` preview feature. Finished and
+cancelled tasks are unlimited. (Because the index is partial, the generated
+client's `findUnique({ where: { itemId } })` is wrong here — use `findFirst`
+with `status: 'OPEN'`.)
 
 `task_history` — what transpired:
 
@@ -155,17 +164,19 @@ state in one table, an append-only record of how it got there in another.**
 | `id`       | String     | CUID PK                                                    |
 | `taskId`   | String     | **No FK** — see the delete rule below                      |
 | `itemId`   | String     | Denormalised, so a row outlives both the task and the item |
-| `action`   | Enum       | CREATED, ASSIGNED, STATUS_CHANGED, RETURNED, COMMENTED, UPDATED, CLOSED_ON_PUBLISH |
+| `action`   | Enum       | CREATED, ADVANCED, RETURNED, ASSIGNED, COMPLETED, CANCELLED, COMMENTED, UPDATED, CLOSED_ON_PUBLISH — plus legacy STATUS_CHANGED (v1 rows only, no longer written) |
 | `note`     | String?    | What a human reads: the return reason, the comment body    |
 | `changes`  | JSONB?     | `[{ path, before, after }]`, same shape as `item_revisions` |
 | `userId`   | String     | Keycloak sub of whoever did it                             |
 | `userName` | String     | Display-name **snapshot** — see below                      |
 
-**One user action writes exactly one history row.** A return moves status and
-assignee together, so it is a single `RETURNED` row carrying both in `changes` —
-not a `RETURNED` plus an `ASSIGNED` a moment later, which would record two events
-that never separately happened. There is no `system` actor: `CLOSED_ON_PUBLISH`
-names the real publisher.
+**One user action writes exactly one history row**, labelled with the action
+route that produced it. A return moves stage and assignee together, so it is a
+single `RETURNED` row carrying both in `changes` — not a `RETURNED` plus an
+`ASSIGNED` a moment later, which would record two events that never separately
+happened. There is no `system` actor: `CLOSED_ON_PUBLISH` names the real
+publisher. The log is never rewritten: v1 rows keep their `STATUS_CHANGED`
+action and their `IN_PROGRESS`/`RETURNED` values inside `changes`.
 
 **A comment is not its own kind of object.** It is one of the things that can
 happen to a task, so it is a `COMMENTED` row in the same log, and the detail read
@@ -856,8 +867,14 @@ curl "$API/users" -H "Authorization: Bearer $TOKEN"
 curl "$API/users?capability=publish" -H "Authorization: Bearer $TOKEN"
 
 # Everyone who writes — drafts:manage OR records:manage. Includes cataloguer,
-# excludes reader. The picker for FIX_METADATA and GENERAL tasks.
+# excludes reader. The picker for GENERAL tasks.
 curl "$API/users?capability=staff" -H "Authorization: Bearer $TOKEN"
+
+# A single scope: drafts:manage / records:manage. The picker for FIX_METADATA —
+# `drafts` when the item is a draft, `records` when it is a published record
+# (a cataloguer cannot edit a published record).
+curl "$API/users?capability=drafts" -H "Authorization: Bearer $TOKEN"
+curl "$API/users?capability=records" -H "Authorization: Bearer $TOKEN"
 
 # Include suspended and departed users (default is active only)
 curl "$API/users?active=false" -H "Authorization: Bearer $TOKEN"
@@ -897,13 +914,20 @@ to the capability and then searches within it — both conditions apply.
 
 ### Tasks (delegation)
 
-> **Redesign planned** — stages instead of `IN_PROGRESS`/`RETURNED`, one active
-> task per item, explicit `complete` / `return` / `reassign` actions. This
-> section describes what is deployed today; the target is
-> `docs/shared/plans/task-workflow-v2.md`.
+Task workflow v2 (shipped 2026-09-25; contract:
+`docs/shared/plans/task-workflow-v2.md`). A task is `OPEN` until it ends; its
+`kind` is the **stage** it is in. State moves only through one route per action;
+`PATCH` edits details. At most one open task per item.
 
 Every route requires `drafts:manage` OR `records:manage` (`assertIsStaff`) — a
-reader gets 403, anonymous gets 401.
+reader gets 403, anonymous gets 401. Who may do *which* action is then decided
+per task:
+
+| Action | Assignee | Creator | `records:manage` (escape hatch) |
+|---|---|---|---|
+| complete, return | ✔ | — | ✔ |
+| reassign, cancel, PATCH details | ✔ | ✔ | ✔ |
+| comment | any staff | | |
 
 ```bash
 # File a task. Also requires being able to VIEW the item: an item the caller
@@ -914,26 +938,48 @@ curl -X POST "$API/tasks" -H "Authorization: Bearer $TOKEN" \
         "title": "Ready for review", "assignedToUserId": "<sub>" }'
 # -> 201 { id, itemId, itemType, kind, title, description, status,
 #          assignedToUserId, assignedToName, createdByUserId, createdByName,
-#          dueAt, createdAt, updatedAt, completedAt, commentCount }
+#          dueAt, createdAt, updatedAt, completedAt, lastHandoff }
+# -> 409 { statusCode: 409, code: "ITEM_HAS_OPEN_TASK", message, taskId }
+#        when the item already has an open task
+
+# Finish the current stage (see "Complete — by stage")
+curl -X POST "$API/tasks/$ID/complete" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{ "note": "Fixed.", "next": { "kind": "REVIEW_PUBLISH", "assignedToUserId": "<sub>" } }'
+
+# Back one step — note REQUIRED; assignedToUserId overrides the person, not the stage
+curl -X POST "$API/tasks/$ID/return" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{ "note": "The author field is wrong." }'
+
+# Same stage, different person (never yourself, never the current holder)
+curl -X POST "$API/tasks/$ID/reassign" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{ "assignedToUserId": "<sub>", "note": "On leave." }'
+
+# Terminal
+curl -X POST "$API/tasks/$ID/cancel" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{ "note": "Filed by mistake." }'
+# All four -> 200 with the task view (no history), or 400 if the task is
+# COMPLETED/CANCELLED already.
+
+# Details only. status / kind / assignedToUserId -> 400 "use the action
+# endpoints"; note -> 400 "use /comments".
+curl -X PATCH "$API/tasks/$ID" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{ "title": "…", "dueAt": "2026-10-01" }'
 
 # My inbox. All staff see all tasks — assignedTo is a filter, not a wall.
 curl "$API/tasks?assignedTo=me&status=OPEN" -H "Authorization: Bearer $TOKEN"
 
-# The "has an open task" badge: render a page of items, then one call for it.
+# "Returned to you"
+curl "$API/tasks?assignedTo=me&status=OPEN&returned=true" -H "Authorization: Bearer $TOKEN"
+
+# The "has an open task" badge: one call per page of items (one status now)
 curl "$API/tasks?itemIds=a,b,c&status=OPEN" -H "Authorization: Bearer $TOKEN"
 
-# Detail: the task, its whole log, and who to prefill as the return target
+# Detail: the task, its whole log, and where Return would send it
 curl "$API/tasks/$ID" -H "Authorization: Bearer $TOKEN"
 # -> { ...,
 #      history: [ { id, action, note, changes, userId, userName, createdAt } ],
-#      returnTo: { userId, displayName } | null }
-
-# Return work with notes — status and assignee MUST move together, and the
-# reason rides along on the same request
-curl -X PATCH "$API/tasks/$ID" -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{ "status": "RETURNED", "assignedToUserId": "<the cataloguer>",
-        "note": "The author field is wrong." }'
+#      returnTarget: { userId, displayName, kind } | null }
 
 # A comment is a COMMENTED row in the same log
 curl -X POST "$API/tasks/$ID/comments" -H "Authorization: Bearer $TOKEN" \
@@ -946,78 +992,101 @@ curl "$API/tasks/item/$ITEM_ID/history" -H "Authorization: Bearer $TOKEN"
 ```
 
 Filters: `assignedTo` · `createdBy` (both accept `me`) · `itemId` · `itemIds`
-(comma-separated, max 200) · `status` · `kind` · `limit` (default 50, max 200) ·
-`offset`.
+(comma-separated, max 200) · `status` (`OPEN` | `COMPLETED` | `CANCELLED`) ·
+`kind` · `returned` (`true` = `lastHandoff` is `RETURNED`, `false` = anything
+else) · `limit` (default 50, max 200) · `offset`.
 
-`PATCH` is open to the assignee, the creator, or `records:manage` — the last
-being the unstick-it-when-someone-is-on-leave escape hatch. There is **no
-`expectedVersion`**: two people editing one task is not a real collision. A
-`PATCH` that moves nothing writes no history row, so idempotent saves from the
-GUI do not fill the log with non-events.
+There is **no `expectedVersion`**: two people editing one task's title is not a
+real collision. The action routes lock the task row (`SELECT … FOR UPDATE`) so
+two simultaneous returns cannot both pop the stack. A `PATCH` that moves nothing
+writes no history row.
 
-#### `returnTo` — the prefill for "return with notes"
+#### Complete — by stage
 
-Derived on the detail read, never stored:
+| Stage | Body | Result | History row |
+|---|---|---|---|
+| `GENERAL` | `{ note? }` | COMPLETED | `COMPLETED` |
+| `GENERAL` | `{ note?, next: { kind: FIX_METADATA \| REVIEW_PUBLISH, assignedToUserId } }` | stays OPEN in `next.kind`; assignee **may be yourself** | `ADVANCED` |
+| `FIX_METADATA` | `{ note?, next: { kind: REVIEW_PUBLISH, assignedToUserId } }` — `next` required | stays OPEN in REVIEW_PUBLISH | `ADVANCED` |
+| `REVIEW_PUBLISH`, item is a DRAFT | `{ note? }` — `next` → 400 | **publishes the item**, task COMPLETED | `CLOSED_ON_PUBLISH` (with the note) |
+| `REVIEW_PUBLISH`, item is a RECORD | `{ note? }` | COMPLETED as "reviewed" | `COMPLETED`, `changes` includes `{ path: "outcome", after: "ALREADY_PUBLISHED" }` |
 
-1. **the creator**, because RETURNED means "sent back to the requester";
-2. failing that, whoever last handed the task to its current holder;
-3. failing that, `null` — the GUI shows an empty picker rather than a wrong default.
+Completing a review of a draft calls `ItemsService.transition([itemId], RECORD,
+actor, { note })` — the same code path and checks as any publish. The caller's
+**own token** must allow publishing (`assertCanTransition`, 403 otherwise — the
+directory is not asked). Publish validation runs inside the transition; its
+`400 PUBLISH_VALIDATION_FAILED` comes back unchanged and the task stays OPEN
+(the whole transaction rolls back). The transition's observer closes the task,
+so there is exactly one closing path whether the publish came from the task or
+not.
 
-Each candidate is skipped unless they are active, can write, and are not already
-holding the task.
+#### The handoff stack — what Return does
 
-The creator comes first for a reason worth keeping: an admin unsticking a task by
-reassigning it between two publishers is "who handed it to me", but returning a
-`REVIEW_PUBLISH` task *to the admin* is wrong — the person who fixes the author
-field is the cataloguer who asked for it to be published. Ordering the other way
-would prefill a value the `(kind, status)` guard then rejects with a 400.
+`tasks.handoffs` records who held the task in which stage:
 
-#### The assignee guard is keyed on `(kind, status)`, not `kind`
+| Action | Stack |
+|---|---|
+| create (A for B, stage K) | `[{A, null}, {B, K}]`, or `[{B, K}]` when A = B |
+| complete with `next` / reassign | push `{new holder, stage}` |
+| return | pop; the task goes to the new top — **person and stage** |
+| return with `assignedToUserId` | pop, then replace the top's person (stage stays) |
 
-| kind | status | Assignee must hold |
+The requester's bottom entry has no stage. A return to it resolves one —
+`REVIEW_PUBLISH` becomes `FIX_METADATA` (the requester fixes what the reviewer
+found), anything else stays — and **writes it into that entry**, so a later
+return to the requester lands in the stage they actually held. A stack of one
+entry cannot be returned (400: cancel or complete instead). `returnTarget` on
+the detail read is exactly that computation, or `null`.
+
+The pure part (stack, stages, capability rule) is
+`backend/src/modules/tasks/task-workflow.ts`, unit-tested without a database in
+`task-workflow.spec.ts`.
+
+#### The assignee guard is keyed on `(kind, itemType)`
+
+| Stage | Item | Assignee must hold |
 |---|---|---|
-| `REVIEW_PUBLISH` | `OPEN`, `IN_PROGRESS` | `canPublish` |
-| `REVIEW_PUBLISH` | `RETURNED` | `canWrite` |
-| `FIX_METADATA`, `GENERAL` | any | `canWrite` |
-| *(all)* | *(all)* | plus: in the directory and active |
+| `GENERAL` | any | `canWrite` (`drafts:manage` or `records:manage`) |
+| `FIX_METADATA` | DRAFT | `canEditDrafts` (`drafts:manage`) |
+| `FIX_METADATA` | RECORD | `canEditRecords` (`records:manage`) — a cataloguer cannot edit a published record |
+| `REVIEW_PUBLISH` | any | `canPublish` |
+| *(all)* | | plus: in the directory and active |
 
-`kind` is the **goal** ("get this published"); `status` plus assignee is **where
-it currently sits**. The obvious kind-only rule — "REVIEW_PUBLISH needs a
-publisher" — breaks the return flow, because a returned task is deliberately
-parked with a cataloguer who has to fix it. Re-run on create, on reassign, on
-`kind` change and on status change.
+Run on create, complete-with-next (for the next stage), return (for the stage it
+lands in) and reassign. v1 keyed it on `(kind, status)` because a RETURNED
+review task sat with a cataloguer; in v2 a returned review becomes
+`FIX_METADATA`, so the item type is what matters.
 
-**This guard is advisory.** It reads `user_profiles`, up to one sync interval
-(24h) stale, so it can reject an assignment the assignee's own token would in fact
-permit; the error says to run `POST /api/users/sync`. It must never gate a real
-permission — the authoritative check at publish time is `assertCanTransition()`,
-reading the JWT.
+**This guard is advisory.** It reads `user_profiles` via
+`UsersService.assignability()`, up to one sync interval (24h) stale, so it can
+reject an assignment the assignee's own token would in fact permit; the error
+says to run `POST /api/users/sync`. It must never gate a real permission — the
+authoritative check at publish time is `assertCanTransition()`, reading the JWT.
 
 #### Status rules
 
-- `CANCELLED` is terminal. `COMPLETED` deliberately is **not** — `COMPLETED →
-  RETURNED` is a real workflow when a publish went out wrong.
-- Entering `RETURNED` requires a *different* assignee in the same request.
-  This does not fall out of the capability table above (a publisher also holds
-  write), so it is enforced explicitly.
-- A task ping-pongs for its whole life rather than spawning a successor, so the
-  comment thread stays in one place. Same as a GitHub PR under "request changes".
+- `COMPLETED` and `CANCELLED` are both terminal — there is no reopen. If a
+  publish went out wrong: unpublish if needed and file a new `FIX_METADATA`
+  task; the old one stays in the item's task history.
+- One task follows the item through the stages instead of a new task per step,
+  so the comment thread stays in one place.
 
 #### Publishing closes review tasks automatically
 
-`transition()` to `RECORD` closes every `OPEN`/`IN_PROGRESS`/`RETURNED`
-`REVIEW_PUBLISH` task on the item, inside the same transaction, and appends a
-`CLOSED_ON_PUBLISH` history row attributed to the real publisher — so a task
-never appears to close by itself.
+`transition()` to `RECORD` closes the `OPEN` `REVIEW_PUBLISH` task on each item,
+inside the same transaction, and appends a `CLOSED_ON_PUBLISH` history row
+attributed to the real publisher — so a task never appears to close by itself.
+It is also how completing a review task closes it (see above), with the note
+from `complete` on that row.
 
-This is an **observer, not a task-driven publish**: `POST /api/items/transition`
-cannot be removed — bulk publish, imports and admin action all use it — so a
-task-driven endpoint alone would still leave tasks lying open whenever anyone
-used the other door. (GitHub composes the same two: the merge button *and*
-auto-close when commits reach the base branch by any route.)
+This is an **observer**: `POST /api/items/transition` cannot be removed — bulk
+publish, imports and admin action all use it — so the task list cannot rely on
+anyone going through the task itself. (GitHub composes the same two: the merge
+button *and* auto-close when commits reach the base branch by any route.)
 
-Not symmetric: `RECORD → DRAFT` does **not** reopen completed tasks. `FIX_METADATA`
-and `GENERAL` are untouched — publishing is not evidence a metadata fix was made.
+Not symmetric: `RECORD → DRAFT` does **not** reopen completed tasks.
+`FIX_METADATA` and `GENERAL` are untouched — publishing is not evidence a
+metadata fix was made.
 
 Deleting an item hard-deletes its live tasks — but **not** their history. See the
 delete rule under `tasks` / `task_history` above; it is the surprising part, and

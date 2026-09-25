@@ -1,13 +1,136 @@
 # Backend: task workflow v2
 
-## Status: PLANNED (2026-09-23)
+## Status: DONE (2026-09-25) · not deployed — ships together with the web frontend
+
+Everything in "Changes" is built and tested. **Do not deploy it alone**: the
+current web frontend's Start / Return / Reopen buttons send PATCHes that v2
+rejects — see [Deploy notes](#deploy-notes). Everything below "Current state"
+is the original plan, each part marked with what was actually done.
 
 The model and the API are in [shared/plans/task-workflow-v2.md](../../shared/plans/task-workflow-v2.md)
 — read it first. Related: [web frontend plan](../../frontend/plans/task-workflow-v2.md).
+The deployed behaviour is documented in [reference.md → Tasks](../reference.md#tasks-delegation).
 
 ---
 
-## Current state (verified 2026-09-23)
+## Done — what was built (2026-09-25)
+
+### Decisions made while building
+
+No product question came up that the contract did not answer. The small
+calls below were made in code and are recorded in the contract too.
+
+| Question | Decision |
+|---|---|
+| Partial unique index in the schema or by hand? | **In the schema**: Prisma 7.7 has a `partialIndexes` preview feature — `@@unique([itemId], map: "tasks_one_open_per_item", where: { status: "OPEN" })`. `migrate diff` generates exactly the planned SQL and shows no drift afterwards, so no advisory lock was needed. Catch: the generated client now offers `findUnique({ where: { itemId } })`, which is wrong for a partial index — warned about in `schema.prisma`. |
+| The requester's bottom entry has no stage. What is stored after a return to them? | The **resolved stage is written into that entry**. Without it, "A files GENERAL for B → B returns → A hands on as FIX to C → C returns" would land with A in FIX (the "same stage" rule) although A held it in GENERAL. With it, the rule "back to the stage they had it" holds everywhere. |
+| A return that would leave the task where it is (override person = current holder, same stage) | **400.** A return to yourself that *changes the stage* (you completed with `next` to yourself, then step back) is allowed. |
+| What does the "reviewed, already published" `changes` entry look like? | `[{ path: "status", before: "OPEN", after: "COMPLETED" }, { path: "outcome", before: null, after: "ALREADY_PUBLISHED" }]` on a `COMPLETED` row. |
+| Status code of the action routes | **200** with the task view (no history, no `returnTarget`) — they change an existing task, they create nothing. |
+| Actions on a COMPLETED / CANCELLED task | **400** "can no longer change". PATCH details and comments on a closed task stay allowed, as in v1. |
+| `completedAt` on cancel | Not set, as in v1 (`completedAt` means "finished"). |
+| `note` on PATCH | **400** pointing at `/comments` (v1 turned it into a COMMENTED row). |
+| `returned=false` | Also supported: `lastHandoff` is anything but RETURNED. |
+| Order of checks on create | The 409 comes before the assignee guard: an item with an open task is the more fundamental "no". |
+
+Local dev data: the one item with two open tasks (test data from 2026-09-23)
+was resolved before migrating by cancelling the older FIX_METADATA task through
+the v1 API as admin, as the plan prescribes.
+
+### Where it is
+
+| File | What |
+|---|---|
+| `prisma/schema.prisma` | `TaskStatus` (3 values), `TaskAction` (+ ADVANCED, COMPLETED, CANCELLED), `Task.handoffs`, `Task.lastHandoff`, the partial unique index; `previewFeatures = ["partialIndexes"]` |
+| `prisma/migrations/20260925140809_task_actions_v2` | The three `ADD VALUE`s |
+| `prisma/migrations/20260925141500_task_workflow_v2` | Columns, data conversion, stack init, `TaskStatus` recreate — one explicit transaction |
+| `prisma/migrations/20260925142000_one_open_task_per_item` | Duplicate guard (`RAISE EXCEPTION` naming the items) + the index |
+| `src/core/types/task.types.ts` | `TaskHandoff`, `TaskHandoffStack` (the `[TaskHandoffStack]` JSON type) |
+| `src/modules/tasks/task-workflow.ts` | **Pure**: `requiredCapability`, `NEXT_STAGES`, `initialStack`, `stackOf`, `push`, `returnStage`, `popForReturn` |
+| `src/modules/tasks/tasks.service.ts` | `create`, `complete`, `returnTask`, `reassign`, `cancel`, `updateDetails`, `returnTarget`; one `act()` wrapper = lock row + one update + one history row |
+| `src/modules/tasks/dto/` | `CompleteTaskDto` (+ `NextStageDto`), `ReturnTaskDto`, `ReassignTaskDto`, `CancelTaskDto`; `UpdateTaskDto` details-only; `TasksQueryDto.returned` |
+| `src/modules/tasks/tasks.controller.ts` | `POST :id/complete \| return \| reassign \| cancel` |
+| `src/modules/users/` | `Assignability` + `canEditDrafts` / `canEditRecords`; `?capability=drafts \| records` |
+| `src/modules/items/items.service.ts` | Observer filter `status: OPEN`; `transition(…, { note })` puts the note on `CLOSED_ON_PUBLISH` |
+
+### Deviations from the plan below, and why
+
+- **Migration 2 wraps everything in one `BEGIN … COMMIT`.** Prisma does not wrap
+  a migration file in a transaction (its own generated enum swap carries an
+  explicit `BEGIN/COMMIT`), so without it a failure half-way would leave v1
+  data half-converted.
+- **`UpdateTaskDto` still declares `status`, `kind`, `assignedToUserId` and
+  `note`** — as `@IsEmpty()` fields whose message points at the right route.
+  The global `ValidationPipe` is `whitelist: true` without
+  `forbidNonWhitelisted`, so simply removing them would make a v1 client's
+  "complete" PATCH return 200 having silently done nothing.
+- **The stack is read through `stackOf()`**, which rebuilds an empty/garbled
+  column from creator + assignee and puts the current holder back on top if the
+  stack disagrees with the row — a hand-edited row cannot send a return
+  somewhere the stack never agreed to.
+- **Every action locks the task row** (`SELECT … FOR UPDATE`) and re-checks
+  status and permissions under the lock, so two simultaneous returns cannot both
+  pop. Complete-REVIEW-on-a-draft cannot run inside that lock (`transition()`
+  opens its own transaction); if a race turns the task into a review of a draft
+  between the read and the lock, the locked path answers **409** instead of
+  completing it without publishing.
+- **`returnTarget` has no eligibility check** (v1's `returnTo` skipped inactive
+  candidates). The stack says who; if that person has left, the return itself
+  says so with a 400 and the dialog lets the caller override the person.
+- **The guard's error names the item type** — "A FIX_METADATA task on a RECORD
+  needs an assignee who can edit published records (records:manage)" — plus the
+  `POST /api/users/sync` hint.
+- Not run: `prisma format` — it realigns unrelated models; the schema diff is
+  kept to the task models.
+
+### Tests
+
+- Jest: `task-workflow.spec.ts` (20 — the guard matrix, stack init/normalise,
+  `returnStage`, the contract's worked example unwound step by step, the
+  resolved-stage write) and a rewritten `tasks.service.spec.ts` (42, against an
+  in-memory Prisma fake: the `(kind, itemType)` guard, 409 incl. the
+  unique-violation race, every complete/return/reassign/cancel rule and its one
+  history row, the row lock, PATCH DTO rejections). Mutation-checked: breaking
+  the REVIEW→FIX return rule fails 5 tests, dropping "never yourself" fails 1.
+  Whole jest suite: 221 pass.
+- API suite §18 rewritten — **194 checks**, 625/625 for the whole suite on dev.
+  Every task on its own item; per-persona 401/403 on all four action routes;
+  guard on `(kind, itemType)` incl. FIX_METADATA on a record; one-open-task 409
+  with `taskId`, then 201 after cancel; the index and enum checked in
+  `pg_indexes`/`pg_enum`; the contract's stage flow end to end (history
+  `CREATED,ADVANCED,ADVANCED,RETURNED,ADVANCED,ASSIGNED,CLOSED_ON_PUBLISH`);
+  return variants (to requester → FIX, stack of one → 400, override person →
+  previous stage); REVIEW complete by a non-assignee and by a stale-directory
+  cataloguer assignee → 403; incomplete draft → `PUBLISH_VALIDATION_FAILED`,
+  task still OPEN, no history row; FIX on a record → "reviewed, already
+  published"; bulk publish closes the review task, leaves a FIX task open;
+  `returned=true/false`; `capability=drafts/records`; the delete asymmetry.
+
+### Deploy notes
+
+1. **Backend and web frontend together.** v2 rejects every state-changing PATCH
+   the current frontend sends (Start, Complete, Return, Reopen, Cancel), and
+   `returnTo`/`IN_PROGRESS`/`RETURNED` are gone from the responses.
+2. **Before deploying, on production** (with v1 still running):
+   `SELECT status, kind, count(*) FROM tasks GROUP BY 1, 2;` and
+   `SELECT "itemId", count(*) FROM tasks WHERE status IN ('OPEN','IN_PROGRESS','RETURNED') GROUP BY 1 HAVING count(*) > 1;`
+   Resolve every duplicate **then**, through the v1 API (cancel all but one per
+   item — admin can, via the `records:manage` escape hatch). The container boots
+   with `prisma migrate deploy && node dist/src/main.js`, so if migration 3
+   aborts, the API does not start at all — with migrations 1 and 2 already
+   applied, so v1 cannot run either. Recovery in that case: cancel the extras
+   in SQL (`UPDATE tasks SET status = 'CANCELLED' WHERE id IN (…)` — writes no
+   history row, so note it somewhere), `npx prisma migrate resolve
+   --rolled-back 20260925142000_one_open_task_per_item`, restart.
+3. **Other developers' local DBs:** `npx prisma migrate deploy` (or `migrate
+   dev`) + `npx prisma generate`; the same duplicate guard applies to their
+   test data.
+4. **Archive app:** still assumed not to call `/api/tasks` — confirm before the
+   release (it would break exactly like the web client).
+
+---
+
+## Current state before v2 (verified 2026-09-23)
 
 | What | Where |
 |---|---|
@@ -24,7 +147,7 @@ The model and the API are in [shared/plans/task-workflow-v2.md](../../shared/pla
 
 ## Changes
 
-### 1. Schema + migration
+### 1. Schema + migration — DONE (index declared in the schema via `partialIndexes`)
 
 `schema.prisma`:
 
@@ -81,7 +204,7 @@ writes no history rows (there is no system actor, by design).
 Before running in production: `SELECT status, kind, count(*) FROM tasks GROUP BY 1, 2`
 and the duplicate query, so the outcome is known in advance.
 
-### 2. Guard — keyed on `(kind, itemType)`
+### 2. Guard — keyed on `(kind, itemType)` — DONE
 
 Replace `requiredCapability(kind, status)` with:
 
@@ -97,7 +220,7 @@ Replace `requiredCapability(kind, status)` with:
 `GET /api/users?capability=` gains `drafts` and `records` for the pickers.
 Still advisory, same error text with the "run `POST /api/users/sync`" hint.
 
-### 3. Service — one method per action
+### 3. Service — one method per action — DONE
 
 Replace `update()`'s diff-and-label logic with explicit methods, each in one
 transaction that writes exactly one history row:
@@ -135,13 +258,13 @@ otherwise same stage".
 (`ItemsModule` does not import `TasksModule` today; it writes tasks through
 Prisma + `TaskHistoryService`, which is fine).
 
-### 4. Observer in `transition()`
+### 4. Observer in `transition()` — DONE
 
 Status filter becomes `status: 'OPEN'` (the other two values no longer exist).
 Everything else stays: REVIEW_PUBLISH only, same transaction, attributed to the
 publisher, RECORD → DRAFT does not reopen.
 
-### 5. Controller + DTOs
+### 5. Controller + DTOs — DONE (PATCH also rejects `note`; routes answer 200)
 
 - Routes `POST /tasks/:id/complete | return | reassign | cancel`.
 - DTOs `CompleteTaskDto { note?, next?: { kind, assignedToUserId } }`,
@@ -153,14 +276,15 @@ publisher, RECORD → DRAFT does not reopen.
 - `TaskView`: add `lastHandoff`; detail replaces `returnTo` with
   `returnTarget`.
 
-### 6. Docs
+### 6. Docs — DONE
 
 `docs/backend/reference.md` → "Tasks (delegation)" rewritten from the shared
-contract once shipped (the banner there points at this plan until then).
+contract, plus the `tasks` / `task_history` table docs and the directory's
+`capability` values.
 
 ---
 
-## Tests
+## Tests — DONE (see [Tests](#tests) above for what was actually written)
 
 `api-test-suite.sh` §18 — rewrite the status-driven parts; keep the directory,
 attribution, snapshot-name and item-delete tests as they are.

@@ -41,8 +41,29 @@ docker exec -it nbcg-db-1 psql -U nbcg -d nbcg     # no local psql needed
 ```
 
 Migrations: `npx prisma migrate dev --name <name>` (dev), `migrate deploy` (prod,
-done by `start:prod`). Raw SQL that Prisma cannot express (triggers, partial
-indexes) goes into the migration file by hand.
+done by `start:prod`). Raw SQL that Prisma cannot express (triggers) goes into
+the migration file by hand. **Partial indexes can be declared in the schema**
+since task workflow v2 — `previewFeatures = ["partialIndexes"]` and
+`@@unique([…], where: { status: "OPEN" })` (see `tasks_one_open_per_item`).
+
+When `migrate dev` refuses to run ("the environment is non-interactive" — it
+wants to confirm a data-loss warning, e.g. removing an enum value) or the
+migration needs data steps in between:
+
+```bash
+# SQL Prisma would generate, against the DB as it is now (all earlier migrations applied)
+npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script
+# write it into prisma/migrations/<timestamp>_<name>/migration.sql, add the data
+# steps, apply:
+npx prisma migrate deploy && npx prisma generate
+# no drift = the same diff now prints "This is an empty migration."
+```
+
+Prisma does **not** wrap a migration file in a transaction; add `BEGIN; … COMMIT;`
+yourself when a failure half-way would leave data half-converted. Try a data
+migration on a throwaway database first (`CREATE DATABASE nbcg_migtest`,
+`DATABASE_URL=…/nbcg_migtest npx prisma migrate deploy`, seed, apply, inspect,
+drop). Don't run `npx prisma format` just to tidy — it realigns unrelated models.
 
 ### ⚠ "Migration was modified after it was applied — reset?" → do NOT reset
 

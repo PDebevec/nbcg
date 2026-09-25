@@ -1,31 +1,23 @@
-import { IsDateString, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
-import { TaskKind, TaskStatus } from '../../../../generated/prisma/enums';
+import { IsDateString, IsEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+
+const USE_ACTIONS =
+  'is not editable through PATCH — use POST /api/tasks/:id/complete, /return, /reassign or /cancel';
 
 /**
- * Every field optional, but not every *combination* legal: the `(kind, status)`
- * assignee guard is re-run against the resulting triple, so returning a
- * REVIEW_PUBLISH task must move `status` and `assignedToUserId` in the same
- * request. Either alone is a 400. See TasksService.update().
+ * `PATCH /tasks/:id` — the task's details only. Where the task is (status,
+ * stage, assignee) moves only through the action routes, each of which writes
+ * exactly one history row with its own label.
+ *
+ * `status`, `kind`, `assignedToUserId` and `note` are declared only to be
+ * REJECTED with a pointer to the right route: the global ValidationPipe strips
+ * unknown keys silently, and a v1 client's "complete" PATCH quietly returning
+ * 200 while doing nothing would be worse than a 400.
  *
  * No `expectedVersion`. Items carry optimistic concurrency because two
  * cataloguers editing one record is a real collision; two people editing one
- * task is not, and a version field on every PATCH is friction the frontend pays
- * for nothing. Deliberate omission.
+ * task's title is not.
  */
 export class UpdateTaskDto {
-  @IsOptional()
-  @IsEnum(TaskStatus)
-  status?: TaskStatus;
-
-  @IsOptional()
-  @IsEnum(TaskKind)
-  kind?: TaskKind;
-
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  assignedToUserId?: string;
-
   @IsOptional()
   @IsString()
   @MinLength(1)
@@ -41,18 +33,15 @@ export class UpdateTaskDto {
   @IsDateString()
   dueAt?: string;
 
-  /**
-   * Why. Goes onto the history row this PATCH writes, not onto the task —
-   * "the author field is wrong" is a fact about one handover, not a property of
-   * the task, and overwriting it on the next round is what the log exists to
-   * prevent.
-   *
-   * Optional, including on a return. Requiring it would be defensible — a
-   * return with no reason is a bug report with no body — but that is a product
-   * call, not a plumbing one.
-   */
-  @IsOptional()
-  @IsString()
-  @MaxLength(5000)
-  note?: string;
+  @IsEmpty({ message: `status ${USE_ACTIONS}` })
+  status?: never;
+
+  @IsEmpty({ message: `kind ${USE_ACTIONS}` })
+  kind?: never;
+
+  @IsEmpty({ message: `assignedToUserId ${USE_ACTIONS}` })
+  assignedToUserId?: never;
+
+  @IsEmpty({ message: 'note is not accepted by PATCH — use POST /api/tasks/:id/comments' })
+  note?: never;
 }

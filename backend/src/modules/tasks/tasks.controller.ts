@@ -1,11 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { GetPrincipal } from '../../core/auth/get-principal.decorator';
 import { RequireScopes } from '../../core/auth/scopes.decorator';
 import { ResourceAccessService } from '../../core/auth/resource-access.service';
 import type { Principal } from '../../core/auth/principal.type';
 import { HistoryQueryDto } from '../items/dto/history-query.dto';
+import { CancelTaskDto } from './dto/cancel-task.dto';
+import { CompleteTaskDto } from './dto/complete-task.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { ReassignTaskDto } from './dto/reassign-task.dto';
+import { ReturnTaskDto } from './dto/return-task.dto';
 import { TasksQueryDto } from './dto/tasks-query.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TasksService } from './tasks.service';
@@ -19,8 +23,12 @@ import { TasksService } from './tasks.service';
  * `reader` assign work to colleagues.
  *
  * There is no `GET /tasks/assignable-users`. The picker is
- * `GET /api/users?capability=publish|staff&q=…`, in the users module, because
- * the directory outlives task delegation.
+ * `GET /api/users?capability=publish|staff|drafts|records&q=…`, in the users
+ * module, because the directory outlives task delegation.
+ *
+ * Task workflow v2: state changes are one route per action
+ * (`POST :id/complete | return | reassign | cancel`); PATCH edits details only.
+ * Who may do which action is decided in TasksService, per task.
  */
 @Controller('tasks')
 export class TasksController {
@@ -73,6 +81,7 @@ export class TasksController {
     return this.tasks.get(id);
   }
 
+  /** Title, description, due date. `status` / `kind` / `assignedToUserId` → 400. */
   @Patch(':id')
   update(
     @GetPrincipal() principal: Principal,
@@ -80,7 +89,56 @@ export class TasksController {
     @Body() dto: UpdateTaskDto,
   ) {
     this.access.assertIsStaff(principal);
-    return this.tasks.update(id, dto, principal);
+    return this.tasks.updateDetails(id, dto, principal);
+  }
+
+  /**
+   * Finish the current stage. Completing a REVIEW_PUBLISH task on a draft
+   * PUBLISHES it — including publish validation, whose
+   * `400 PUBLISH_VALIDATION_FAILED` comes back unchanged.
+   */
+  @Post(':id/complete')
+  @HttpCode(200)
+  complete(
+    @GetPrincipal() principal: Principal,
+    @Param('id') id: string,
+    @Body() dto: CompleteTaskDto,
+  ) {
+    this.access.assertIsStaff(principal);
+    return this.tasks.complete(id, dto, principal);
+  }
+
+  @Post(':id/return')
+  @HttpCode(200)
+  returnTask(
+    @GetPrincipal() principal: Principal,
+    @Param('id') id: string,
+    @Body() dto: ReturnTaskDto,
+  ) {
+    this.access.assertIsStaff(principal);
+    return this.tasks.returnTask(id, dto, principal);
+  }
+
+  @Post(':id/reassign')
+  @HttpCode(200)
+  reassign(
+    @GetPrincipal() principal: Principal,
+    @Param('id') id: string,
+    @Body() dto: ReassignTaskDto,
+  ) {
+    this.access.assertIsStaff(principal);
+    return this.tasks.reassign(id, dto, principal);
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(200)
+  cancel(
+    @GetPrincipal() principal: Principal,
+    @Param('id') id: string,
+    @Body() dto: CancelTaskDto,
+  ) {
+    this.access.assertIsStaff(principal);
+    return this.tasks.cancel(id, dto, principal);
   }
 
   @Post(':id/comments')

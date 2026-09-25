@@ -1,6 +1,11 @@
 # Backend: `tasks` + `task_history` — rewrite of the task model
 
-## Status: DONE — implemented 2026-08-16
+## Status: DONE — implemented 2026-08-16 · `returnTo` and the status flow superseded 2026-09-25
+
+> The two-table split, the append-only log, the delete asymmetry and the naming
+> rule all still stand. `returnTo` (and its ordering discussion below) and the
+> PATCH-driven statuses were replaced by the handoff stack in
+> [task workflow v2](../plans/task-workflow-v2.md).
 
 Shipped as planned. 406 API-suite assertions pass, 66 jest tests pass (23 in
 `tasks.service.spec.ts`). The plan below is unedited; the deviations are here.

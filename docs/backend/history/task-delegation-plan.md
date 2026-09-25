@@ -1,6 +1,14 @@
 # Backend: Task Delegation — Implementation Plan
 
-## Status: DONE — implemented 2026-08-16, storage model since SUPERSEDED
+## Status: DONE — implemented 2026-08-16, storage model since SUPERSEDED, workflow superseded 2026-09-25
+
+> **Workflow superseded by [task workflow v2](../plans/task-workflow-v2.md)
+> (backend 2026-09-25).** The `(kind, status)` guard, the RETURNED status and
+> its PATCH-based return flow, `returnTo`, reopen and several open tasks per
+> item are gone: stages move through `POST /tasks/:id/complete | return |
+> reassign | cancel`, the guard is keyed on `(kind, itemType)`. The publish
+> observer and the reasoning below about the item reference and the directory
+> still hold. Current behaviour: `docs/backend/reference.md` → Tasks.
 
 > **Superseded on storage only.** `work_tasks`/`task_comments` were replaced the
 > same day by `tasks` + `task_history` — see

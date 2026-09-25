@@ -27,6 +27,19 @@ export interface UserProfileView {
   email: string | null;
 }
 
+/** What the task assignee guard needs to know about one user. */
+export interface Assignability {
+  isActive: boolean;
+  /** `records:manage` AND `drafts:manage` — REVIEW_PUBLISH. */
+  canPublish: boolean;
+  /** Either one — GENERAL. */
+  canWrite: boolean;
+  /** `drafts:manage` — FIX_METADATA on a draft. */
+  canEditDrafts: boolean;
+  /** `records:manage` — FIX_METADATA on a published record. */
+  canEditRecords: boolean;
+}
+
 /**
  * Read side of the user directory. Never writes: `user_profiles` has exactly one
  * writer, `UserSyncService`.
@@ -57,6 +70,8 @@ export class UsersService {
               },
             ]
           : []),
+        ...(dto.capability === 'drafts' ? [{ scopes: { has: 'drafts:manage' } }] : []),
+        ...(dto.capability === 'records' ? [{ scopes: { has: 'records:manage' } }] : []),
         ...(active ? [{ enabled: true, deletedAt: null }] : []),
         ...(q
           ? [
@@ -102,9 +117,7 @@ export class UsersService {
    * Never gate a real permission on this — the authoritative publish check is
    * `ResourceAccessService.assertCanTransition()`, reading the JWT.
    */
-  async assignability(
-    userId: string,
-  ): Promise<{ isActive: boolean; canPublish: boolean; canWrite: boolean } | null> {
+  async assignability(userId: string): Promise<Assignability | null> {
     const row = await this.prisma.userProfile.findUnique({
       where: { userId },
       select: { canPublish: true, enabled: true, deletedAt: true, scopes: true },
@@ -117,6 +130,8 @@ export class UsersService {
       // Read off the raw `scopes` column, which is exactly what it was stored
       // for: "a future capability question needs no migration and no resync".
       canWrite: row.scopes.includes('drafts:manage') || row.scopes.includes('records:manage'),
+      canEditDrafts: row.scopes.includes('drafts:manage'),
+      canEditRecords: row.scopes.includes('records:manage'),
     };
   }
 

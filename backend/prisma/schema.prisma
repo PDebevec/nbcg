@@ -8,6 +8,8 @@ generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
   moduleFormat = "commonjs"
+  // For tasks_one_open_per_item (model Task): a partial unique index declared in the schema.
+  previewFeatures = ["partialIndexes"]
 }
 
 generator jsonTypes {
@@ -252,38 +254,41 @@ model FileMetricDaily {
 // and what would make it worth revisiting.
 // ---------------------------------------------------------------------------
 
+/// Task workflow v2 (docs/shared/plans/task-workflow-v2.md): a task is OPEN
+/// until it ends. Where it is in the work is its `kind` (the stage), not its
+/// status; "returned" is an event in the log, not a place a task sits.
+/// COMPLETED and CANCELLED are both terminal.
 enum TaskStatus {
-  OPEN // assigned, not picked up
-  IN_PROGRESS // assignee is working on it
-  RETURNED // sent back to the requester with notes
+  OPEN
   COMPLETED
   CANCELLED
 }
 
-/// What kind of work is being asked for. Exists because the assignee guard rail
-/// differs by kind and free text cannot be checked: a REVIEW_PUBLISH task
-/// assigned to someone who cannot publish is unfinishable by construction,
-/// while a GENERAL "have a look at this" is fine for any colleague who writes.
+/// The task's current STAGE. Moves forward on "complete with next"
+/// (GENERAL -> FIX_METADATA -> REVIEW_PUBLISH) and back on "return". The
+/// assignee guard differs by stage and item type, because free text cannot be
+/// checked: a REVIEW_PUBLISH task held by someone who cannot publish is
+/// unfinishable by construction.
 enum TaskKind {
-  REVIEW_PUBLISH // "this is ready, please publish it"
+  REVIEW_PUBLISH // "this is ready, please publish it" — completing it publishes
   FIX_METADATA // "the author field is wrong"
   GENERAL // anything else, passed to any colleague
 }
 
-/// What happened to a task. Pick the MOST SPECIFIC action that describes the
-/// actor's intent: a return is RETURNED, not STATUS_CHANGED plus ASSIGNED.
-///
-/// One user action produces exactly one row. A return moves status and assignee
-/// together — the API enforces that they travel in one atomic PATCH — so
-/// splitting it would record two events that never separately happened.
+/// What happened to a task. One user action produces exactly one row, labelled
+/// with the action route that produced it — a return is RETURNED, even though it
+/// moves both the stage and the assignee.
 enum TaskAction {
   CREATED
-  ASSIGNED // handed to someone else without a status change
-  STATUS_CHANGED // picked up, completed by hand, cancelled, reopened
-  RETURNED // sent back with notes — the workflow's whole point
+  ASSIGNED // reassigned: same stage, other person
+  STATUS_CHANGED // LEGACY (v1 PATCH): picked up / completed / reopened. No longer written.
+  RETURNED // back one step on the handoff stack, with a required note
   COMMENTED // a note, no state change
-  UPDATED // title, description, dueAt or kind edited
-  CLOSED_ON_PUBLISH // the observer in transition()
+  UPDATED // title, description or dueAt edited
+  CLOSED_ON_PUBLISH // the observer in transition() — also how a REVIEW_PUBLISH "complete" closes
+  ADVANCED // a stage was completed and handed on to the next person/stage
+  COMPLETED // finished without a next stage (or reviewed an already published record)
+  CANCELLED
 }
 
 /// Current state of a handoff between two members of staff. One row per live
@@ -322,10 +327,22 @@ model Task {
   createdAt        DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
   completedAt      DateTime?  @db.Timestamptz(3)
+  /// [TaskHandoffStack] — who held the task in which stage. Bottom = the
+  /// requester (`kind: null` until the task is first returned to them), top =
+  /// the current holder. Complete-with-next and reassign push; return pops.
+  handoffs         Json       @default("[]")
+  /// How the task reached its current holder. Drives the "returned to you"
+  /// badge and `GET /tasks?returned=true`.
+  lastHandoff      TaskAction @default(CREATED)
 
   @@index([assignedToUserId, status])
   @@index([createdByUserId, status])
   @@index([itemId])
+  /// At most one OPEN task per item — one person does one thing on an item at a
+  /// time. Finished/cancelled tasks are unlimited (history). PARTIAL: the
+  /// generated client offers `findUnique({ where: { itemId } })`, which is
+  /// wrong here — use findFirst with `status: 'OPEN'`.
+  @@unique([itemId], map: "tasks_one_open_per_item", where: { status: "OPEN" })
   @@map("tasks")
 }
 

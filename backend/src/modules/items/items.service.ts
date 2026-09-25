@@ -351,10 +351,17 @@ export class ItemsService {
     await Promise.all(attachments.map((a) => this.seaweedfs.delete(a.originalFid).catch(() => {})));
   }
 
+  /**
+   * `options.note` lands on the CLOSED_ON_PUBLISH row of any review task this
+   * publish closes — how "complete REVIEW_PUBLISH" (POST /tasks/:id/complete)
+   * carries its note, so the task-driven publish and every other publish share
+   * one closing path.
+   */
   async transition(
     ids: string[],
     targetState: ItemType,
     actor: Actor,
+    options: { note?: string } = {},
   ): Promise<Array<{ id: string; version: number }>> {
     return this.prisma.$transaction(async (tx) => {
       const [allDrafts, allRecords] = await Promise.all([
@@ -528,11 +535,9 @@ export class ItemsService {
       // A published item's review task is done, however it got published. This
       // endpoint is also reachable via bulk publish, import and admin action, so
       // the task list cannot rely on anyone going through the task itself — an
-      // observer here is the correctness mechanism, and a task-driven publish
-      // endpoint would be ergonomics on top rather than a replacement.
-      //
-      // RETURNED is included deliberately: if the item went out anyway, the goal
-      // was reached and the task should not linger with the cataloguer.
+      // observer here is the correctness mechanism. Completing a REVIEW_PUBLISH
+      // task (TasksService.complete) calls this method and lets the observer do
+      // the closing, so there is exactly one closing path.
       //
       // FIX_METADATA and GENERAL are untouched — publishing is not evidence that
       // a metadata fix was made, and there is no signal that would tell us.
@@ -544,7 +549,7 @@ export class ItemsService {
           where: {
             itemId: { in: ids },
             kind: TaskKind.REVIEW_PUBLISH,
-            status: { in: [TaskStatus.OPEN, TaskStatus.IN_PROGRESS, TaskStatus.RETURNED] },
+            status: TaskStatus.OPEN,
           },
           select: { id: true, itemId: true, status: true },
         });
@@ -562,6 +567,7 @@ export class ItemsService {
               taskId: t.id,
               itemId: t.itemId,
               action: TaskAction.CLOSED_ON_PUBLISH,
+              note: options.note,
               changes: [
                 { path: 'status', before: t.status, after: TaskStatus.COMPLETED },
               ],

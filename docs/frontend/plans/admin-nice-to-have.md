@@ -59,10 +59,11 @@ Section B needs a backend endpoint or field first.
 
 ## Notes
 
-- **Task workflow v2 (planned 2026-09-23) changes A2, A4, A9** — see
+- **Task workflow v2 (backend built 2026-09-25, web open) changes A2, A4, A9** — see
   [task-workflow-v2.md](task-workflow-v2.md#nice-to-have-list): A4 becomes a
   server-side `status=OPEN&kind=REVIEW_PUBLISH` query (IN_PROGRESS is gone), A9
-  must handle a per-item `409 ITEM_HAS_OPEN_TASK`, A2 shares the publish-error
+  must handle a per-item `409 ITEM_HAS_OPEN_TASK` (its body carries the blocking
+  `taskId`, so the progress list can link to it), A2 shares the publish-error
   dialog with metadata schema v2.
 
 - The recommendation in the chat (2026-09-22) was A1, A2, A3, A4, A6 and A9; everything else is optional polish.

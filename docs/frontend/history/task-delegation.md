@@ -1,6 +1,10 @@
 # Frontend: Task Delegation
 
-## Status: DONE — 2026-09-22
+## Status: DONE — 2026-09-22 · being reworked for [task workflow v2](../plans/task-workflow-v2.md)
+
+> The backend moved to task workflow v2 on 2026-09-25 (dev): the Start /
+> Return / Send back / Reopen PATCHes this UI sends are rejected there. The
+> rework is planned in `docs/frontend/plans/task-workflow-v2.md`.
 
 > **Built as specified below**, plus one addition and three small deviations:
 >
