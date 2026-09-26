@@ -43,7 +43,7 @@ COMARC/B-based metadata, attach scans, and publish them to a public catalogue.
 - **Metadata** is one JSONB column shaped after COMARC/B (`DomainRecord` in
   `backend/src/modules/import/cobiss/cobiss-util/cobiss.types.ts`); unknown keys
   are dropped on write. Field list: [metadata-fields.md](metadata-fields.md).
-  The editor contract is `GET /api/schema/record` (→ [schema v2 plan](plans/metadata-schema-v2.md)).
+  The editor contract is `GET /api/schema/v2/record` ([metadata schema v2](plans/metadata-schema-v2.md); v1 removed 2026-09-26).
 - **Visibility** `PUBLIC` / `PRIVATE` / `HIDDEN` × table decides who can see an
   item (scopes `records:view:public` … `drafts:view:hidden`).
 - **Relations** (`item_relations`) make parent/child trees: collections and their

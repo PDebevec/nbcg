@@ -1,6 +1,6 @@
 # Backend: metadata schema v2
 
-## Status: B1–B6 DONE (2026-09-24) · B8–B12 DONE (2026-09-25, dev) · B7 waits for the archive app
+## Status: DONE on dev — B1–B6 2026-09-24 · B8–B12 2026-09-25 · B7 (v1 removed) 2026-09-26
 
 **Not yet deployed to production.** No release ordering is needed any more: all
 data is test data (2026-09-25) — see [Deploy notes](#deploy-notes). B1–B7 below
@@ -230,7 +230,8 @@ Each phase ships on its own and leaves v1 untouched.
   contract), never hand-written.
 - `GET /schema/v2/record` on the existing `SchemaController`: same ETag
   mechanism, but `Cache-Control: no-cache`. No `level` param — `levels` become
-  rules on `isChild`.
+  rules on `isChild`. (As built: on `parentCollectionType ∋ 4`; `isChild` was
+  removed on 2026-09-26, no rule used it.)
 - **Self-check** (runs in a jest spec *and* once at module init, throwing on
   failure so a bad schema cannot boot):
   - every field key (recursively) is accepted by `METADATA_VALIDATORS` — the
@@ -321,11 +322,36 @@ name → 404. Public, like `/schema`.
   it gets this for free — confirmed when task workflow v2 was built
   (2026-09-25; §18 of the API suite completes a review of an incomplete draft).
 
-### B7 — retire v1 (XS, later) — OPEN, waits for the archive app
+### B7 — retire v1 (XS, later) — DONE (2026-09-26)
 
 After the archive app confirms it runs on v2: delete `buildRecordFields()`,
 `FieldDescriptor`, `RecordSchemaQueryDto`, the v1 route and its tests; update
 the reference.
+
+**As built (2026-09-26):** the archive app reported it runs on v2 and v1 can
+go. Deleted `schema.types.ts`, `dto/record-schema-query.dto.ts`, the v1 field
+list in `schema.service.ts` (now only builds and self-checks v2) and the v1
+route in `schema.controller.ts`; `GET /schema/record` is a 404. Jest's "keeps
+every v1 key" case went; the API suite's v1 section now checks the 404s.
+**Web impact, accepted by the user:** the admin editor loaded its code lists
+from v1; until web F2 it falls back to in-use values for material type,
+language and country and shows its "code lists failed" notice, and the other
+seven dropdowns are empty.
+
+Done the same day, so no main/child is left anywhere:
+
+- **`isChild` removed from the context** (`buildContext`, `CONTEXT_KEYS`,
+  `conformance.json`): no rule used it; a parent matters to the rules only
+  through `parentCollectionType`. The self-check spec and the API suite assert
+  it stays gone.
+- **`jeGlavnoGradivo` removed** ("is main material"): set to `true` on every
+  create and import, never read. Gone from `BaseMetadata`, `ItemsService`, the
+  import worker, the web's `BaseMetadata` type, the field docs and the API
+  suite's fixtures. Existing items keep the key until the rollout wipe.
+
+Tests after B7: jest 264 pass (1 skipped); API suite **682 pass, 0 fail** on a
+freshly started API (runs against a dev server whose `dist/` had been rebuilt
+underneath it gave random 500s — restart it first).
 
 ### B8 — `targetState`: draft and record rules (S) — DONE (2026-09-25)
 
@@ -482,7 +508,8 @@ spec, B11 parser cases.
 | Change | Web frontend | Archive app | Infrastructure |
 |---|---|---|---|
 | `summaryNote` accepted (done) | add the Summary field back to the editor and the record page (removed in `cd8e5bd`) | — | — |
-| v2 endpoint | adopts it ([plan](../../frontend/plans/metadata-schema-v2.md)) | migrates at its own pace; **v1 frozen** | — |
+| v2 endpoint | adopts it ([plan](../../frontend/plans/metadata-schema-v2.md)) | migrated (reported 2026-09-26) | — |
+| B7 v1 removed (2026-09-26) | **editor code lists fall back to in-use values until F2** (accepted) | — (on v2) | — |
 | Publish validation (B6; code renamed by B9) | must render `METADATA_VALIDATION_FAILED` in the editor, the items-list bulk publish and the task "Complete" dialog | affected: it creates items as `RECORD` too (confirmed 2026-09-25) — accepted, test data only | — |
 | New fields | rendered by the schema-driven form; **until then the web cannot enter `extent`, so it cannot publish books** | must support `quantity` | `metadata.issue.date` = `keyword`: one `PUT _mapping` on production, no reindex |
 | Import `progress.warnings` | import page could list them (renders only `errors` today) | — | — |

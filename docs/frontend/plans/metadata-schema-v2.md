@@ -1,6 +1,6 @@
 # Frontend: schema-driven metadata editor (schema v2)
 
-## Status: PLANNED (2026-09-23) — every backend phase it needs is on dev (B1–B6 2026-09-24, B8–B12 2026-09-25): ready to start
+## Status: PLANNED (2026-09-23) — every backend phase it needs is on dev (B1–B6 2026-09-24, B8–B12 2026-09-25): ready to start · **F2 is now urgent: v1 was removed 2026-09-26**
 
 Contract: [shared/plans/metadata-schema-v2.md](../../shared/plans/metadata-schema-v2.md).
 Backend: [backend/plans/metadata-schema-v2.md](../../backend/plans/metadata-schema-v2.md).
@@ -40,6 +40,14 @@ is "Extent" / "Obim" (and switches to "Number of pages", "Duration", "Number of
 sheets" by material type).
 
 ### ⚠ Already affects the current web app
+
+**v1 is gone (2026-09-26, backend B7)**, and the editor loaded its dropdown
+code lists from it (`getRecordSchema()` → `codeListsFromSchema()`). It now
+shows its "code lists failed" notice and falls back to `/search/suggest`
+(values already in use) for material type, language and country; record type,
+bibliographic level, illustration, content type, literary form, biography and
+author role have no options. Accepted by the user on 2026-09-26 — **F2 fixes
+it** and is the next web step.
 
 Validation is **on** in the backend for every write (every client; publish
 since 2026-09-24, every save since 2026-09-25):
@@ -92,6 +100,8 @@ Problems this plan removes, and what `cd8e5bd` already did about them:
    105 codes) come from `allowedValues` in `GET /api/schema/record`
    (`codeListsFromSchema()`). `/search/suggest` is only a fallback when the
    schema call fails. v1 still inlines all 449 languages, filtered locally.
+   **Back since 2026-09-26:** v1 was removed, so the fallback is all there is
+   until F2.
 3. **No material-type awareness**: a map shows no scale field, a book no page
    count, a serial issue no issue number. The interim
    [material-type visibility](material-type-field-visibility.md) plan covers
@@ -150,6 +160,16 @@ waiting for F3.
 left: `codeListsFromSchema()` reads v2 `vocabularies`, and the language fields,
 relator roles and content types move from inline options (449 / 116 / 69) to
 the vocabulary search.
+
+**Update 2026-09-26 — now required:** v1 is deleted, so `getRecordSchema()`
+(`src/api/admin.ts`, `/schema/record`) fails and the editor runs on its
+fallback. F2 = replace it with `GET /api/schema/v2/record`:
+`codeListsFromSchema()` takes the inline `vocabularies[name].values`
+(`materialType`, `recordType`, `bibliographicLevel`, `country`,
+`illustration`, `literaryForm`, `biography`), and the language fields,
+`authors[].role` (`relator`) and `contentTypeCodes` (`contentType`) become
+search-as-you-type pickers on `/api/search/vocabularies/:name`. Delete the v1
+`FieldDescriptor` type.
 
 ### F3 — generic renderer (L)
 
@@ -213,7 +233,8 @@ saved to (the contract's editor rule 2).
 
 ### F5 — parent context (S)
 
-The rules for serial issues need `isChild` / `parentCollectionType`. The editor
+The rules for serial issues need `parentCollectionType` (`isChild` was removed
+from the context on 2026-09-26 — no rule used it). The editor
 reads `parent_relations` from the loaded item, fetches each parent with
 `getItem()` (normally one), and feeds `collectionType` into `useSchemaForm`.
 The web app has no "create as child of…" flow today (relations are made via the

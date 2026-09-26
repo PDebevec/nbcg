@@ -105,7 +105,6 @@ export class ItemsService {
       _source,
       childrenInDrafts: 0,
       childrenInRecords: 0,
-      jeGlavnoGradivo: true,
     };
 
     // 400 PARENT_NOT_FOUND before anything is checked or written.

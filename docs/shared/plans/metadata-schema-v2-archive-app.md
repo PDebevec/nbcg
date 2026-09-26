@@ -1,6 +1,6 @@
 # Archive app → metadata schema v2: migration guide
 
-## Status: PLANNED (app side) — backend B1–B12 on dev since 2026-09-25, so the app can start · decisions settled 2026-09-25
+## Status: DONE (reported by the archive app 2026-09-26) — the app runs on v2; v1 removed by backend B7 the same day
 
 For the desktop archive application (TypeScript/Vue, runs at the client on
 `nbcg-dc`, source not in this repo). It builds its whole metadata editor from
@@ -13,7 +13,10 @@ came out of reviewing the app against the contract.
 
 ---
 
-## What the app does today (confirmed 2026-09-25)
+## What the app did before v2 (confirmed 2026-09-25)
+
+Kept as the starting point of this guide; since 2026-09-26 the app follows the
+steps below.
 
 | | |
 |---|---|
@@ -36,8 +39,8 @@ already the case (B8–B12, 2026-09-25): a book as Record without `extent`
 (v1 has `materialType` as optional). That's accepted: wipe, move the processed
 batches back to "scanned", test again on v2.
 
-v1 (`GET /api/schema/record`) stays until the app has moved, then it is
-deleted (backend B7).
+v1 (`GET /api/schema/record`) stayed until the app had moved; it was deleted
+on 2026-09-26 (backend B7).
 
 ---
 
@@ -274,28 +277,30 @@ field. (Until backend B9 — on dev since 2026-09-25 — the code was
 ### 11. Switch off v1
 
 When the app runs on v2, tell the backend side; `GET /api/schema/record` is
-then removed (backend B7).
+then removed (backend B7). **Done 2026-09-26.**
 
 ---
 
 ## Checklist
 
+All done — reported by the archive app on 2026-09-26 ("v1 can go").
+
 - [x] Which `targetState` the app sends — both (2026-09-25)
 - [x] Does the app call `/api/tasks` — no (2026-09-25)
 - [x] "Get data" → COBISS preview — done
-- [ ] Fetch v2 with ETag/If-None-Match, revalidate on start
-- [ ] Render from `groups`/`fields`/`input`, labels in both languages, `default`
-- [ ] `storeAs` for enums (drop the `metadata-wire.ts` special case)
-- [ ] `evaluate.ts` copied verbatim + `conformance.json` passing
-- [ ] Context from the batch's parents; Draft/Record choice before the first upload, the backend state after
-- [ ] Draft/Record toggle locked once the item is on the backend
-- [ ] Main/child switch removed; the ingestion-case suggestion reads the batch's parents
-- [ ] "Other fields" section for hidden-with-value
-- [ ] Free and strict typeahead (`/search/suggest`, `/search/vocabularies/:name`)
-- [ ] Processing blocked by `checkMetadata` for the item's state; re-checked before upload
-- [ ] New items: create with `parentIds`, no connect; store `parents[].version` (highest wins)
-- [ ] Re-uploads and taken-over records: `PATCH` + connect, as today
-- [ ] Deleted parent: batch blocked (404 on load, `PARENT_NOT_FOUND` on upload), one message
-- [ ] `METADATA_VALIDATION_FAILED` handling
-- [ ] `quantity`, `issue`, `keywords`, `summaryNote`, `collectionType` dropdown, `readOnly`
-- [ ] Tell the backend: v1 can be removed
+- [x] Fetch v2 with ETag/If-None-Match, revalidate on start
+- [x] Render from `groups`/`fields`/`input`, labels in both languages, `default`
+- [x] `storeAs` for enums (drop the `metadata-wire.ts` special case)
+- [x] `evaluate.ts` copied verbatim + `conformance.json` passing
+- [x] Context from the batch's parents; Draft/Record choice before the first upload, the backend state after
+- [x] Draft/Record toggle locked once the item is on the backend
+- [x] Main/child switch removed; the ingestion-case suggestion reads the batch's parents
+- [x] "Other fields" section for hidden-with-value
+- [x] Free and strict typeahead (`/search/suggest`, `/search/vocabularies/:name`)
+- [x] Processing blocked by `checkMetadata` for the item's state; re-checked before upload
+- [x] New items: create with `parentIds`, no connect; store `parents[].version` (highest wins)
+- [x] Re-uploads and taken-over records: `PATCH` + connect, as today
+- [x] Deleted parent: batch blocked (404 on load, `PARENT_NOT_FOUND` on upload), one message
+- [x] `METADATA_VALIDATION_FAILED` handling
+- [x] `quantity`, `issue`, `keywords`, `summaryNote`, `collectionType` dropdown, `readOnly`
+- [x] Tell the backend: v1 can be removed

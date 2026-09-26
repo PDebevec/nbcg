@@ -547,7 +547,7 @@ curl 'http://localhost:3000/api/search/vocabularies/language?q=crn&limit=5'
 ### Schema (v2)
 
 ```bash
-# One schema for every material type and level — the conditions are inside. Public.
+# One schema for every material type and parent — the conditions are inside. Public.
 curl -i 'http://localhost:3000/api/schema/v2/record'
 # -> ETag: "…", Cache-Control: no-cache
 # -> { schemaVersion: 2, languages: ["en","cnr"], inlineVocabularyMax: 50,
@@ -613,32 +613,13 @@ listova*, *Razmjera* (map scale); help *Slobodne ključne riječi (610)*,
 *GGGG, GGGG-MM ili GGGG-MM-DD*; unit abbreviations in `extentUnit` (*str.*,
 *list.*, *sv.*, *kom.*, *min*).
 
-### Schema (v1)
+### Schema (v1) — removed 2026-09-26
 
-**Frozen** until the archive app has moved to v2, then deleted (backend plan
-B7). The v2 fields (`summaryNote`, `keywords`, `extent`, `issue`) are
-deliberately not in it.
-
-```bash
-# Field descriptors for building a metadata editor. Public, no auth needed.
-curl 'http://localhost:3000/api/schema/record'
-curl 'http://localhost:3000/api/schema/record?level=main'    # or child
-# -> { "fields": [ { key, type, required, itemType?, allowedValues?, objectShape?,
-#                    group, order, parentInheritable, issueIdentifying, levels } ] }
-```
-
-- Built once at module load in `src/modules/schema/schema.service.ts` from a
-  hand-written list next to the COBISS code maps; cached per `level` with an
-  MD5 `ETag` (`If-None-Match` → 304).
-- `Cache-Control: public, max-age=86400` — a client may use a stale schema for
-  up to a day after a deploy without revalidating.
-- `required` is **advisory**: the only field the API enforces is `title`.
-- Every coded field ships its full `allowedValues` inline (449 languages ×3
-  language fields), ~98 KB in total.
-- No labels: every client carries its own field names/translations.
-- **The desktop archive app builds its whole editor from this response**, so
-  the shape is a public contract — see `docs/shared/archive-app.md` before
-  changing it.
+`GET /api/schema/record?level=main|child` answers **404** since 2026-09-26
+(schema v2 B7): the archive app runs on [v2](#schema-v2), and v2 has no
+main/child level. The web admin editor still took its code lists from it; until
+its schema v2 step F2 it falls back to values already in use and says so on
+the form (see the [web plan](../frontend/plans/metadata-schema-v2.md)).
 
 ---
 
@@ -867,7 +848,6 @@ exactly as strictly as a real one: it still returns `404` for a missing id and
 | `issn`                  | string[]         |                                    |
 | `seriesTitle` …         | string           | `seriesTitle`, `seriesSubtitle`, `seriesResponsibility`, `seriesIssn`, `seriesVolume` |
 | `collectionType`        | number           | Required; set to 0 when not sent (schema `default: 0`) |
-| `jeGlavnoGradivo`       | boolean          | Auto-set to true                   |
 | `childrenInDrafts`      | number           | Auto-managed via DB triggers       |
 | `childrenInRecords`     | number           | Auto-managed via DB triggers       |
 | `_source`               | string           | Auto-set: `cobiss` or `nbcg`       |

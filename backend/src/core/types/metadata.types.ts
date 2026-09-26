@@ -13,11 +13,10 @@ export interface BaseMetadata {
   collectionType: number;
   childrenInDrafts: number;
   childrenInRecords: number;
-  jeGlavnoGradivo: boolean;
 }
 
-// System fields managed by the DB trigger / import — never user-editable.
-type SystemMetadataKeys = 'jeGlavnoGradivo' | 'childrenInDrafts' | 'childrenInRecords';
+// System fields managed by the DB trigger — never user-editable.
+type SystemMetadataKeys = 'childrenInDrafts' | 'childrenInRecords';
 
 /**
  * Runtime mirror of user-editable BaseMetadata keys.

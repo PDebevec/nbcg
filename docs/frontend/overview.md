@@ -43,7 +43,8 @@ whole tree; use it on specific files only.
 "open task" badge per row, bulk publish/delete). `/admin/items/:id` is the
 editor: a hand-written form over every metadata field the API accepts (~40, in
 sections, with COMARC 105/206/207/208 under a collapsible "Advanced"; code lists
-from `GET /api/schema/record`, and clearing a field sends `null`) plus a
+from `GET /api/schema/record` — removed 2026-09-26, see below — and clearing a
+field sends `null`) plus a
 raw-JSON tab, files (upload with OCR text), revision history and the item's task
 history; saves use optimistic concurrency (`expectedVersion`, a 409 opens a
 compare/resolve flow).
@@ -55,6 +56,7 @@ imports and polls the job.
 
 | Issue | Where | Plan |
 |---|---|---|
+| **Dropdown code lists are gone**: the editor loaded them from v1 `GET /api/schema/record`, removed on 2026-09-26 (backend B7). It now shows its "code lists failed" notice and offers only in-use values for material type, language and country; record type, bibliographic level, illustration, content type, literary form, biography and author role are empty | `AdminItemEditPage.vue`, `metadataForm.ts` (`codeListsFromSchema`) | [web schema v2 plan F2](plans/metadata-schema-v2.md#f2--quick-win-on-the-current-form-s) — read v2 `vocabularies`, search the big ones |
 | No "Summary" (`summaryNote`) field: removed in `cd8e5bd` because the API dropped it on every save | `ItemMetadataForm.vue`, `RecordDetailPage.vue` | the API accepts it since 2026-09-24 (schema v2 B3) — add the field back |
 | **Publishing needs fields the form cannot enter; every save is checked.** Backend validation (schema v2: publish since 2026-09-24, every write since 2026-09-25, on dev) requires a material type on drafts, `extent` for books etc. and `issue.number`/`issue.date` for an issue of a serial on records; the form has no `extent` or `issue` input (JSON tab only). Errors come back as `400 METADATA_VALIDATION_FAILED`; the form and bulk publish show only its `message`, not which fields | `ItemMetadataForm.vue`, `AdminItemsPage.vue` | [web schema v2 plan ⚠](plans/metadata-schema-v2.md#-already-affects-the-current-web-app) — must land before the backend reaches production |
 | Import page lists `progress.errors` but not the new `progress.warnings` (items imported that would fail the check for their state) | `AdminImportPage.vue` | web schema v2 plan |

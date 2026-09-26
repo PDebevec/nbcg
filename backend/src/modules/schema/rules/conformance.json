@@ -21,7 +21,7 @@
       "parents": [],
       "itemState": "DRAFT",
       "targetState": "DRAFT",
-      "expected": { "materialType": "am", "recordType": "a", "bibliographicLevel": "m", "collectionType": 0, "isChild": false, "parentCollectionType": [], "itemState": "DRAFT", "targetState": "DRAFT" }
+      "expected": { "materialType": "am", "recordType": "a", "bibliographicLevel": "m", "collectionType": 0, "parentCollectionType": [], "itemState": "DRAFT", "targetState": "DRAFT" }
     },
     {
       "name": "an explicit recordType wins over the fallback",
@@ -29,7 +29,7 @@
       "parents": [],
       "itemState": "RECORD",
       "targetState": "RECORD",
-      "expected": { "materialType": "am", "recordType": "b", "bibliographicLevel": "m", "collectionType": 3, "isChild": false, "parentCollectionType": [], "itemState": "RECORD", "targetState": "RECORD" }
+      "expected": { "materialType": "am", "recordType": "b", "bibliographicLevel": "m", "collectionType": 3, "parentCollectionType": [], "itemState": "RECORD", "targetState": "RECORD" }
     },
     {
       "name": "every parent contributes its collectionType; a parent without one counts as 0",
@@ -37,7 +37,7 @@
       "parents": [{ "collectionType": 4 }, {}],
       "itemState": "NEW",
       "targetState": "RECORD",
-      "expected": { "materialType": null, "recordType": null, "bibliographicLevel": null, "collectionType": 0, "isChild": true, "parentCollectionType": [4, 0], "itemState": "NEW", "targetState": "RECORD" }
+      "expected": { "materialType": null, "recordType": null, "bibliographicLevel": null, "collectionType": 0, "parentCollectionType": [4, 0], "itemState": "NEW", "targetState": "RECORD" }
     },
     {
       "name": "a collectionType that is not a number counts as 0 (strict)",
@@ -191,7 +191,7 @@
 
   "record": {
     "description": "The record rule table, run against the fields of GET /api/schema/v2/record. contextDefaults saves to RECORD (the publish rules); the draft cases set targetState DRAFT.",
-    "contextDefaults": { "materialType": null, "recordType": null, "bibliographicLevel": null, "collectionType": 0, "isChild": false, "parentCollectionType": [], "itemState": "DRAFT", "targetState": "RECORD" },
+    "contextDefaults": { "materialType": null, "recordType": null, "bibliographicLevel": null, "collectionType": 0, "parentCollectionType": [], "itemState": "DRAFT", "targetState": "RECORD" },
     "cases": [
       {
         "name": "book (am), not a collection",
@@ -300,7 +300,7 @@
       },
       {
         "name": "issue: child of a serial collection",
-        "context": { "materialType": "am", "recordType": "a", "bibliographicLevel": "m", "isChild": true, "parentCollectionType": [4] },
+        "context": { "materialType": "am", "recordType": "a", "bibliographicLevel": "m", "parentCollectionType": [4] },
         "expected": {
           "issue": { "visible": true, "required": false },
           "issue.number": { "visible": true, "required": true },
@@ -320,12 +320,12 @@
       },
       {
         "name": "the serial-issue hide wins over the map rule, and a hidden field is not required",
-        "context": { "materialType": "em", "recordType": "e", "bibliographicLevel": "m", "isChild": true, "parentCollectionType": [4] },
+        "context": { "materialType": "em", "recordType": "e", "bibliographicLevel": "m", "parentCollectionType": [4] },
         "expected": { "cartographicMathematicalData": { "visible": false, "required": false } }
       },
       {
         "name": "child of a primary collection keeps its own fields",
-        "context": { "materialType": "am", "recordType": "a", "bibliographicLevel": "m", "isChild": true, "parentCollectionType": [1] },
+        "context": { "materialType": "am", "recordType": "a", "bibliographicLevel": "m", "parentCollectionType": [1] },
         "expected": {
           "issue": { "visible": false },
           "authors": { "visible": true },
@@ -336,7 +336,7 @@
       },
       {
         "name": "two parents, one of them serial: array match on any element",
-        "context": { "isChild": true, "parentCollectionType": [1, 4] },
+        "context": { "parentCollectionType": [1, 4] },
         "expected": { "issue": { "visible": true }, "issue.number": { "required": true } }
       },
       {
@@ -388,7 +388,7 @@
       },
       {
         "name": "issue saved as a draft: issue data shown, not required",
-        "context": { "materialType": "am", "recordType": "a", "bibliographicLevel": "m", "isChild": true, "parentCollectionType": [4], "targetState": "DRAFT" },
+        "context": { "materialType": "am", "recordType": "a", "bibliographicLevel": "m", "parentCollectionType": [4], "targetState": "DRAFT" },
         "expected": {
           "issue": { "visible": true },
           "issue.number": { "visible": true, "required": false },

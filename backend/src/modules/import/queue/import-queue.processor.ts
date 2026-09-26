@@ -94,7 +94,6 @@ export class ImportQueueProcessor extends WorkerHost {
       collectionType: 0,
       childrenInDrafts: 0,
       childrenInRecords: 0,
-      jeGlavnoGradivo: true,
     };
 
     const data = {

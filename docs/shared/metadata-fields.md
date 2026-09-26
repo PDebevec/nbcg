@@ -27,7 +27,6 @@ Legend: ✅ already in SEARCH_FIELDS · 🔍 good search candidate · — not us
 | `collectionType` | `number` | — numeric code |
 | `childrenInDrafts` | `number` | — system |
 | `childrenInRecords` | `number` | — system |
-| `jeGlavnoGradivo` | `boolean` | — system |
 
 ---
 

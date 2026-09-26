@@ -41,7 +41,7 @@ English.
 
 | Plan | Parts | Status |
 |---|---|---|
-| **Metadata schema v2** — dynamic fields by material type / collection / parent, typeahead hints, searchable vocabularies, labels, draft/record validation on save · [contract](shared/plans/metadata-schema-v2.md) · [backend](backend/plans/metadata-schema-v2.md) · [web](frontend/plans/metadata-schema-v2.md) · [archive app](shared/plans/metadata-schema-v2-archive-app.md) | backend, web, archive app | backend B1–B6 DONE 2026-09-24 · **B8–B12 DONE 2026-09-25** (dev, not deployed): draft/record rules (`targetState`), every save checked (`METADATA_VALIDATION_FAILED`), `parentIds` on create + `PARENT_NOT_FOUND`, `extent` from COBISS 215, accent-insensitive search · next: wipe + a few examples, then web F1–F5 + archive app · B7 (drop v1) last. No release ordering: all data is test data |
+| **Metadata schema v2** — dynamic fields by material type / collection / parent, typeahead hints, searchable vocabularies, labels, draft/record validation on save · [contract](shared/plans/metadata-schema-v2.md) · [backend](backend/plans/metadata-schema-v2.md) · [web](frontend/plans/metadata-schema-v2.md) · [archive app](shared/plans/metadata-schema-v2-archive-app.md) | backend, web, archive app | **backend DONE** on dev, not deployed (B1–B6 2026-09-24; B8–B12 2026-09-25: draft/record rules, every save checked, `parentIds` + `PARENT_NOT_FOUND`, `extent` from COBISS 215, accent-insensitive search; **B7 2026-09-26: v1 removed**, with `isChild` and `jeGlavnoGradivo` — no main/child left) · **archive app on v2** (2026-09-26) · web: **F2 urgent** (its dropdowns read v1), then F1, F3–F5 · then wipe + a few examples. No release ordering: all data is test data |
 | **Task workflow v2** — stages instead of statuses, one open task per item, return = previous person + stage, complete REVIEW = publish · [contract](shared/plans/task-workflow-v2.md) · [backend](backend/plans/task-workflow-v2.md) · [web](frontend/plans/task-workflow-v2.md) | backend, web (deploy together) | BACKEND DONE 2026-09-25 (dev, not deployed) · web open |
 | [Material-type field visibility in the item editor](frontend/plans/material-type-field-visibility.md): type picked first, only that type's fields shown, the rest folded into "Other fields"; static map now, schema v2 rules later | web | TODO 2026-09-23 |
 | [Usage metrics outlive their items](backend/plans/usage-metrics-orphans.md) — deleted items in "most viewed" | backend | TODO, needs a decision |
@@ -51,10 +51,11 @@ English.
 | [Production incident follow-ups](infrastructure/plans/infrastructure-todo.md) — `10.10.11.1:443`, worker client secret | infrastructure | see doc |
 | [Backend → Keycloak internal routing](infrastructure/plans/keycloak-internal-routing-fix.md) — bare-IP hostname breaks JWKS + user sync | infrastructure | plan; check against commit `9705fbc` |
 
-Suggested order: ~~metadata schema v2 backend B8–B12~~ (done 2026-09-25) →
-wipe + a few example items (backend plan's deploy notes) → archive app
-migration and web F1–F5 (the web's task workflow v2 alongside; its dialog uses
-the same validation error) → retire schema v1. The web-only material-type visibility plan can run
+Suggested order: ~~metadata schema v2 backend B8–B12~~ (done 2026-09-25),
+~~archive app migration~~ and ~~retire schema v1~~ (done 2026-09-26) → web F2
+(the editor's dropdowns lost their v1 source) → wipe + a few example items
+(backend plan's deploy notes) → web F1, F3–F5 (the web's task workflow v2
+alongside; its dialog uses the same validation error). The web-only material-type visibility plan can run
 alongside; its §3b folds into web F1.
 
 ### Done / superseded (in `history/`)

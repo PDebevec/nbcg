@@ -33,12 +33,6 @@ describe('schema v2 self-check', () => {
     expect(schema.fields.map((f) => f.key).sort()).toEqual([...METADATA_VALIDATORS.keys()].sort());
   });
 
-  it('keeps every v1 key', () => {
-    const v1 = new SchemaService().getRecordSchema().fields.map((f) => f.key);
-    const v2 = new Set(schema.fields.map((f) => f.key));
-    expect(v1.filter((k) => !v2.has(k))).toEqual([]);
-  });
-
   describe('catches', () => {
     const errorsFor = (s: SchemaV2) => selfCheckSchema(s).join('\n');
 
@@ -87,7 +81,7 @@ describe('schema v2 self-check', () => {
     it('a rule that sets something other than state', () => {
       const s = schemaWith((specs) => {
         specs.find((f) => f.key === 'edition')!.rules = [
-          { when: { ref: 'isChild', eq: true }, set: { type: 'text' } as never },
+          { when: { ref: 'itemState', eq: 'NEW' }, set: { type: 'text' } as never },
         ];
         return specs;
       });
@@ -211,6 +205,8 @@ describe('schema v2 shape', () => {
 
   it('declares targetState, and 207 is the serial\'s own numbering (not per issue)', () => {
     expect(schema.context.map((c) => c.key)).toContain('targetState');
+    // No main/child level of any kind (2026-09-26): only the parents' collectionType.
+    expect(schema.context.map((c) => c.key)).not.toContain('isChild');
     expect(field(schema, 'numberingAndDates').issueIdentifying).toBe(false);
     expect(field(schema, 'issue.number').issueIdentifying).toBe(true);
   });

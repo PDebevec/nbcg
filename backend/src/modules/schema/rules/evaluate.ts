@@ -137,7 +137,6 @@ export function buildContext(
       codeOf(m.bibliographicLevel) ??
       (materialType && materialType.length > 1 ? materialType.charAt(1) : null),
     collectionType: collectionTypeOf(m.collectionType),
-    isChild: parents.length > 0,
     parentCollectionType: parents.map((p) => collectionTypeOf(p?.collectionType)),
     itemState,
     targetState,

@@ -1,6 +1,6 @@
 # Metadata schema v2 — the contract
 
-## Status: backend B1–B6 DONE (2026-09-24) · B8–B12 DONE (2026-09-25) — both on dev, not production · next: web and archive app
+## Status: backend DONE on dev (B1–B6 2026-09-24, B8–B12 2026-09-25, B7 v1 removed 2026-09-26) · archive app on v2 (2026-09-26) · next: web
 
 The backend implements this contract as written, with the refinements marked
 **(as built)** below; details and the decisions taken on the way are in the
@@ -25,7 +25,7 @@ that switches to these rules once they exist.
 
 ## Why
 
-Today `GET /api/schema/record` (v1, see [reference](../../backend/reference.md#schema-v1))
+Until 2026-09-26 `GET /api/schema/record` (v1, [removed](../../backend/reference.md#schema-v1--removed-2026-09-26))
 returns a flat list of field descriptors. The desktop archive app builds its
 whole editor from it. The web admin editor takes only its code lists from it and
 hard-codes everything else: which fields exist, layout, labels (all 40 fields
@@ -91,9 +91,9 @@ since `cd8e5bd`). What is missing:
 | `POST /api/items` | **(2026-09-25)** new optional `parentIds: string[]`: checked with these parents, linked in the same transaction. The response adds `parents: [ { parentId, version, childrenInDrafts, childrenInRecords } ]` (what `connect` returns, one per parent). An unknown parent → `400 PARENT_NOT_FOUND`. | as today, plus manage on each parent's collection (as `connect`) |
 | `POST /api/relations/connect` | **(2026-09-25)** re-checks each child ([Validation on save](#validation-on-save)); an unknown parent → `400 PARENT_NOT_FOUND` (was a plain 400). | as today |
 
-**v1 stays frozen** at `GET /api/schema/record` until the archive app has moved
-to v2 (the app runs at the client and cannot be updated in lock-step with a
-deploy). After that v1 is deleted — see the archive plan.
+~~**v1 stays frozen** at `GET /api/schema/record` until the archive app has
+moved to v2.~~ **(2026-09-26)** The archive app runs on v2; v1 is deleted
+(404, backend B7).
 
 Caching: `ETag` + `Cache-Control: no-cache`. Clients send `If-None-Match` and get
 a `304` with no body when nothing changed. (v1's `max-age=86400` lets a client
@@ -139,13 +139,16 @@ That keeps the rule evaluator ~50 lines in any language.
   { "key": "bibliographicLevel",   "type": "string",   "source": "item",   "path": "bibliographicLevel.code",
     "fallback": "materialType.code[1]" },
   { "key": "collectionType",       "type": "number",   "source": "item",   "path": "collectionType", "default": 0 },
-  { "key": "isChild",              "type": "boolean",  "source": "parent", "description": "the item has at least one parent" },
   { "key": "parentCollectionType", "type": "number[]", "source": "parent", "path": "collectionType",
     "description": "collectionType of every parent; [] when there is none" },
   { "key": "itemState",            "type": "string",   "source": "item",   "description": "NEW | DRAFT | RECORD — where the item is now (NEW = not created yet)" },
   { "key": "targetState",          "type": "string",   "source": "item",   "description": "DRAFT | RECORD — the state it is being saved as" }   // (2026-09-25)
 ]
 ```
+
+**(2026-09-26)** `isChild` is gone: no rule used it, and main/child is not a
+concept in v2 at all. What a parent means for the rules is only its
+`collectionType` (`parentCollectionType`, `[]` without parents).
 
 `source: "parent"` means the client must know the parent(s). The archive app
 knows them before it creates the item (the batch's parents); the web editor
@@ -513,7 +516,7 @@ each only where its rule makes it visible. "record only" below = a rule with
 | Field | Base | Rules |
 |---|---|---|
 | `title` | required (draft + record) | — |
-| `collectionType` | `select`, required (draft + record), **`default: 0`** (2026-09-25) | hidden when `isChild` and the parent is a serial (an issue is not a collection) |
+| `collectionType` | `select`, required (draft + record), **`default: 0`** (2026-09-25) | hidden when a parent is a serial (`parentCollectionType ∋ 4`; an issue is not a collection) |
 | `materialType` | `select`, required — **(2026-09-25) for drafts too** | — (it drives every other rule) |
 | **`extent`** (new, `quantity`) | hidden | `a b c d` → visible, unit `pages` "str.", label "Broj strana"; `g i j` → visible, unit `minutes` "min", label "Trajanje"; `e f k` → visible, unit `sheets` "list."; **required, record only**, when `collectionType = 0` and `recordType ∈ a b g i j`; never required when `collectionType ≠ 0` (it lives on the children) |
 | `cartographicMathematicalData` (206, scale) | hidden | `e f` → visible, label "Scale" / "Razmjera" (as built; was "Merilo" here), help "1:25 000"; **required, record only** |

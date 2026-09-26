@@ -166,7 +166,7 @@ Of these, v2's planned `extent` field covers only duration (unit `min` for `g i 
 
 | Frontend change | Backend / other clients need |
 |---|---|
-| §3a: static map, grouped type picker, "Other fields (n)", "On this page" card | nothing. It uses the v1 code lists the editor already loads from `GET /api/schema/record` |
+| §3a: static map, grouped type picker, "Other fields (n)", "On this page" card | the editor's code lists — loaded from v1 `GET /api/schema/record`, which was removed on 2026-09-26; after web schema v2 F2 they come from v2 `vocabularies` |
 | Picking a type sets `recordType` + `bibliographicLevel`; clearing it sends `null` for both | nothing new. The API stores all three today, and `null` clears a field since `cd8e5bd` |
 | §3b: switch to the schema | schema v2 **B1** (endpoint) + **B2** (evaluator) — both done 2026-09-24 — and web **F1** |
 | §2a differences | a decision in the contract's rule table; otherwise the switch changes what users see |

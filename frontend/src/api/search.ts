@@ -122,7 +122,6 @@ export interface BaseMetadata {
   collectionType: number;
   childrenInDrafts: number;
   childrenInRecords: number;
-  jeGlavnoGradivo: boolean;
 }
 
 // ---------------------------------------------------------------------------

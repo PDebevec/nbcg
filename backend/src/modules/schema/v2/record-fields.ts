@@ -21,8 +21,6 @@ export const CONTEXT_KEYS: ContextKey[] = [
   { key: 'bibliographicLevel', type: 'string', source: 'item', path: 'bibliographicLevel.code',
     fallback: 'materialType.code[1]' },
   { key: 'collectionType', type: 'number', source: 'item', path: 'collectionType', default: 0 },
-  { key: 'isChild', type: 'boolean', source: 'parent',
-    description: 'the item has at least one parent' },
   { key: 'parentCollectionType', type: 'number[]', source: 'parent', path: 'collectionType',
     description: 'collectionType of every parent; [] when there is none' },
   { key: 'itemState', type: 'string', source: 'item',
