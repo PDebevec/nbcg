@@ -18,7 +18,7 @@ additive, no client breaks.
 
 | | Before | Now |
 |---|---|---|
-| `collectionType` | did not exist; the param was dropped silently, so every item came back | `collectionType=1,3,4` = collections only, `0` = not a collection |
+| `collectionType` | did not exist; the param was dropped silently, so every item came back | `collectionType=>0` = every collection, including types added later; `0` = not a collection; a list (`1,3,4`) or a comparison (`>=`, `<`, `<=`) for anything else |
 | `isbn`, `issn` | matched nothing (ISBNs are stored with dashes, the filter removed them) | any spelling: dashes, spaces, `x`/`X` |
 | `yearFrom` / `yearTo` | compared words as text: `yearFrom` alone also matched `s. a.` and `[ca. 1850?]` | only 4-digit years count; `1884-1885` counts as both years |
 | A value that does not parse | 400 for years only (class-validator, `message` an array); other filters sent it to the index | 400 for every filter, `message` a string: `Invalid collectionType "x": expected a whole number` |
@@ -31,9 +31,10 @@ sub-fields): done on dev, **production at deploy** —
 
 1. **Send only params the backend knows.** An unknown or misspelled one is
    dropped without an error, and the search returns unfiltered hits.
-2. **Take `collectionType` codes from the schema**
-   (`GET /api/schema/v2/record` → `vocabularies.collectionType.values`); "any
-   collection" = every code except `0`. A new code then works without a release.
+2. **"Any collection" is `collectionType=>0`** — no client needs to know the
+   codes, so a new collection type works without a release. For labels (a
+   dropdown of types) use the schema: `GET /api/schema/v2/record` →
+   `vocabularies.collectionType.values`.
 3. **`language` and `materialType` take the English label** (`en`), not the
    code — what `/search/suggest?field=…` returns as `value.en`. Switching to
    codes is decision D1 in the web plan.

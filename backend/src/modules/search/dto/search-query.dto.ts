@@ -48,7 +48,7 @@ export class SearchQueryDto {
 
   // ── Multi-select exact filters (comma-separated) ──
 
-  /** Collection type codes — `1,3,4` is any collection, `0` not a collection */
+  /** Collection type codes (`0` not a collection, `1,3,4`), or one comparison: `>0` is every collection */
   @IsOptional()
   @IsString()
   collectionType?: string;
