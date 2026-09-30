@@ -411,14 +411,18 @@ curl 'http://localhost:3000/api/search?q=keyword&type=records'
 curl 'http://localhost:3000/api/search?q=keyword&type=drafts'
 
 # Advanced search with filters
-curl 'http://localhost:3000/api/search?title=Montenegro&author=Scherb&year=1850-1860&language=ger&materialType=am'
+curl 'http://localhost:3000/api/search?title=Montenegro&author=Scherb&yearFrom=1850&yearTo=1860&language=German&materialType=Book'
 
 # Filter by publisher
 curl 'http://localhost:3000/api/search?publisher=Suppan'
 
-# Filter by ISBN/ISSN/COBISS ID
-curl 'http://localhost:3000/api/search?cobissId=922222'
+# Collections only, name + type only (the archive app's parent picker)
+curl 'http://localhost:3000/api/search?q=zbirka&collectionType=1,3,4&fields=metadata.title,metadata.collectionType'
+
+# Filter by ISBN/ISSN (any spelling: dashes and spaces are ignored) or COBISS ID
 curl 'http://localhost:3000/api/search?isbn=978-3-16-148410-0'
+curl 'http://localhost:3000/api/search?isbn=9783161484100'
+curl 'http://localhost:3000/api/search?cobissId=922222'
 
 # Get item by ID
 curl http://localhost:3000/api/search/<item_id>
@@ -430,25 +434,46 @@ curl 'http://localhost:3000/api/search/<parent_id>/children?page=1&limit=20'
 **Search query params:**
 | Param          | Type   | Description                                |
 |----------------|--------|--------------------------------------------|
-| `q`            | string | Full-text search (title, subtitle, authors, series, notes, filenames) |
+| `q`            | string | Full-text search, every word required (fuzzy, last word also as a prefix): title, subtitle, first responsibility, authors, parallel title, series title, notes, attachment filenames |
 | `type`         | string | `all` (default), `records`, `drafts`       |
 | `page`         | number | Page number, 1-indexed (default: 1)        |
 | `limit`        | number | Results per page, 1-100 (default: 20)      |
-| `title`        | string | Filter by title (phrase prefix)            |
-| `author`       | string | Filter by author name                      |
-| `publisher`    | string | Filter by publisher                        |
-| `series`       | string | Filter by series title                     |
-| `year`         | string | Publication year or range: `1990` or `1990-2000` |
-| `language`     | string | Language code (e.g. `ger`, `cnr`)          |
-| `materialType` | string | Material type code (e.g. `am`)             |
-| `isbn`         | string | ISBN (exact match, hyphens stripped)        |
-| `issn`         | string | ISSN (exact match, hyphens stripped)        |
-| `cobissId`     | string | COBISS ID (exact match)                    |
+| `title`        | string | Title, every word required (fuzzy + prefix) |
+| `author`       | string | Author family/first name, every word required (fuzzy) |
 | `fullText`     | string | Search extracted PDF text; hits include `matchedFiles` with highlight snippets |
 | `fields`       | string | Comma-separated `_source` projection. **Allowlisted** — see below |
 | `sort`         | string | `relevance` (default) or `newest`          |
 
-`year` must be `YYYY` or `YYYY-YYYY` (range start must not exceed end) — anything else returns 400.
+**Filters** — exact, they narrow the hits without changing the score. Same
+params on `GET /search/:id/children`.
+
+| Param | Value | Keeps items where |
+|---|---|---|
+| `collectionType` | codes, comma-separated: `1,3,4` | `metadata.collectionType` is any of them — `0` not a collection, `1` primary, `3` collection, `4` serial collection, so `1,3,4` = every collection |
+| `language` | English names, comma-separated: `Slovenian,English` | a `metadata.language[].en` is any of them |
+| `materialType` | English names, comma-separated: `Book` | `metadata.materialType.en` is any of them |
+| `publisher` | comma-separated | `metadata.publication.publisher` contains any of them as a phrase |
+| `yearFrom`, `yearTo` | `YYYY`, inclusive, either may be left out | a 4-digit year in `metadata.publication.year` is in the range: `1884-1885` counts as 1884 and 1885, `[ca. 1850?]` as 1850, `s. a.` has none |
+| `isbn`, `issn` | one number, any spelling | an `isbn[]` / `issn[]` equals it once dashes and spaces are dropped and case is ignored (`978-86…-X` = `97886…x`) |
+| `cobissId` | one ID | `metadata.cobissId` equals it |
+| `createdBy` | one user id | `createdByUserId` equals it |
+
+A value that does not parse is a 400 `Invalid <param> "<value>": expected
+<format>`; `yearFrom` after `yearTo` is a 400. A **misspelled or unknown param
+is dropped silently** (the global ValidationPipe's `whitelist`), so it returns
+unfiltered hits — check the param name before trusting an empty filter.
+
+The filters are one allowlist, `FILTER_FIELDS` in
+`src/modules/search/filter-fields.ts`: param → index path, kind of match
+(`terms`, `term`, `phrase`, `range`) and value format (`string`, `integer`,
+`year`). A new filter is an entry there plus its param on `SearchQueryDto`
+(`filter-fields.spec.ts` fails if the param is missing); a new kind or format is
+one case or parser in the same file. The path must be indexed the way its kind
+needs (the file header says how): `isbn`/`issn` match their `.normalized`
+sub-field and years their `.years` sub-field, both declared in
+`infrastructure/docker/pgsync/schema.json` (2026-09-29; before, the ISBN filter
+found nothing and `yearFrom` alone also matched years like `s. a.`) — changing
+them needs a [reindex](../infrastructure/opensearch-reindex.md).
 
 `fields` is checked against an allowlist and unknown names are dropped silently.
 `id` is always included, and the `_source` excludes are applied on top of the

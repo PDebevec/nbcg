@@ -153,47 +153,67 @@ describe('SearchService – query building', () => {
     expect(mtFilter.terms['metadata.materialType.en.keyword']).toEqual(['Book', 'Journal']);
   });
 
+  // ── Collection type (multi-select of numeric codes) ──
+
+  it('builds terms filter of numbers for comma-separated collection types', async () => {
+    const body = await searchWith({ collectionType: '1,3,4' });
+    const userQuery = body.query.bool.must[0];
+    const ctFilter = userQuery.bool.filter[0];
+    expect(ctFilter.terms['metadata.collectionType']).toEqual([1, 3, 4]);
+  });
+
+  it('throws when a collection type is not a number', async () => {
+    await expect(searchWith({ collectionType: '1,x' })).rejects.toThrow('Invalid collectionType "x"');
+  });
+
   // ── Year range ──
+  // On `.years`, which holds only the 4-digit years of the value: the text
+  // field itself also held words like "ca" and "s", which sort after any year.
 
   it('builds range filter for yearFrom + yearTo', async () => {
     const body = await searchWith({ yearFrom: '1990', yearTo: '2000' });
     const userQuery = body.query.bool.must[0];
     const rangeFilter = userQuery.bool.filter[0];
-    expect(rangeFilter.range['metadata.publication.year']).toEqual({ gte: '1990', lte: '2000' });
+    expect(rangeFilter.range['metadata.publication.year.years']).toEqual({ gte: '1990', lte: '2000' });
   });
 
   it('builds range filter for yearFrom only', async () => {
     const body = await searchWith({ yearFrom: '1990' });
     const userQuery = body.query.bool.must[0];
     const rangeFilter = userQuery.bool.filter[0];
-    expect(rangeFilter.range['metadata.publication.year']).toEqual({ gte: '1990' });
+    expect(rangeFilter.range['metadata.publication.year.years']).toEqual({ gte: '1990' });
   });
 
   it('builds range filter for yearTo only', async () => {
     const body = await searchWith({ yearTo: '2000' });
     const userQuery = body.query.bool.must[0];
     const rangeFilter = userQuery.bool.filter[0];
-    expect(rangeFilter.range['metadata.publication.year']).toEqual({ lte: '2000' });
+    expect(rangeFilter.range['metadata.publication.year.years']).toEqual({ lte: '2000' });
   });
 
   it('throws when yearFrom > yearTo', async () => {
     await expect(searchWith({ yearFrom: '2000', yearTo: '1990' })).rejects.toThrow(BadRequestException);
   });
 
+  it('throws when a year is not YYYY', async () => {
+    await expect(searchWith({ yearFrom: '199' })).rejects.toThrow('Invalid yearFrom "199"');
+  });
+
   // ── Exact identifiers ──
 
-  it('builds term filter for isbn with dashes removed', async () => {
+  it('builds term filter for isbn on the normalized sub-field, value as typed', async () => {
+    // The index normalizer strips dashes and spaces on both sides, so the query sends it unchanged
     const body = await searchWith({ isbn: '978-3-16-148410-0' });
     const userQuery = body.query.bool.must[0];
     const isbnFilter = userQuery.bool.filter[0];
-    expect(isbnFilter.term['metadata.isbn']).toBe('9783161484100');
+    expect(isbnFilter.term['metadata.isbn.normalized']).toBe('978-3-16-148410-0');
   });
 
   it('builds term filter for cobissId', async () => {
     const body = await searchWith({ cobissId: '12345' });
     const userQuery = body.query.bool.must[0];
     const cobissFilter = userQuery.bool.filter[0];
-    expect(cobissFilter.term['metadata.cobissId']).toBe('12345');
+    expect(cobissFilter.term['metadata.cobissId.keyword']).toBe('12345');
   });
 
   // ── Full text ──

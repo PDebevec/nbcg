@@ -6,6 +6,7 @@ import type { Principal, VisibilityFilter } from '../../core/auth/principal.type
 import type { SearchQueryDto } from './dto/search-query.dto';
 import type { SuggestQueryDto } from './dto/suggest-query.dto';
 import { SUGGEST_FIELDS } from './suggest-fields';
+import { buildFilterClauses } from './filter-fields';
 import { rankByQuery } from '../../shared/util/text-match';
 import type { SuggestFieldConfig } from './suggest-fields';
 
@@ -101,17 +102,12 @@ const GENERAL_SEARCH_FIELDS = [
   'metadata.notes',
 ];
 
-/** Split a comma-separated query param into trimmed non-empty values. */
-function parseMultiValue(raw: string | undefined): string[] {
-  if (!raw) return [];
-  return raw.split(',').map((v) => v.trim()).filter(Boolean);
-}
-
 // ─── Query builder ───────────────────────────────────────────────────────────
 
 function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
   const must: unknown[] = [];
-  const filter: unknown[] = [];
+  // Exact filters (collectionType, language, years, identifiers, …) — see filter-fields.ts
+  const filter: unknown[] = buildFilterClauses(dto);
 
   // ── q: general search ──
   // All words required (AND). Each word must match in at least one of the
@@ -201,64 +197,6 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
         prefix_length: 1,
       },
     });
-  }
-
-  // ── publisher: exact multi-select (comma-separated) ──
-  const publishers = parseMultiValue(dto.publisher);
-  if (publishers.length) {
-    filter.push({
-      bool: {
-        should: publishers.map((p) => ({
-          match_phrase: { 'metadata.publication.publisher': p },
-        })),
-        minimum_should_match: 1,
-      },
-    });
-  }
-
-  // ── language: exact multi-select ──
-  const languages = parseMultiValue(dto.language);
-  if (languages.length) {
-    filter.push({ terms: { 'metadata.language.en.keyword': languages } });
-  }
-
-  // ── materialType: exact multi-select ──
-  const materialTypes = parseMultiValue(dto.materialType);
-  if (materialTypes.length) {
-    filter.push({ terms: { 'metadata.materialType.en.keyword': materialTypes } });
-  }
-
-  // ── year range ──
-  if (dto.yearFrom || dto.yearTo) {
-    if (dto.yearFrom && dto.yearTo && dto.yearFrom > dto.yearTo) {
-      throw new BadRequestException('yearFrom must not be greater than yearTo');
-    }
-    filter.push({
-      range: {
-        'metadata.publication.year': {
-          ...(dto.yearFrom ? { gte: dto.yearFrom } : {}),
-          ...(dto.yearTo ? { lte: dto.yearTo } : {}),
-        },
-      },
-    });
-  }
-
-  // ── exact identifiers ──
-  if (dto.isbn) {
-    filter.push({ term: { 'metadata.isbn': dto.isbn.replace(/-/g, '') } });
-  }
-
-  if (dto.issn) {
-    filter.push({ term: { 'metadata.issn': dto.issn.replace(/-/g, '') } });
-  }
-
-  if (dto.cobissId) {
-    filter.push({ term: { 'metadata.cobissId': dto.cobissId } });
-  }
-
-  // ── createdBy: exact creator filter (keyword) ──
-  if (dto.createdBy) {
-    filter.push({ term: { createdByUserId: dto.createdBy } });
   }
 
   // ── fullText: nested search in extracted PDF text ──

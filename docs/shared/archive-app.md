@@ -20,7 +20,7 @@ check/edit the metadata in a generated form → create the item → upload scans
 | `POST /api/items`, `PATCH /api/items/:id` | create (with the batch's `parentIds`) / edit; `targetState` DRAFT or RECORD, chosen per batch (default Draft) and changeable per item until the item exists | `expectedVersion` on PATCH (409 on conflict). **Schema v2 B8–B10 (dev since 2026-09-25):** every create and edit is checked against the Draft or Record rules → `400 METADATA_VALIDATION_FAILED` (was `PUBLISH_VALIDATION_FAILED`, Record only); a Draft needs a title and a material type. Create takes `parentIds` and returns each parent's new `version`; an unknown parent → `400 PARENT_NOT_FOUND`. The Draft/Record choice is locked once the item exists (edits are checked against its backend state) |
 | `POST /api/files/upload/:itemId` | scans + `extractedTexts` (filename → OCR text) + `role` | keys of `extractedTexts` must match an uploaded filename or the whole request is a 400 |
 | `POST /api/relations/connect` | re-uploads and taken-over records only: links them to the batch's parents (new items are linked by `parentIds` on create) | returns the parent's new `version`. Since 2026-09-25 (dev) it re-checks each child, and an unknown parent → `400 PARENT_NOT_FOUND` (was 404) |
-| `GET /api/search…` | lookups (parents, …) | |
+| `GET /api/search…` | lookups (parents, …) | **Parent picker** (dev since 2026-09-29): `?q=<typed>&type=all&limit=20&collectionType=<codes>&fields=metadata.title,metadata.collectionType`, `<codes>` = the schema's `vocabularies.collectionType` codes without `0` (`1,3,4` today). Each hit: `id`, `index` (drafts/records), `source.metadata.{title, collectionType}`. All filters: [reference → Search](../backend/reference.md#search). An unknown param is dropped without an error, i.e. no filter at all |
 
 Not used: `/api/tasks` and `POST /api/items/transition` (`transitionItems`
 exists in the app's `items.ts` but nothing calls it). Confirmed 2026-09-25.
@@ -48,3 +48,6 @@ Once real cataloguing starts, go back to strict backwards compatibility
 - [x] Move to metadata schema v2 — [migration guide](plans/metadata-schema-v2-archive-app.md)
       (includes dropping the main/child switch and creating with `parentIds`).
       Done, reported 2026-09-26; v1 removed the same day (backend B7).
+- [ ] Parent picker: collections only, name + type only — the call above
+      ([search filters](plans/search-filters.md)). The backend does not require a
+      parent to be a collection; the filter is the picker's job.

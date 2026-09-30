@@ -425,6 +425,118 @@ assert_status "Multi-select language filter" "200"
 http GET "$API/search?materialType=Book" "$TOKEN_ADMIN"
 assert_status "Material type filter" "200"
 
+# --- 5b: filter registry (filter-fields.ts) — each filter returns the right items ---
+echo -e "\n  ${YELLOW}Filter registry: collectionType, ISBN/ISSN, years...${NC}"
+
+PGSYNC_SCHEMA="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/infrastructure/docker/pgsync/schema.json"
+if [ -f "$PGSYNC_SCHEMA" ]; then
+  if python3 -c "
+import json,sys; d=json.load(open('$PGSYNC_SCHEMA'))
+def ok(n):
+    m=n['nodes']['transform']['mapping']['metadata']['properties']
+    return all(m[k]['fields']['normalized']['normalizer']=='identifier' for k in ('isbn','issn')) \
+        and m['publication']['properties']['year']['fields']['years']['analyzer']=='years'
+sys.exit(0 if all(ok(n) for n in d) else 1)" 2>/dev/null; then
+    echo -e "  ${GREEN}PASS${NC} pgsync maps isbn/issn .normalized and publication.year .years in both indices"
+    ((PASSED++))
+  else
+    echo -e "  ${RED}FAIL${NC} pgsync schema.json lacks the filter sub-fields (reindex after adding them)"
+    ((FAILED++))
+    ERRORS+=("pgsync must map isbn/issn .normalized and publication.year .years")
+  fi
+fi
+
+# Unique per run: the marker isolates the fixtures, the ISBN/ISSN only exist here
+FLT_N=$(date +%s)
+FLT="TFLT$FLT_N"
+FLT_ISBN="978-86-${FLT_N:0:5}-${FLT_N:5:5}-X"
+FLT_ISSN="${FLT_N:0:4}-${FLT_N:4:3}X"
+
+http POST "$API/items" "$TOKEN_EDITOR" "{\"targetState\":\"DRAFT\",\"visibilityStatus\":\"PRIVATE\",\"metadata\":{\"title\":\"TEST-SUITE-FILTER-COLL $FLT\",$DRAFTABLE,\"collectionType\":3,\"isbn\":[\"$FLT_ISBN\"],\"publication\":{\"year\":\"[ca. 1850?]\"}}}"
+assert_status "Create a collection (type 3) with an ISBN and year '[ca. 1850?]'" "201"
+FLT_COLL_ID=$(json_field "['id']")
+CLEANUP_IDS+=("$FLT_COLL_ID")
+
+http POST "$API/items" "$TOKEN_EDITOR" "{\"targetState\":\"DRAFT\",\"visibilityStatus\":\"PRIVATE\",\"metadata\":{\"title\":\"TEST-SUITE-FILTER-SERIAL $FLT\",$DRAFTABLE,\"collectionType\":4,\"publication\":{\"year\":\"1884-1885\"}}}"
+assert_status "Create a serial collection (type 4) with year '1884-1885'" "201"
+FLT_SERIAL_ID=$(json_field "['id']")
+CLEANUP_IDS+=("$FLT_SERIAL_ID")
+
+http POST "$API/items" "$TOKEN_EDITOR" "{\"targetState\":\"DRAFT\",\"visibilityStatus\":\"PRIVATE\",\"metadata\":{\"title\":\"TEST-SUITE-FILTER-ITEM $FLT\",$DRAFTABLE,\"collectionType\":0,\"issn\":[\"$FLT_ISSN\"],\"publication\":{\"year\":\"2026\"}}}"
+assert_status "Create a plain item (type 0) with an ISSN and year 2026" "201"
+FLT_ITEM_ID=$(json_field "['id']")
+CLEANUP_IDS+=("$FLT_ITEM_ID")
+
+http POST "$API/items" "$TOKEN_EDITOR" "{\"targetState\":\"DRAFT\",\"visibilityStatus\":\"PRIVATE\",\"metadata\":{\"title\":\"TEST-SUITE-FILTER-CHILD $FLT\",$DRAFTABLE,\"collectionType\":0},\"parentIds\":[\"$FLT_COLL_ID\"]}"
+assert_status "Create a plain item inside the collection" "201"
+FLT_CHILD_ID=$(json_field "['id']")
+CLEANUP_IDS+=("$FLT_CHILD_ID")
+
+# Wait for pgsync: the child is created last and carries the relation
+for _ in $(seq 1 20); do
+  http GET "$API/search/$FLT_COLL_ID/children" "$TOKEN_ADMIN"
+  if [ "$(json_field "['total']")" = "1" ]; then break; fi
+  sleep 1
+done
+
+# Which of these four items a search returns — anything else in the index is ignored
+FLT_MINE="{'$FLT_COLL_ID','$FLT_SERIAL_ID','$FLT_ITEM_ID','$FLT_CHILD_ID'}"
+flt_search() { http GET "$API/search?type=drafts&limit=100&q=$FLT&$1" "${2-$TOKEN_ADMIN}"; }
+FLT_GOT="{h['id'] for h in d['hits']} & $FLT_MINE"
+
+flt_search "collectionType=1,3,4"
+assert_json_true "collectionType=1,3,4 returns both collections, no plain item" "$FLT_GOT == {'$FLT_COLL_ID','$FLT_SERIAL_ID'}"
+flt_search "collectionType=4"
+assert_json_true "collectionType=4 returns only the serial collection" "$FLT_GOT == {'$FLT_SERIAL_ID'}"
+flt_search "collectionType=0"
+assert_json_true "collectionType=0 returns only the plain items" "$FLT_GOT == {'$FLT_ITEM_ID','$FLT_CHILD_ID'}"
+flt_search "collectionType=abc"
+assert_status "collectionType=abc returns 400 (was silently ignored)" "400"
+assert_json_true "…and names the param and the bad value" "d['message'].startswith('Invalid collectionType') and 'abc' in d['message']"
+
+# The parent picker call: collections only, name + type only
+flt_search "collectionType=1,3,4&fields=metadata.title,metadata.collectionType"
+assert_json_true "Picker call returns only id + metadata.title + metadata.collectionType" \
+  "d['hits'] and all(set(h['source']) == {'id','metadata'} and set(h['source']['metadata']) == {'title','collectionType'} for h in d['hits'])"
+
+# Filters work on the children endpoint too (same query builder)
+http GET "$API/search/$FLT_COLL_ID/children?collectionType=0" "$TOKEN_ADMIN"
+assert_json_true "children?collectionType=0 returns the child" "[h['id'] for h in d['hits']] == ['$FLT_CHILD_ID']"
+http GET "$API/search/$FLT_COLL_ID/children?collectionType=3" "$TOKEN_ADMIN"
+assert_json_true "children?collectionType=3 returns nothing" "d['total'] == 0"
+
+# ISBN/ISSN: stored with dashes; any spelling finds them (the old filter found none)
+flt_search "isbn=$FLT_ISBN"
+assert_json_true "isbn with dashes finds the item" "$FLT_GOT == {'$FLT_COLL_ID'}"
+flt_search "isbn=${FLT_ISBN//-/}"
+assert_json_true "isbn without dashes finds the item" "$FLT_GOT == {'$FLT_COLL_ID'}"
+flt_search "isbn=${FLT_ISBN//-/%20}"
+assert_json_true "isbn with spaces finds the item" "$FLT_GOT == {'$FLT_COLL_ID'}"
+flt_search "issn=$(echo "${FLT_ISSN//-/}" | tr X x)"
+assert_json_true "issn without dash, lowercase x, finds the item" "$FLT_GOT == {'$FLT_ITEM_ID'}"
+
+# Years: only the 4-digit years of the value count ("ca" used to sort after every year)
+flt_search "yearFrom=2000"
+assert_json_true "yearFrom=2000 skips '[ca. 1850?]'" "$FLT_GOT == {'$FLT_ITEM_ID'}"
+flt_search "yearFrom=1840&yearTo=1860"
+assert_json_true "1840–1860 finds '[ca. 1850?]'" "$FLT_GOT == {'$FLT_COLL_ID'}"
+flt_search "yearFrom=1880&yearTo=1890"
+assert_json_true "1880–1890 finds '1884-1885'" "$FLT_GOT == {'$FLT_SERIAL_ID'}"
+flt_search "yearTo=1860"
+assert_json_true "yearTo=1860 finds only '[ca. 1850?]'" "$FLT_GOT == {'$FLT_COLL_ID'}"
+flt_search "yearFrom=185"
+assert_status "yearFrom=185 returns 400 (YYYY)" "400"
+
+# Filters narrow what each persona may see; they never widen it (PRIVATE drafts)
+flt_search "collectionType=1,3,4" ""
+assert_json_true "Anonymous: collectionType filter shows no drafts" "d['total'] == 0"
+flt_search "collectionType=1,3,4" "$TOKEN_READER"
+assert_json_true "Reader: collectionType filter shows no drafts" "d['total'] == 0"
+flt_search "collectionType=1,3,4" "$TOKEN_CATALOGUER"
+assert_json_true "Cataloguer: collectionType filter shows both collections" "$FLT_GOT == {'$FLT_COLL_ID','$FLT_SERIAL_ID'}"
+flt_search "collectionType=1,3,4" "$TOKEN_EDITOR"
+assert_json_true "Editor: collectionType filter shows both collections" "$FLT_GOT == {'$FLT_COLL_ID','$FLT_SERIAL_ID'}"
+
 # Suggest endpoint
 http GET "$API/search/suggest?field=language" "$TOKEN_ADMIN"
 assert_status "Suggest all languages" "200"

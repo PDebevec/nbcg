@@ -45,6 +45,30 @@ curl -XPOST 'localhost:9200/records/_analyze' -H 'Content-Type: application/json
 # -> tokens "niksic" and "nikšić"
 ```
 
+## Filter sub-fields: ISBN/ISSN and years (2026-09-29)
+
+The search filters ([reference → Search](../backend/reference.md#search)) match
+two kinds of sub-field, declared under `metadata` in `transform.mapping`, with
+their analysis in the same `setting` block as above:
+
+| Sub-field | Built by | Holds |
+|---|---|---|
+| `metadata.isbn.normalized`, `metadata.issn.normalized` | `identifier` normalizer: char filter `identifier_separators` (drops whitespace and every dash, `[\s\p{Pd}]`) + `lowercase` | the whole number: `978-9940-34-341-5` → `9789940343415`, `2049–363X` → `2049363x` |
+| `metadata.publication.year.years` | `years` analyzer: pattern tokenizer `four_digit_years`, `(?<!\d)\d{4}(?!\d)` | only the 4-digit years: `1884-1885` → `1884`, `1885`; `[ca. 1850?]` → `1850`; `c1995` → `1995`; `s. a.` → none |
+
+The main fields keep their dynamic shape (`text` + `.keyword`), so search,
+suggest and `fields` projections behave as before. Why: the dynamic `text`
+mapping split `978-9940-34-341-5` into `978`, `9940`, … so an exact ISBN filter
+matched nothing, and a year range compared words as text, so `ca` or `s`
+counted as later than any year. Done on dev with the full reindex above;
+**production: still to do** (same procedure). Check a live index:
+
+```bash
+curl 'localhost:9200/records/_mapping/field/metadata.isbn,metadata.publication.year'
+curl -XPOST 'localhost:9200/records/_analyze' -H 'Content-Type: application/json' \
+  -d '{"field":"metadata.publication.year.years","text":"[ca. 1850?]"}'   # -> "1850"
+```
+
 ## Adding a mapping for a field that does not exist yet — no reindex
 
 A reindex is only needed to **change** a field's mapping. A field that no

@@ -7,8 +7,18 @@
         "filter": {
           "folding": { "type": "asciifolding", "preserve_original": true }
         },
+        "char_filter": {
+          "identifier_separators": { "type": "pattern_replace", "pattern": "[\\s\\p{Pd}]", "replacement": "" }
+        },
+        "normalizer": {
+          "identifier": { "type": "custom", "char_filter": ["identifier_separators"], "filter": ["lowercase"] }
+        },
+        "tokenizer": {
+          "four_digit_years": { "type": "pattern", "pattern": "(?<!\\d)\\d{4}(?!\\d)", "group": 0 }
+        },
         "analyzer": {
-          "default": { "type": "custom", "tokenizer": "standard", "filter": ["lowercase", "folding"] }
+          "default": { "type": "custom", "tokenizer": "standard", "filter": ["lowercase", "folding"] },
+          "years": { "type": "custom", "tokenizer": "four_digit_years" }
         }
       }
     },
@@ -34,7 +44,32 @@
             "type": "object",
             "enabled": true,
             "properties": {
-              "issue": { "properties": { "date": { "type": "keyword" } } }
+              "issue": { "properties": { "date": { "type": "keyword" } } },
+              "isbn": {
+                "type": "text",
+                "fields": {
+                  "keyword": { "type": "keyword", "ignore_above": 256 },
+                  "normalized": { "type": "keyword", "normalizer": "identifier" }
+                }
+              },
+              "issn": {
+                "type": "text",
+                "fields": {
+                  "keyword": { "type": "keyword", "ignore_above": 256 },
+                  "normalized": { "type": "keyword", "normalizer": "identifier" }
+                }
+              },
+              "publication": {
+                "properties": {
+                  "year": {
+                    "type": "text",
+                    "fields": {
+                      "keyword": { "type": "keyword", "ignore_above": 256 },
+                      "years": { "type": "text", "analyzer": "years" }
+                    }
+                  }
+                }
+              }
             }
           },
           "version": { "type": "integer" },
@@ -116,8 +151,18 @@
         "filter": {
           "folding": { "type": "asciifolding", "preserve_original": true }
         },
+        "char_filter": {
+          "identifier_separators": { "type": "pattern_replace", "pattern": "[\\s\\p{Pd}]", "replacement": "" }
+        },
+        "normalizer": {
+          "identifier": { "type": "custom", "char_filter": ["identifier_separators"], "filter": ["lowercase"] }
+        },
+        "tokenizer": {
+          "four_digit_years": { "type": "pattern", "pattern": "(?<!\\d)\\d{4}(?!\\d)", "group": 0 }
+        },
         "analyzer": {
-          "default": { "type": "custom", "tokenizer": "standard", "filter": ["lowercase", "folding"] }
+          "default": { "type": "custom", "tokenizer": "standard", "filter": ["lowercase", "folding"] },
+          "years": { "type": "custom", "tokenizer": "four_digit_years" }
         }
       }
     },
@@ -143,7 +188,32 @@
             "type": "object",
             "enabled": true,
             "properties": {
-              "issue": { "properties": { "date": { "type": "keyword" } } }
+              "issue": { "properties": { "date": { "type": "keyword" } } },
+              "isbn": {
+                "type": "text",
+                "fields": {
+                  "keyword": { "type": "keyword", "ignore_above": 256 },
+                  "normalized": { "type": "keyword", "normalizer": "identifier" }
+                }
+              },
+              "issn": {
+                "type": "text",
+                "fields": {
+                  "keyword": { "type": "keyword", "ignore_above": 256 },
+                  "normalized": { "type": "keyword", "normalizer": "identifier" }
+                }
+              },
+              "publication": {
+                "properties": {
+                  "year": {
+                    "type": "text",
+                    "fields": {
+                      "keyword": { "type": "keyword", "ignore_above": 256 },
+                      "years": { "type": "text", "analyzer": "years" }
+                    }
+                  }
+                }
+              }
             }
           },
           "version": { "type": "integer" },

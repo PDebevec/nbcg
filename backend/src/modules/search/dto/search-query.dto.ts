@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SearchQueryDto {
@@ -41,9 +41,19 @@ export class SearchQueryDto {
   @IsString()
   fullText?: string;
 
-  // ── Multi-select exact filters (comma-separated, filter context) ──
+  // ── Exact filters (filter context — they do not affect scoring) ──
+  // Every param from here to `createdBy` is read by an entry of FILTER_FIELDS
+  // (filter-fields.ts), which also parses and validates its value. Each must be
+  // declared here: the global ValidationPipe strips undeclared params silently.
 
-  /** Publisher — comma-separated exact values */
+  // ── Multi-select exact filters (comma-separated) ──
+
+  /** Collection type codes — `1,3,4` is any collection, `0` not a collection */
+  @IsOptional()
+  @IsString()
+  collectionType?: string;
+
+  /** Publisher — comma-separated, each matched as a phrase */
   @IsOptional()
   @IsString()
   publisher?: string;
@@ -60,22 +70,24 @@ export class SearchQueryDto {
 
   // ── Range filters ──
 
-  /** Publication year start (YYYY) */
+  /** Publication year start (YYYY), inclusive */
   @IsOptional()
-  @Matches(/^\d{4}$/, { message: 'yearFrom must be YYYY' })
+  @IsString()
   yearFrom?: string;
 
-  /** Publication year end (YYYY) */
+  /** Publication year end (YYYY), inclusive */
   @IsOptional()
-  @Matches(/^\d{4}$/, { message: 'yearTo must be YYYY' })
+  @IsString()
   yearTo?: string;
 
   // ── Exact identifiers ──
 
+  /** ISBN — with or without dashes */
   @IsOptional()
   @IsString()
   isbn?: string;
 
+  /** ISSN — with or without dashes */
   @IsOptional()
   @IsString()
   issn?: string;
