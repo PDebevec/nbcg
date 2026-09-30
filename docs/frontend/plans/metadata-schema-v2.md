@@ -1,6 +1,17 @@
 # Frontend: schema-driven metadata editor (schema v2)
 
-## Status: PLANNED (2026-09-23) — every backend phase it needs is on dev (B1–B6 2026-09-24, B8–B12 2026-09-25): ready to start · **F2 is now urgent: v1 was removed 2026-09-26**
+## Status: F1, F2, F4, F5 BUILT 2026-09-30 with the admin redesign (type-check, lint and production build pass; not yet clicked through in a browser) · F3 decided: hand-written form, no generic renderer · F6 open
+
+**What was built (2026-09-30)** — see [overview → Admin area](../overview.md#admin-area):
+`src/api/schema.ts`, `src/stores/schema-store.ts`, `src/utils/schemaRules.ts` (verbatim copy of
+the backend's `evaluate.ts`), `src/composables/useSchemaForm.ts`; the editor reads code lists from
+the v2 vocabularies (inline ones as selects, `language` / `relator` / `contentType` searched),
+shows `extent`, `issue`, `keywords`, `summaryNote` and `collectionType`, evaluates visibility /
+required / captions / units per item, blocks Save for the state being saved to, lists what
+publishing still needs, and shows `METADATA_VALIDATION_FAILED` in `ValidationErrorDialog.vue`.
+**F3**: the user chose (2026-09-30) to keep the hand-written, sectioned form — the schema feeds
+it field states, the layout stays in `src/components/admin/form/fields.ts` and
+`editor/ItemMetadataForm.vue`. A field the backend adds must be added there by hand.
 
 Contract: [shared/plans/metadata-schema-v2.md](../../shared/plans/metadata-schema-v2.md).
 Backend: [backend/plans/metadata-schema-v2.md](../../backend/plans/metadata-schema-v2.md).

@@ -1,6 +1,13 @@
 # Frontend: task workflow v2
 
-## Status: PLANNED (2026-09-23) · backend DONE 2026-09-25 (dev) — ships together with it
+## Status: BUILT 2026-09-30 with the admin redesign (type-check, lint and production build pass; not yet clicked through in a browser) · backend DONE 2026-09-25 (dev) — ships together with it
+
+**Differences from the plan below (2026-09-30):** no stage stepper in the task header (the canvas
+has none); the four actions are separate dialogs in `src/components/admin/tasks/`
+(`CompleteTaskDialog`, `ReturnTaskDialog`, `ReassignTaskDialog`, `CancelTaskDialog`) instead of
+one `MoveTaskDialog`; the inbox opens a task in a pane next to the list (`?task=<id>`). Task
+lists show the task title and the item's type, not the item's title — a task carries only
+`itemId` / `itemType`, and `GET /search/:id` counts an item view, so it is not called per row.
 
 Contract: [shared/plans/task-workflow-v2.md](../../shared/plans/task-workflow-v2.md).
 Backend: [backend/plans/task-workflow-v2.md](../../backend/plans/task-workflow-v2.md).

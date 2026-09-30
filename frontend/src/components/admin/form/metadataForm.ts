@@ -1,8 +1,9 @@
-import type { FieldDescriptor, MetadataPayload } from 'src/api/admin';
+import type { MetadataPayload } from 'src/api/admin';
 import type {
   Author,
   CorporateBody,
   DomainRecord,
+  Issue,
   Publication,
   ResolvedCode,
   Responsibility,
@@ -51,9 +52,17 @@ export interface PublicationForm {
   manufacturerName: string;
 }
 
+export interface IssueForm {
+  volume: string;
+  number: string;
+  date: string;
+}
+
 export interface MetadataForm {
   // Identification
   title: string;
+  /** 0 = not a collection, 1 primary collection, 3 collection, 4 serial collection. */
+  collectionType: number;
   subtitle: string;
   titleMediumDesignation: string;
   titleByAnotherAuthor: string;
@@ -73,8 +82,12 @@ export interface MetadataForm {
   edition: string;
   publicationDate1: string;
   publicationDate2: string;
+  // One issue of a serial collection (shown when a parent is a serial collection)
+  issue: IssueForm;
   // Physical description
   physicalDescription: string;
+  /** The number of the numeric extent; its unit follows the material type (schema rule), so it is not stored here. */
+  extentValue: number | null;
   otherPhysicalDetails: string;
   dimensions: string;
   // Series
@@ -93,7 +106,9 @@ export interface MetadataForm {
   originalLanguage: ResolvedCode[];
   translationLanguages: ResolvedCode[];
   country: ResolvedCode[];
-  // Notes and links
+  // Subject, notes and links
+  keywords: string[];
+  summaryNote: string;
   notes: string[];
   /** Plain URLs; wrapped into `{ url }` objects for the server. */
   electronicLocation: string[];
@@ -123,6 +138,7 @@ export function emptyCorporateBody(): CorporateBodyForm {
 export function emptyForm(): MetadataForm {
   return {
     title: '',
+    collectionType: 0,
     subtitle: '',
     titleMediumDesignation: '',
     titleByAnotherAuthor: '',
@@ -146,7 +162,9 @@ export function emptyForm(): MetadataForm {
     edition: '',
     publicationDate1: '',
     publicationDate2: '',
+    issue: { volume: '', number: '', date: '' },
     physicalDescription: '',
+    extentValue: null,
     otherPhysicalDetails: '',
     dimensions: '',
     seriesTitle: '',
@@ -162,6 +180,8 @@ export function emptyForm(): MetadataForm {
     originalLanguage: [],
     translationLanguages: [],
     country: [],
+    keywords: [],
+    summaryNote: '',
     notes: [],
     electronicLocation: [],
     textualMaterialCodes: {
@@ -200,6 +220,7 @@ export function metadataToForm(metadata: Record<string, unknown>): MetadataForm 
   const form = emptyForm();
 
   form.title = str(m.title);
+  form.collectionType = typeof metadata.collectionType === 'number' ? metadata.collectionType : 0;
   form.subtitle = str(m.subtitle);
   form.titleMediumDesignation = str(m.titleMediumDesignation);
   form.titleByAnotherAuthor = str(m.titleByAnotherAuthor);
@@ -238,7 +259,11 @@ export function metadataToForm(metadata: Record<string, unknown>): MetadataForm 
   form.publicationDate1 = str(m.publicationDate1);
   form.publicationDate2 = str(m.publicationDate2);
 
+  const issue: Issue = m.issue ?? {};
+  form.issue = { volume: str(issue.volume), number: str(issue.number), date: str(issue.date) };
+
   form.physicalDescription = str(m.physicalDescription);
+  form.extentValue = typeof m.extent?.value === 'number' ? m.extent.value : null;
   form.otherPhysicalDetails = str(m.otherPhysicalDetails);
   form.dimensions = str(m.dimensions);
 
@@ -258,6 +283,8 @@ export function metadataToForm(metadata: Record<string, unknown>): MetadataForm 
   form.translationLanguages = codeList(m.translationLanguages);
   form.country = codeList(m.country);
 
+  form.keywords = strList(m.keywords);
+  form.summaryNote = str(m.summaryNote);
   form.notes = strList(m.notes);
   form.electronicLocation = (Array.isArray(m.electronicLocation) ? m.electronicLocation : [])
     .map((e) => str(e?.url))
@@ -332,6 +359,27 @@ function publication(p: PublicationForm): Value {
   return Object.keys(out).length ? out : EMPTY;
 }
 
+function issueOf(i: IssueForm): Value {
+  const out: Issue = {};
+  if (i.volume.trim()) out.volume = i.volume.trim();
+  if (i.number.trim()) out.number = i.number.trim();
+  if (i.date.trim()) out.date = i.date.trim();
+  return Object.keys(out).length ? out : EMPTY;
+}
+
+/**
+ * The numeric extent as stored: `{ value, unit }`. The unit is the one the
+ * schema evaluates for the material type (pages, sheets, minutes); when the
+ * type has none (the field is folded away) the stored unit is kept. Without
+ * any unit there is nothing valid to send.
+ */
+function extentOf(value: number | null, unit: string | null | undefined, stored: unknown): Value {
+  if (value === null || Number.isNaN(value)) return EMPTY;
+  const storedUnit = (stored as { unit?: unknown } | null | undefined)?.unit;
+  const resolved = unit ?? (typeof storedUnit === 'string' ? storedUnit : null);
+  return resolved ? { value, unit: resolved } : EMPTY;
+}
+
 function textualCodes(t: TextualCodesForm): Value {
   const out: TextualMaterialCodes = {};
   if (t.illustrationCodes.length) out.illustrationCodes = t.illustrationCodes.map(cleanCode);
@@ -358,6 +406,8 @@ export function formToMetadata(
   form: MetadataForm,
   base: Record<string, unknown>,
   mode: 'create' | 'update',
+  /** Unit code of the numeric extent for the current material type (from the schema rules). */
+  extentUnit?: string | null,
 ): MetadataPayload {
   const values: Record<keyof DomainRecord, Value> = {
     cobissId: s(form.cobissId),
@@ -387,7 +437,9 @@ export function formToMetadata(
     edition: s(form.edition),
     publicationDate1: s(form.publicationDate1),
     publicationDate2: s(form.publicationDate2),
+    issue: issueOf(form.issue),
     physicalDescription: s(form.physicalDescription),
+    extent: extentOf(form.extentValue, extentUnit, base.extent),
     otherPhysicalDetails: s(form.otherPhysicalDetails),
     dimensions: s(form.dimensions),
     seriesTitle: s(form.seriesTitle),
@@ -402,6 +454,8 @@ export function formToMetadata(
     originalLanguage: codes(form.originalLanguage),
     translationLanguages: codes(form.translationLanguages),
     country: codes(form.country),
+    keywords: list(form.keywords),
+    summaryNote: s(form.summaryNote),
     notes: list(form.notes),
     electronicLocation: (() => {
       const urls = form.electronicLocation.map((u) => u.trim()).filter(Boolean);
@@ -413,7 +467,7 @@ export function formToMetadata(
     musicEditionStatement: s(form.musicEditionStatement),
   };
 
-  const out: Record<string, unknown> = { ...base };
+  const out: Record<string, unknown> = { ...base, collectionType: form.collectionType };
   for (const [key, value] of Object.entries(values)) {
     if (value === EMPTY) {
       if (mode === 'update') out[key] = null;
@@ -430,62 +484,4 @@ export function metadataForDisplay(payload: MetadataPayload): Record<string, unk
   return Object.fromEntries(
     Object.entries(payload).filter(([, v]) => v !== null && v !== undefined),
   );
-}
-
-// ---------------------------------------------------------------------------
-// Code lists from GET /schema/record
-// ---------------------------------------------------------------------------
-
-export interface CodeLists {
-  recordType: ResolvedCode[];
-  bibliographicLevel: ResolvedCode[];
-  materialType: ResolvedCode[];
-  language: ResolvedCode[];
-  country: ResolvedCode[];
-  illustrationCodes: ResolvedCode[];
-  contentTypeCodes: ResolvedCode[];
-  literaryForm: ResolvedCode[];
-  biographyCode: ResolvedCode[];
-  /** Relator codes for `authors[].role`. */
-  role: ResolvedCode[];
-}
-
-export function emptyCodeLists(): CodeLists {
-  return {
-    recordType: [],
-    bibliographicLevel: [],
-    materialType: [],
-    language: [],
-    country: [],
-    illustrationCodes: [],
-    contentTypeCodes: [],
-    literaryForm: [],
-    biographyCode: [],
-    role: [],
-  };
-}
-
-export function codeListsFromSchema(fields: FieldDescriptor[]): CodeLists {
-  const lists = emptyCodeLists();
-  const byKey = new Map(fields.map((f) => [f.key, f]));
-  const values = (f: FieldDescriptor | undefined) => f?.allowedValues ?? [];
-
-  lists.recordType = values(byKey.get('recordType'));
-  lists.bibliographicLevel = values(byKey.get('bibliographicLevel'));
-  lists.materialType = values(byKey.get('materialType'));
-  lists.language = values(byKey.get('language'));
-  lists.country = values(byKey.get('country'));
-
-  const tmc = new Map(
-    (byKey.get('textualMaterialCodes')?.objectShape ?? []).map((f) => [f.key, f]),
-  );
-  lists.illustrationCodes = values(tmc.get('illustrationCodes'));
-  lists.contentTypeCodes = values(tmc.get('contentTypeCodes'));
-  lists.literaryForm = values(tmc.get('literaryForm'));
-  lists.biographyCode = values(tmc.get('biographyCode'));
-
-  const authorShape = new Map((byKey.get('authors')?.objectShape ?? []).map((f) => [f.key, f]));
-  lists.role = values(authorShape.get('role'));
-
-  return lists;
 }

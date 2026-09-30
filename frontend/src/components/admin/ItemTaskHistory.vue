@@ -1,5 +1,12 @@
 <template>
   <div>
+    <div class="row items-center q-gutter-x-md q-mb-md">
+      <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.tasks.history.title') }}</h2>
+      <span class="text-caption adm-muted">{{ t('admin.tasks.history.onePerItem') }}</span>
+      <q-space />
+      <slot name="actions" />
+    </div>
+
     <div v-if="error" class="text-negative q-pa-md">{{ t('admin.tasks.history.loadFailed') }}</div>
 
     <div v-else-if="loading && entries.length === 0" class="q-pa-md">
@@ -8,13 +15,14 @@
 
     <TaskHistoryList v-else :entries="entries" show-task-link />
 
-    <div v-if="entries.length > 0 && entries.length < total" class="text-center q-py-md">
+    <div v-if="entries.length > 0 && entries.length < total" class="text-center q-pt-md">
       <q-btn
         outline
         no-caps
+        dense
         color="primary"
         :loading="loading"
-        :label="t('admin.tasks.history.loadMore')"
+        :label="t('admin.common.loadMore')"
         @click="loadMore"
       />
     </div>

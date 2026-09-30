@@ -1,173 +1,91 @@
 <template>
-  <q-page class="q-pa-lg">
-    <div class="page-body">
-      <div class="row items-center q-mb-md">
-        <q-btn flat dense round icon="arrow_back" color="primary" @click="goBack" />
-        <h1 class="text-h5 text-weight-bold q-my-none q-ml-sm ellipsis">
-          {{ task ? task.title : t('admin.tasks.detail.title') }}
-        </h1>
-        <q-space />
-        <TaskStatusBadge v-if="task" :status="task.status" />
-      </div>
+  <q-page class="adm-page">
+    <AdminPageHeader
+      :eyebrow="t('admin.tasks.title')"
+      back-to="/admin/tasks"
+      :title="task ? task.title : t('admin.tasks.detail.title')"
+    >
+      <template v-if="task" #title-append>
+        <TaskStatusBadge :status="task.status" :returned="task.lastHandoff === 'RETURNED'" />
+      </template>
+      <template v-if="task" #caption>
+        {{ t(`admin.tasks.kinds.${task.kind}`) }} ·
+        {{ t('admin.tasks.detail.filedBy', { date: formatDate(task.createdAt, locale), name: task.createdByName }) }}
+        <template v-if="task.itemType">
+          · {{ t(`admin.tasks.detail.on.${task.itemType}`) }}
+          <router-link :to="`/admin/items/${task.itemId}`" class="item-link">
+            {{ item?.title || t('admin.tasks.openItem') }}
+          </router-link>
+        </template>
+        <template v-else> · {{ t('admin.tasks.itemType.gone') }}</template>
+      </template>
+      <template v-if="task && permissions.open" #actions>
+        <q-btn
+          v-if="permissions.canReturn"
+          outline
+          no-caps
+          color="primary"
+          icon="o_undo"
+          :label="t('admin.tasks.detail.returnAction')"
+          :disable="!task.returnTarget"
+          @click="dialog = 'return'"
+        >
+          <q-tooltip v-if="!task.returnTarget">{{ t('admin.tasks.detail.noReturnTarget') }}</q-tooltip>
+        </q-btn>
+        <q-btn
+          v-if="permissions.canComplete"
+          unelevated
+          no-caps
+          color="positive"
+          :icon="mode === 'handOn' ? 'o_arrow_forward' : mode === 'publish' ? 'o_publish' : 'o_check'"
+          :label="t(`admin.tasks.complete.label.${mode}`)"
+          @click="dialog = 'complete'"
+        />
+      </template>
+    </AdminPageHeader>
 
-      <q-banner v-if="loadError" class="bg-negative text-white q-mb-md" rounded>
-        {{ t('admin.tasks.detail.loadFailed') }}
-      </q-banner>
+    <q-banner v-if="loadError" class="bg-negative text-white" rounded>
+      {{ t('admin.tasks.detail.loadFailed') }}
+    </q-banner>
 
-      <div v-else-if="loading && !task" class="q-pa-md">
-        <q-skeleton v-for="i in 4" :key="i" type="text" class="q-mb-md" />
-      </div>
+    <div v-else-if="loading && !task">
+      <q-skeleton v-for="i in 4" :key="i" type="text" class="q-mb-md" />
+    </div>
 
-      <template v-else-if="task">
-        <!-- Summary -->
-        <q-card flat bordered class="task-card q-mb-md">
-          <q-card-section>
-            <div class="row q-col-gutter-md">
-              <div class="col-6 col-md-3">
-                <div class="field-label">{{ t('admin.tasks.fields.kind') }}</div>
-                <div>{{ t(`admin.tasks.kinds.${task.kind}`) }}</div>
-              </div>
-              <div class="col-6 col-md-3">
-                <div class="field-label">{{ t('admin.tasks.detail.assignedTo') }}</div>
-                <div>{{ task.assignedToName }}</div>
-              </div>
-              <div class="col-6 col-md-3">
-                <div class="field-label">{{ t('admin.tasks.detail.createdBy') }}</div>
-                <div>{{ task.createdByName }}</div>
-              </div>
-              <div class="col-6 col-md-3">
-                <div class="field-label">{{ t('admin.tasks.detail.item') }}</div>
-                <router-link
-                  v-if="task.itemType"
-                  :to="`/admin/items/${task.itemId}`"
-                  class="item-link"
-                >
-                  {{ t(`admin.tasks.itemType.${task.itemType}`) }}
-                  <q-icon name="open_in_new" size="14px" />
-                </router-link>
-                <span v-else class="text-library-muted">{{ t('admin.tasks.itemType.gone') }}</span>
-              </div>
-              <div class="col-6 col-md-3">
-                <div class="field-label">{{ t('admin.tasks.detail.created') }}</div>
-                <div>{{ new Date(task.createdAt).toLocaleString() }}</div>
-              </div>
-              <div v-if="task.completedAt" class="col-6 col-md-3">
-                <div class="field-label">{{ t('admin.tasks.detail.completed') }}</div>
-                <div>{{ new Date(task.completedAt).toLocaleString() }}</div>
-              </div>
-              <div v-if="task.dueAt" class="col-6 col-md-3">
-                <div class="field-label">{{ t('admin.tasks.fields.dueAt') }}</div>
-                <div>{{ new Date(task.dueAt).toLocaleDateString() }}</div>
-              </div>
-            </div>
-
-            <div v-if="task.description" class="q-mt-md">
-              <div class="field-label">{{ t('admin.tasks.detail.description') }}</div>
-              <div class="description">{{ task.description }}</div>
-            </div>
-          </q-card-section>
-
-          <q-separator v-if="isCancelled || showPublishHint || canAct" />
-
-          <q-card-section v-if="isCancelled" class="text-library-muted">
-            <q-icon name="block" class="q-mr-xs" />
-            {{ t('admin.tasks.detail.cancelledHint') }}
-          </q-card-section>
-
-          <q-card-section v-else-if="canAct" class="row items-center q-gutter-sm">
-            <template v-if="task.status === 'OPEN'">
-              <q-btn
-                outline
-                no-caps
-                color="primary"
-                icon="play_arrow"
-                :label="t('admin.tasks.detail.start')"
-                :loading="acting"
-                @click="setStatus('IN_PROGRESS')"
-              />
-            </template>
-
-            <template v-if="isActive">
-              <q-btn
-                v-if="task.status !== 'RETURNED'"
-                outline
-                no-caps
-                color="warning"
-                icon="undo"
-                :label="t('admin.tasks.detail.returnAction')"
-                @click="openMove('return')"
-              />
-              <q-btn
-                v-else
-                outline
-                no-caps
-                color="primary"
-                icon="redo"
-                :label="t('admin.tasks.detail.sendBack')"
-                @click="openMove('sendBack')"
-              />
-              <q-btn
-                outline
-                no-caps
-                color="primary"
-                icon="person"
-                :label="t('admin.tasks.detail.reassign')"
-                @click="openMove('reassign')"
-              />
-              <q-btn
-                unelevated
-                no-caps
-                color="positive"
-                icon="check"
-                :label="t('admin.tasks.detail.complete')"
-                :loading="acting"
-                @click="setStatus('COMPLETED')"
-              />
-              <q-btn
-                flat
-                no-caps
-                color="negative"
-                icon="block"
-                :label="t('admin.tasks.detail.cancel')"
-                :loading="acting"
-                @click="cancelTask"
-              />
-            </template>
-
-            <template v-if="task.status === 'COMPLETED'">
-              <q-btn
-                outline
-                no-caps
-                color="primary"
-                icon="replay"
-                :label="t('admin.tasks.detail.reopen')"
-                @click="openMove('reopen')"
-              />
-            </template>
-
-            <q-space />
-            <span v-if="showPublishHint" class="text-caption text-library-muted">
-              <q-icon name="info_outline" class="q-mr-xs" />
-              {{ t('admin.tasks.detail.publishHint') }}
+    <div v-else-if="task" class="task-grid">
+      <div class="column q-gutter-y-md">
+        <!-- It came back: the reason is the first thing to read -->
+        <div v-if="returned" class="adm-note adm-note--warning" role="note">
+          <q-icon name="o_undo" />
+          <div class="column">
+            <span class="text-weight-bold">
+              {{
+                t('admin.tasks.detail.returnedBy', {
+                  name: returned.userName,
+                  when: formatDateTime(returned.createdAt, locale),
+                })
+              }}
             </span>
-          </q-card-section>
+            <span class="pre-wrap">{{ returned.note }}</span>
+          </div>
+        </div>
 
-          <q-card-section v-else-if="showPublishHint" class="text-caption text-library-muted">
-            <q-icon name="info_outline" class="q-mr-xs" />
-            {{ t('admin.tasks.detail.publishHint') }}
-          </q-card-section>
+        <q-card v-if="task.description" flat bordered>
+          <div class="adm-card__body column q-gutter-y-sm">
+            <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.tasks.detail.description') }}</h2>
+            <p class="q-ma-none pre-wrap">{{ task.description }}</p>
+          </div>
         </q-card>
 
         <!-- Activity: one stream, comments and events interleaved -->
-        <q-card flat bordered class="task-card">
-          <q-card-section class="text-subtitle1 text-weight-bold q-pb-none">
-            {{ t('admin.tasks.detail.activity') }}
-          </q-card-section>
-          <q-card-section class="q-pt-sm">
+        <q-card flat bordered>
+          <div class="activity-head">
+            <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.tasks.detail.activity') }}</h2>
+          </div>
+          <div class="activity-body">
             <TaskHistoryList :entries="task.history" :known-names="knownNames" />
-          </q-card-section>
-          <q-separator />
-          <q-card-section class="row items-end q-gutter-sm">
+          </div>
+          <div class="comment-box">
             <q-input
               v-model="commentText"
               outlined
@@ -176,70 +94,106 @@
               type="textarea"
               class="col"
               :placeholder="t('admin.tasks.detail.commentPlaceholder')"
+              :aria-label="t('admin.tasks.detail.commentPlaceholder')"
               @keydown.ctrl.enter.prevent="sendComment"
             />
             <q-btn
               unelevated
               no-caps
               color="primary"
-              icon="send"
+              icon="o_send"
               :label="t('admin.tasks.detail.send')"
               :loading="commenting"
               :disable="!commentText.trim()"
               @click="sendComment"
             />
-          </q-card-section>
+          </div>
         </q-card>
-      </template>
+      </div>
+
+      <aside class="column q-gutter-y-md">
+        <q-card flat bordered>
+          <div class="adm-card__body column q-gutter-y-md">
+            <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.tasks.detail.details') }}</h2>
+            <dl class="details">
+              <dt>{{ t('admin.tasks.columns.status') }}</dt>
+              <dd>
+                <TaskStatusBadge :status="task.status" :returned="task.lastHandoff === 'RETURNED'" dense />
+              </dd>
+              <template v-if="returned">
+                <dt>{{ t('admin.tasks.detail.lastStep') }}</dt>
+                <dd>{{ t('admin.tasks.detail.returnedByShort', { name: returned.userName }) }}</dd>
+              </template>
+              <dt>{{ t('admin.tasks.columns.kind') }}</dt>
+              <dd class="text-weight-medium">{{ t(`admin.tasks.kinds.${task.kind}`) }}</dd>
+              <dt>{{ t('admin.tasks.detail.assignedTo') }}</dt>
+              <dd>
+                <UserAvatar :name="task.assignedToName" :size="24" />
+                <span>{{ task.assignedToName }}</span>
+              </dd>
+              <dt>{{ t('admin.tasks.detail.createdBy') }}</dt>
+              <dd>
+                <UserAvatar :name="task.createdByName" :size="24" />
+                <span>{{ task.createdByName }}</span>
+              </dd>
+              <dt>{{ t('admin.tasks.detail.item') }}</dt>
+              <dd>
+                <router-link v-if="task.itemType" :to="`/admin/items/${task.itemId}`" class="adm-link">
+                  {{ t(`admin.itemType.${task.itemType}`) }}
+                  <q-icon name="o_open_in_new" size="14px" />
+                </router-link>
+                <span v-else class="adm-muted">{{ t('admin.tasks.itemType.gone') }}</span>
+              </dd>
+              <dt>{{ t('admin.tasks.detail.created') }}</dt>
+              <dd>{{ formatDateTime(task.createdAt, locale) }}</dd>
+              <dt>{{ t('admin.tasks.columns.updated') }}</dt>
+              <dd>{{ formatDateTime(task.updatedAt, locale) }}</dd>
+              <template v-if="task.completedAt">
+                <dt>{{ t('admin.tasks.detail.completed') }}</dt>
+                <dd>{{ formatDateTime(task.completedAt, locale) }}</dd>
+              </template>
+              <template v-if="task.dueAt">
+                <dt>{{ t('admin.tasks.fields.dueAt') }}</dt>
+                <dd>{{ formatDate(task.dueAt, locale) }}</dd>
+              </template>
+            </dl>
+          </div>
+        </q-card>
+
+        <q-card v-if="permissions.canManage" flat bordered>
+          <div class="adm-card__body column q-gutter-y-sm">
+            <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.tasks.detail.moreActions') }}</h2>
+            <q-btn
+              outline
+              no-caps
+              color="primary"
+              icon="o_swap_horiz"
+              :label="t('admin.tasks.detail.reassign')"
+              @click="dialog = 'reassign'"
+            />
+            <q-btn
+              flat
+              no-caps
+              color="negative"
+              icon="o_block"
+              :label="t('admin.tasks.detail.cancel')"
+              @click="dialog = 'cancel'"
+            />
+            <div class="more-note">
+              <q-icon name="o_info" size="16px" />
+              <span>{{ t('admin.tasks.detail.cancelNote') }}</span>
+            </div>
+          </div>
+        </q-card>
+
+        <div v-else-if="!permissions.open" class="adm-note">
+          <q-icon :name="task.status === 'CANCELLED' ? 'o_block' : 'o_check_circle'" />
+          <span>{{ t(`admin.tasks.detail.closedHint.${task.status}`) }}</span>
+        </div>
+      </aside>
     </div>
 
-    <!-- Return / reassign / send back / reopen: every move of the assignee,
-         with or without a status change, in ONE request. Returning without a
-         new assignee, or reassigning to someone the (kind, status) rule
-         rejects, is a 400 the server explains — surfaced verbatim. -->
-    <q-dialog v-model="moveOpen">
-      <q-card v-if="task && move" class="move-card">
-        <q-card-section class="row items-center">
-          <div class="text-h6">{{ moveTitle }}</div>
-          <q-space />
-          <q-btn v-close-popup flat round dense icon="close" />
-        </q-card-section>
-        <q-card-section class="q-gutter-md">
-          <div v-if="move.mode === 'return'" class="text-body2 text-library-muted">
-            {{ t('admin.tasks.detail.returnDialog.hint') }}
-          </div>
-          <AssigneePicker
-            v-model="moveAssignee"
-            :kind="task.kind"
-            :status="move.targetStatus"
-            :exclude-user-id="move.mode === 'return' ? task.assignedToUserId : undefined"
-            :error="moveSubmitted && !moveAssignee"
-            :error-message="t('admin.tasks.create.assigneeRequired')"
-          />
-          <q-input
-            v-model="moveNote"
-            outlined
-            type="textarea"
-            autogrow
-            maxlength="5000"
-            :label="t('admin.tasks.detail.returnDialog.note')"
-            :error="move.mode === 'return' && moveSubmitted && !moveNote.trim()"
-            :error-message="t('admin.tasks.detail.returnDialog.noteRequired')"
-          />
-        </q-card-section>
-        <q-card-actions align="right" class="q-pa-md">
-          <q-btn v-close-popup flat no-caps :label="t('admin.items.cancel')" />
-          <q-btn
-            unelevated
-            no-caps
-            color="primary"
-            :label="moveSubmitLabel"
-            :loading="acting"
-            @click="submitMove"
-          />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
+    <TaskActionDialogs v-if="task" v-model:dialog="dialog" :task="task" :item="item" @done="onActionDone" />
   </q-page>
 </template>
 
@@ -247,59 +201,47 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useQuasar } from 'quasar';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { auth } from 'src/services/keycloak';
 import { useAuthz } from 'src/composables/useAuthz';
-import type { PickedUser } from 'src/api/users';
-import {
-  ACTIVE_TASK_STATUSES,
-  addTaskComment,
-  apiErrorMessage,
-  getTask,
-  patchTask,
-  type PatchTaskParams,
-  type TaskDetail,
-  type TaskStatus,
-} from 'src/api/tasks';
-import TaskStatusBadge from 'src/components/admin/TaskStatusBadge.vue';
+import { useItemSummary } from 'src/composables/useItemSummary';
+import { apiErrorMessage } from 'src/api/errors';
+import { addTaskComment, getTask, type TaskDetail } from 'src/api/tasks';
+import { useTaskCountStore } from 'src/stores/task-count-store';
+import { formatDate, formatDateTime } from 'src/utils/adminFormat';
+import { completeMode, returnNote, taskPermissions } from 'src/utils/taskRules';
+import AdminPageHeader from 'src/components/admin/AdminPageHeader.vue';
 import TaskHistoryList from 'src/components/admin/TaskHistoryList.vue';
-import AssigneePicker from 'src/components/admin/AssigneePicker.vue';
+import TaskStatusBadge from 'src/components/admin/TaskStatusBadge.vue';
+import UserAvatar from 'src/components/admin/UserAvatar.vue';
+import TaskActionDialogs from 'src/components/admin/tasks/TaskActionDialogs.vue';
+import type { TaskDialog } from 'src/components/admin/tasks/types';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const $q = useQuasar();
 const route = useRoute();
-const router = useRouter();
 const { canManageRecords } = useAuthz();
+const taskCount = useTaskCountStore();
 
 const taskId = computed(() => route.params.id as string);
 
 const task = ref<TaskDetail | null>(null);
 const loading = ref(true);
 const loadError = ref(false);
-const acting = ref(false);
+const dialog = ref<TaskDialog | null>(null);
+
+// The item's title for the header — one read for this one task.
+const { item, reload: reloadItem } = useItemSummary(computed(() => task.value?.itemId));
 
 // ── Derived state ──
 
-const isCancelled = computed(() => task.value?.status === 'CANCELLED');
-const isActive = computed(() => !!task.value && ACTIVE_TASK_STATUSES.includes(task.value.status));
-const showPublishHint = computed(
-  () => !!task.value && task.value.kind === 'REVIEW_PUBLISH' && isActive.value,
-);
-
-// Mirrors the backend rule for PATCH: assignee, creator, or records:manage.
-// UI shaping only — the API's 403 is the authority.
-const canAct = computed(() => {
-  if (!task.value) return false;
-  const me = auth.userId;
-  return (
-    canManageRecords.value ||
-    (!!me && (task.value.assignedToUserId === me || task.value.createdByUserId === me))
-  );
-});
+const permissions = computed(() => taskPermissions(task.value, auth.userId, canManageRecords.value));
+const mode = computed(() => (task.value ? completeMode(task.value) : 'general'));
+const returned = computed(() => (task.value ? returnNote(task.value, task.value.history) : undefined));
 
 /**
- * Seed for the raw ids in `changes[]`: the task's live names plus the
- * requester. Anything else the history list resolves on its own.
+ * Seed for the raw ids in `changes[]`: the task's live names plus the return
+ * target. Anything else the history list resolves on its own.
  */
 const knownNames = computed<Record<string, string>>(() => {
   if (!task.value) return {};
@@ -307,7 +249,8 @@ const knownNames = computed<Record<string, string>>(() => {
     [task.value.assignedToUserId]: task.value.assignedToName,
     [task.value.createdByUserId]: task.value.createdByName,
   };
-  if (task.value.returnTo) names[task.value.returnTo.userId] = task.value.returnTo.displayName;
+  const target = task.value.returnTarget;
+  if (target) names[target.userId] = target.displayName;
   return names;
 });
 
@@ -328,136 +271,12 @@ async function load() {
 onMounted(() => void load());
 watch(taskId, () => void load());
 
-function goBack() {
-  if (window.history.length > 1) router.back();
-  else void router.push('/admin/tasks');
-}
-
-function notifyError(err: unknown, fallback: string) {
-  $q.notify({ type: 'negative', message: apiErrorMessage(err) ?? fallback });
-}
-
-// ── Simple status changes ──
-
-async function applyPatch(params: PatchTaskParams, successMsg: string) {
-  acting.value = true;
-  try {
-    await patchTask(taskId.value, params);
-    $q.notify({ type: 'positive', message: successMsg });
-    await load();
-    return true;
-  } catch (err) {
-    notifyError(err, t('admin.tasks.detail.actionFailed'));
-    return false;
-  } finally {
-    acting.value = false;
-  }
-}
-
-function setStatus(status: TaskStatus) {
-  void applyPatch({ status }, t('admin.tasks.detail.statusUpdated'));
-}
-
-function cancelTask() {
-  $q.dialog({
-    title: t('admin.items.confirmTitle'),
-    message: t('admin.tasks.detail.cancelConfirm'),
-    cancel: { flat: true, noCaps: true, label: t('admin.items.cancel') },
-    ok: { unelevated: true, noCaps: true, color: 'negative', label: t('admin.items.confirm') },
-  }).onOk(() => setStatus('CANCELLED'));
-}
-
-// ── Moves: return / reassign / send back / reopen ──
-
-type MoveMode = 'return' | 'reassign' | 'sendBack' | 'reopen';
-
-interface Move {
-  mode: MoveMode;
-  /** The status the task lands in — what the picker derives its capability from. */
-  targetStatus: TaskStatus;
-}
-
-const move = ref<Move | null>(null);
-const moveOpen = ref(false);
-const moveAssignee = ref<PickedUser | null>(null);
-const moveNote = ref('');
-const moveSubmitted = ref(false);
-
-function openMove(mode: MoveMode) {
-  if (!task.value) return;
-  switch (mode) {
-    case 'return':
-      move.value = { mode, targetStatus: 'RETURNED' };
-      // The requester, already accounting for whether they left or hold the
-      // task themselves. Can be null — then an empty picker, not an error.
-      moveAssignee.value = task.value.returnTo;
-      break;
-    case 'sendBack':
-      move.value = { mode, targetStatus: 'OPEN' };
-      moveAssignee.value = null;
-      break;
-    case 'reopen':
-      move.value = { mode, targetStatus: 'OPEN' };
-      moveAssignee.value = {
-        userId: task.value.assignedToUserId,
-        displayName: task.value.assignedToName,
-      };
-      break;
-    case 'reassign':
-    default:
-      move.value = { mode: 'reassign', targetStatus: task.value.status };
-      moveAssignee.value = null;
-      break;
-  }
-  moveNote.value = '';
-  moveSubmitted.value = false;
-  moveOpen.value = true;
-}
-
-const moveTitle = computed(() => {
-  switch (move.value?.mode) {
-    case 'return':
-      return t('admin.tasks.detail.returnDialog.title');
-    case 'sendBack':
-      return t('admin.tasks.detail.sendBack');
-    case 'reopen':
-      return t('admin.tasks.detail.reopen');
-    default:
-      return t('admin.tasks.detail.reassignDialog.title');
-  }
-});
-
-const moveSubmitLabel = computed(() => {
-  switch (move.value?.mode) {
-    case 'return':
-      return t('admin.tasks.detail.returnDialog.submit');
-    case 'sendBack':
-      return t('admin.tasks.detail.sendBack');
-    case 'reopen':
-      return t('admin.tasks.detail.reopen');
-    default:
-      return t('admin.tasks.detail.reassignDialog.submit');
-  }
-});
-
-async function submitMove() {
-  if (!task.value || !move.value) return;
-  moveSubmitted.value = true;
-  const note = moveNote.value.trim();
-  if (!moveAssignee.value) return;
-  if (move.value.mode === 'return' && !note) return;
-
-  // Status and assignee travel together — the server rejects RETURNED alone.
-  const params: PatchTaskParams = { assignedToUserId: moveAssignee.value.userId };
-  if (move.value.targetStatus !== task.value.status) params.status = move.value.targetStatus;
-  if (note) params.note = note;
-
-  const successMsg =
-    move.value.mode === 'return'
-      ? t('admin.tasks.detail.returnDialog.done', { name: moveAssignee.value.displayName })
-      : t('admin.tasks.detail.reassignDialog.done', { name: moveAssignee.value.displayName });
-
-  if (await applyPatch(params, successMsg)) moveOpen.value = false;
+// The action answers carry no history and no return target: reload. A publish
+// moved the item to the records, so its summary is reloaded as well.
+function onActionDone() {
+  void load();
+  void reloadItem();
+  void taskCount.refresh();
 }
 
 // ── Comments ──
@@ -475,7 +294,10 @@ async function sendComment() {
     task.value.history.push(entry);
     commentText.value = '';
   } catch (err) {
-    notifyError(err, t('admin.tasks.detail.commentFailed'));
+    $q.notify({
+      type: 'negative',
+      message: apiErrorMessage(err) ?? t('admin.tasks.detail.commentFailed'),
+    });
   } finally {
     commenting.value = false;
   }
@@ -483,32 +305,67 @@ async function sendComment() {
 </script>
 
 <style scoped lang="sass">
-.page-body
-  max-width: 960px
-  margin: 0 auto
-
-.task-card
-  background: $surface
-  border-radius: $radius
-
-.field-label
-  font-size: 12px
-  font-weight: 600
-  color: $muted
-  margin-bottom: 2px
-
-.description
-  white-space: pre-wrap
-  overflow-wrap: anywhere
+.task-grid
+  display: grid
+  grid-template-columns: minmax(0, 1fr) 320px
+  gap: 24px
+  align-items: start
 
 .item-link
   color: $primary
-  text-decoration: none
   font-weight: 600
+  text-decoration: none
   &:hover
     text-decoration: underline
 
-.move-card
-  width: 560px
-  max-width: 95vw
+.pre-wrap
+  white-space: pre-wrap
+  overflow-wrap: anywhere
+  line-height: 1.55
+
+.activity-head
+  padding: 16px 20px 0
+
+.activity-body
+  padding: 16px 20px 0
+
+.comment-box
+  display: flex
+  align-items: flex-end
+  gap: 10px
+  padding: 16px 20px 20px
+  margin-top: 8px
+  border-top: 1px solid $divider-soft
+
+.details
+  margin: 0
+  display: grid
+  grid-template-columns: 96px minmax(0, 1fr)
+  row-gap: 12px
+  column-gap: 12px
+  align-items: center
+  font-size: 13px
+  dt
+    color: $muted
+
+  dd
+    margin: 0
+    display: flex
+    align-items: center
+    gap: 8px
+    min-width: 0
+
+.more-note
+  display: flex
+  gap: 8px
+  padding-top: 10px
+  margin-top: 4px
+  border-top: 1px solid $divider-soft
+  font-size: 12px
+  line-height: 1.45
+  color: $muted
+
+@media (max-width: 1100px)
+  .task-grid
+    grid-template-columns: minmax(0, 1fr)
 </style>

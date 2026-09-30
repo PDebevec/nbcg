@@ -3,13 +3,19 @@
     :model-value="modelValue"
     :options="filtered"
     :option-label="codeLabel"
+    option-value="code"
     outlined
+    dense
+    options-dense
     multiple
     use-chips
     use-input
     input-debounce="0"
+    hide-bottom-space
     :label="label"
     :hint="hint"
+    :for="forId"
+    :readonly="readonly"
     @filter="onFilter"
     @update:model-value="emit('update:modelValue', $event ?? [])"
   >
@@ -20,13 +26,15 @@
         </q-item-section>
         <q-item-section>
           <q-item-label>{{ codeLabel(opt) }}</q-item-label>
-          <q-item-label caption>{{ opt.code }}</q-item-label>
+        </q-item-section>
+        <q-item-section side>
+          <span class="adm-mono">{{ opt.code }}</span>
         </q-item-section>
       </q-item>
     </template>
     <template #no-option>
       <q-item>
-        <q-item-section class="text-library-muted">{{ t('admin.edit.noMatch') }}</q-item-section>
+        <q-item-section class="adm-muted">{{ t('admin.common.noMatch') }}</q-item-section>
       </q-item>
     </template>
   </q-select>
@@ -39,13 +47,15 @@ import type { ResolvedCode } from 'src/api/search';
 import { useCodeLabel } from 'src/composables/useCodeLabel';
 import { filterCodes } from './filterCodes';
 
-// Multi-value ResolvedCode picker (languages, countries, illustration codes).
+// Multi-value ResolvedCode picker over an inlined code list (countries, illustration codes).
 
 const props = defineProps<{
   modelValue: ResolvedCode[];
   options: ResolvedCode[];
-  label: string;
+  label?: string | undefined;
   hint?: string | undefined;
+  forId?: string | undefined;
+  readonly?: boolean | undefined;
 }>();
 
 const emit = defineEmits<{ (e: 'update:modelValue', value: ResolvedCode[]): void }>();

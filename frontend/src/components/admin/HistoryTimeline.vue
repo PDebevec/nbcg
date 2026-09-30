@@ -6,50 +6,46 @@
       <q-skeleton v-for="i in 4" :key="i" type="text" class="q-mb-md" />
     </div>
 
-    <div v-else-if="revisions.length === 0" class="text-library-muted q-pa-md text-center">
-      {{ t('admin.history.empty') }}
-    </div>
+    <div v-else-if="revisions.length === 0" class="adm-empty">{{ t('admin.history.empty') }}</div>
 
     <!-- Keyed on revision id — two revisions can share a version, never key on it -->
-    <q-list v-else separator>
-      <q-item v-for="revision in revisions" :key="revision.id" class="q-py-md">
-        <q-item-section avatar top>
-          <q-icon
-            :name="actionMeta(revision.action).icon"
-            :color="actionMeta(revision.action).color"
-            size="22px"
-          />
-        </q-item-section>
-        <q-item-section>
-          <q-item-label>
+    <template v-else>
+      <div v-for="(revision, index) in revisions" :key="revision.id" class="event">
+        <div class="event__rail">
+          <q-avatar size="28px" :class="`event__icon event__icon--${actionMeta(revision.action).tone}`">
+            <q-icon :name="actionMeta(revision.action).icon" size="14px" />
+          </q-avatar>
+          <div v-if="index < revisions.length - 1" class="event__line" />
+        </div>
+        <div class="event__body">
+          <div class="event__head">
             <span class="text-weight-bold">{{ t(`admin.history.actions.${revision.action}`) }}</span>
-            <span class="text-library-muted"> · {{ revision.userName || revision.userId }}</span>
-          </q-item-label>
-          <q-item-label caption>
-            {{ new Date(revision.createdAt).toLocaleString() }}
-          </q-item-label>
-
-          <div v-if="revision.changes?.length" class="changes q-mt-sm">
-            <div v-for="(change, ci) in revision.changes" :key="ci" class="change-row">
-              <div class="change-field">{{ pathLabel(change.path) }}</div>
-              <div class="change-values">
-                <ChangeValue :value="change.before" />
-                <q-icon name="arrow_forward" size="14px" class="text-library-muted" />
-                <ChangeValue :value="change.after" />
-              </div>
-            </div>
+            <span class="adm-muted">{{ t('admin.items.by', { name: revision.userName || revision.userId }) }}</span>
+            <span class="event__time">{{ formatDateTime(revision.createdAt, locale) }}</span>
           </div>
-        </q-item-section>
-      </q-item>
-    </q-list>
 
-    <div v-if="revisions.length > 0 && revisions.length < total" class="text-center q-py-md">
+          <div v-if="revision.changes?.length" class="event__changes">
+            <template v-for="(change, ci) in revision.changes" :key="ci">
+              <span class="event__field">{{ pathLabel(change.path) }}</span>
+              <span class="event__values">
+                <ChangeValue :value="change.before" before />
+                <span class="event__arrow">→</span>
+                <ChangeValue :value="change.after" />
+              </span>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <div v-if="revisions.length > 0 && revisions.length < total" class="event-more">
       <q-btn
         outline
         no-caps
+        dense
         color="primary"
         :loading="loading"
-        :label="t('admin.history.loadMore')"
+        :label="t('admin.common.loadMore')"
         @click="loadMore"
       />
     </div>
@@ -60,11 +56,14 @@
 import { h, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { getItemHistory, type ChangeAction, type ItemRevision } from 'src/api/admin';
+import { formatDateTime } from 'src/utils/adminFormat';
+
+// The revision timeline of one item: who changed what, newest first, paged.
 
 const props = defineProps<{ itemId: string }>();
 
 const i18n = useI18n();
-const { t } = i18n;
+const { t, locale } = i18n;
 
 const PAGE_SIZE = 50;
 
@@ -91,6 +90,13 @@ function loadMore() {
   void load(revisions.value.length);
 }
 
+/** Reload from the top — after a save, a publish or a file change on the same page. */
+function refresh() {
+  void load(0);
+}
+
+defineExpose({ refresh });
+
 onMounted(() => void load(0));
 watch(
   () => props.itemId,
@@ -103,21 +109,23 @@ watch(
 
 // ── Presentation ──
 
-const ACTION_META: Record<ChangeAction, { icon: string; color: string }> = {
-  CREATE: { icon: 'add_circle', color: 'positive' },
-  UPDATE: { icon: 'edit', color: 'primary' },
-  PUBLISH: { icon: 'publish', color: 'positive' },
-  UNPUBLISH: { icon: 'unpublished', color: 'warning' },
-  VISIBILITY_CHANGE: { icon: 'visibility', color: 'info' },
-  FILE_ADDED: { icon: 'upload_file', color: 'primary' },
-  FILE_REMOVED: { icon: 'file_download_off', color: 'negative' },
-  RELATION_ADDED: { icon: 'add_link', color: 'primary' },
-  RELATION_REMOVED: { icon: 'link_off', color: 'negative' },
-  DELETE: { icon: 'delete_forever', color: 'negative' },
+type Tone = 'positive' | 'warning' | 'primary' | 'negative';
+
+const ACTION_META: Record<ChangeAction, { icon: string; tone: Tone }> = {
+  CREATE: { icon: 'o_add', tone: 'positive' },
+  UPDATE: { icon: 'o_edit', tone: 'primary' },
+  PUBLISH: { icon: 'o_publish', tone: 'positive' },
+  UNPUBLISH: { icon: 'o_unpublished', tone: 'warning' },
+  VISIBILITY_CHANGE: { icon: 'o_visibility', tone: 'primary' },
+  FILE_ADDED: { icon: 'o_attach_file', tone: 'primary' },
+  FILE_REMOVED: { icon: 'o_delete', tone: 'negative' },
+  RELATION_ADDED: { icon: 'o_add_link', tone: 'primary' },
+  RELATION_REMOVED: { icon: 'o_link_off', tone: 'negative' },
+  DELETE: { icon: 'o_delete_forever', tone: 'negative' },
 };
 
 function actionMeta(action: ChangeAction) {
-  return ACTION_META[action] ?? { icon: 'help_outline', color: 'grey' };
+  return ACTION_META[action] ?? { icon: 'o_help_outline', tone: 'primary' as Tone };
 }
 
 /**
@@ -146,41 +154,116 @@ function pathLabel(path: string): string {
  * nested object when a subtree changed at once. Objects render as pretty JSON;
  * absence renders as a muted em dash, never as the string "null".
  */
-const ChangeValue = (valueProps: { value: unknown }) => {
+const ChangeValue = (valueProps: { value: unknown; before?: boolean }) => {
   const value = valueProps.value;
   if (value === null || value === undefined || value === '') {
     return h('span', { class: 'value-empty' }, '—');
   }
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return h('span', { class: 'value-scalar' }, String(value));
+    return h(
+      'span',
+      { class: valueProps.before ? 'value-scalar value-before' : 'value-scalar' },
+      String(value),
+    );
   }
   return h('pre', { class: 'value-json' }, JSON.stringify(value, null, 1));
 };
 </script>
 
 <style scoped lang="sass">
-.changes
-  border-left: 2px solid $divider
-  padding-left: 12px
+.event
+  display: flex
+  gap: 14px
+
+.event__rail
   display: flex
   flex-direction: column
-  gap: 8px
+  align-items: center
+  width: 28px
+  flex: none
 
-.change-field
+.event__icon--positive
+  background: $soft-positive
+  color: $soft-positive-ink
+
+.event__icon--warning
+  background: $soft-warning
+  color: $soft-warning-ink
+
+.event__icon--primary
+  background: $soft-primary
+  color: $primary
+
+.event__icon--negative
+  background: $soft-negative
+  color: $soft-negative-ink
+
+.event__line
+  width: 2px
+  flex: 1 1 auto
+  margin-top: 4px
+  background: $divider-soft
+
+.event__body
+  flex: 1 1 auto
+  min-width: 0
+  padding-bottom: 18px
+
+.event__head
+  display: flex
+  flex-wrap: wrap
+  align-items: baseline
+  gap: 4px 6px
+  min-height: 28px
+  padding-top: 3px
+  font-size: 14px
+
+.event__time
+  margin-left: auto
   font-size: 12px
+  color: $muted
+  white-space: nowrap
+
+.event__changes
+  margin-top: 8px
+  display: grid
+  grid-template-columns: 160px minmax(0, 1fr)
+  row-gap: 6px
+  column-gap: 12px
+  padding: 10px 14px
+  background: $paper-deep
+  border-radius: $radius
+  font-size: 13px
+
+.event__field
   font-weight: 600
   color: $muted
 
-.change-values
+.event__values
   display: flex
+  flex-wrap: wrap
   align-items: baseline
   gap: 8px
-  flex-wrap: wrap
+  min-width: 0
+
+.event__arrow
+  color: #8A8272
+
+.event-more
+  display: flex
+  justify-content: center
+  padding-top: 12px
+  margin-top: 8px
+  border-top: 1px solid $divider-soft
 
 :deep(.value-scalar)
-  font-size: 13px
-  color: $ink
+  font-weight: 500
   overflow-wrap: anywhere
+
+:deep(.value-before)
+  font-weight: 400
+  color: #8A8272
+  text-decoration: line-through
 
 :deep(.value-empty)
   color: $muted

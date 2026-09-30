@@ -1,6 +1,6 @@
 # Frontend: Admin nice-to-have improvements
 
-## Status: DECIDED 2026-09-24 — accepted: A1, A2, A3b, A4, A5, A6, A8, A9 (on the canvas since 2026-09-24, implemented with the redesign); rejected: A7, A10, A11; deferred: A12, A3a, B1–B4
+## Status: A1, A2, A3b, A4, A5, A6, A8, A9 BUILT 2026-09-30 with the admin redesign (type-check, lint and production build pass; not yet clicked through in a browser); rejected: A7, A10, A11; deferred: A12, A3a, B1–B4
 
 ## Summary
 

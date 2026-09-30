@@ -1,35 +1,47 @@
 <template>
-  <q-badge :color="color" :label="t(`admin.tasks.statuses.${status}`)" class="task-status-badge" />
+  <q-badge class="badge-soft" :class="[`badge-soft--${tone}`, { 'badge-soft--sm': dense }]">
+    {{ label }}
+  </q-badge>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import type { TaskStatus } from 'src/api/tasks';
 
-const props = defineProps<{ status: TaskStatus }>();
-const { t } = useI18n();
+// Three statuses since task workflow v2. A task that came back is still OPEN
+// and reads "Open · returned". Status values from old history rows
+// (IN_PROGRESS, RETURNED) fall back to a neutral chip.
 
-const color = computed(() => {
+const props = defineProps<{
+  /** A TaskStatus, or a legacy value read from a history row. */
+  status: string;
+  /** `lastHandoff === 'RETURNED'` on an open task. */
+  returned?: boolean | undefined;
+  dense?: boolean;
+}>();
+
+const i18n = useI18n();
+const { t } = i18n;
+
+const isReturned = computed(() => props.status === 'OPEN' && !!props.returned);
+
+const tone = computed(() => {
+  if (isReturned.value) return 'warning';
   switch (props.status) {
     case 'OPEN':
       return 'info';
-    case 'IN_PROGRESS':
-      return 'primary';
-    case 'RETURNED':
-      return 'warning';
     case 'COMPLETED':
       return 'positive';
-    case 'CANCELLED':
-      return 'library-muted';
     default:
-      return 'library-muted';
+      return 'muted';
   }
 });
-</script>
 
-<style scoped lang="sass">
-.task-status-badge
-  font-size: 0.7rem
-  font-weight: 600
-</style>
+const label = computed(() => {
+  if (isReturned.value) return t('admin.tasks.openReturned');
+  const key = `admin.tasks.statuses.${props.status}`;
+  if (i18n.te(key)) return t(key);
+  const legacy = `admin.tasks.legacyStatuses.${props.status}`;
+  return i18n.te(legacy) ? t(legacy) : props.status;
+});
+</script>

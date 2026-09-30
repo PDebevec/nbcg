@@ -58,9 +58,11 @@ export async function listUsers(params?: {
   /**
    * `publish` = records:manage AND drafts:manage (can publish).
    * `staff` = records:manage OR drafts:manage (can write).
+   * `drafts` / `records` = that one scope — who can fix a draft / a published
+   * record (a cataloguer cannot edit a published record).
    * Composes with `q`: filters to the capability, then searches within it.
    */
-  capability?: 'publish' | 'staff';
+  capability?: 'publish' | 'staff' | 'drafts' | 'records';
   /** Defaults to true server-side — a picker showing departed staff is a bug */
   active?: boolean;
   /** Case-insensitive substring over display name, username and email */

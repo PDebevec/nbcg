@@ -1,6 +1,6 @@
 # Frontend: Material-type-driven field visibility in the item editor
 
-## Status: TODO (2026-09-23) — web only, no backend work needed; §3b's backend side (schema v2 B1–B2) is done 2026-09-24, it waits for web F1
+## Status: SUPERSEDED 2026-09-30 — the editor went straight to the schema v2 rules (web schema v2 F1); no static map was built. Kept for the reasoning in §2.
 
 | Doc | Relation |
 |---|---|

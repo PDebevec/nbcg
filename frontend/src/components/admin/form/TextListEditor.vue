@@ -1,6 +1,5 @@
 <template>
   <div class="text-list">
-    <div class="text-list__label">{{ label }}</div>
     <div v-for="(value, i) in modelValue" :key="i" class="row items-start no-wrap q-mb-sm">
       <q-input
         :model-value="value"
@@ -10,26 +9,29 @@
         :type="textarea ? 'textarea' : (inputType ?? 'text')"
         :autogrow="textarea"
         :placeholder="placeholder"
+        :readonly="readonly"
         @update:model-value="setAt(i, String($event ?? ''))"
       />
       <q-btn
+        v-if="!readonly"
         flat
         dense
         round
-        icon="close"
-        color="library-muted"
+        icon="o_close"
+        color="grey-7"
         class="q-ml-xs"
-        :aria-label="t('admin.edit.remove')"
+        :aria-label="t('admin.common.remove')"
         @click="removeAt(i)"
       />
     </div>
     <q-btn
+      v-if="!readonly"
       outline
       dense
       no-caps
       color="primary"
-      icon="add"
-      :label="addLabel ?? t('admin.edit.addLine')"
+      icon="o_add"
+      :label="addLabel ?? t('admin.common.add')"
       @click="add"
     />
   </div>
@@ -43,11 +45,11 @@ import { useI18n } from 'vue-i18n';
 
 const props = defineProps<{
   modelValue: string[];
-  label: string;
   addLabel?: string | undefined;
   placeholder?: string | undefined;
-  textarea?: boolean;
+  textarea?: boolean | undefined;
   inputType?: 'text' | 'url' | undefined;
+  readonly?: boolean | undefined;
 }>();
 
 const emit = defineEmits<{ (e: 'update:modelValue', value: string[]): void }>();
@@ -71,11 +73,3 @@ function add() {
   emit('update:modelValue', [...props.modelValue, '']);
 }
 </script>
-
-<style scoped lang="sass">
-.text-list__label
-  font-size: 0.8rem
-  font-weight: 600
-  color: $muted
-  margin-bottom: 6px
-</style>

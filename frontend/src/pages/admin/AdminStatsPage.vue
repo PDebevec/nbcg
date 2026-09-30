@@ -1,31 +1,26 @@
 <template>
-  <q-page class="q-pa-lg">
-    <div class="page-body">
-      <h1 class="text-h5 text-weight-bold q-mt-none q-mb-md">{{ t('admin.stats.title') }}</h1>
-
-      <!-- Date range: one row above everything it scopes. Presets first, custom range behind the picker. -->
-      <div class="row items-center q-gutter-md q-mb-lg">
+  <q-page class="adm-page stats-page">
+    <AdminPageHeader
+      :eyebrow="t('admin.nav.groupInsight')"
+      :title="t('admin.stats.title')"
+      :caption="`${rangeLabel} · ${t('admin.stats.days', { count: rangeDays })}`"
+    >
+      <!-- Date range: one control above everything it scopes. Presets first, a custom range behind the picker. -->
+      <template #actions>
         <q-btn-toggle
           :model-value="activePreset"
           :options="presetOptions"
           unelevated
           no-caps
           dense
-          toggle-color="primary"
+          color="transparent"
+          text-color="grey-9"
+          toggle-color="white"
+          toggle-text-color="primary"
           class="preset-toggle"
           @update:model-value="applyPreset"
         />
-        <q-input
-          :model-value="rangeLabel"
-          dense
-          outlined
-          readonly
-          :label="t('admin.stats.period')"
-          class="range-input cursor-pointer"
-        >
-          <template #prepend>
-            <q-icon name="event" color="primary" />
-          </template>
+        <q-btn outline no-caps color="primary" icon="o_event" :label="rangeLabel" class="range-btn">
           <q-popup-proxy transition-show="scale" transition-hide="scale">
             <q-date
               :model-value="{ from, to }"
@@ -36,59 +31,68 @@
               @update:model-value="onDatePick"
             />
           </q-popup-proxy>
-        </q-input>
-      </div>
+        </q-btn>
+      </template>
+    </AdminPageHeader>
 
-      <!-- Refetch keeps the frame: previous render stays, dimmed, no layout jump -->
-      <div :class="{ refetching: loading }">
-        <!-- ── Activity ── -->
+    <!-- Refetch keeps the frame: previous render stays, dimmed, no layout jump -->
+    <div class="stats-sections" :class="{ refetching: loading }">
+      <!-- ── Activity ── -->
+      <section class="stats-section">
         <h2 class="section-title">{{ t('admin.stats.activity') }}</h2>
-        <div class="row q-gutter-sm q-mb-md">
+        <div class="tile-grid">
           <StatTile
-            v-for="key in ACTIVITY_KEYS"
+            v-for="(key, index) in ACTIVITY_KEYS"
             :key="key"
             :label="t(`admin.stats.tiles.${key}`)"
             :value="overview?.activity.totals[key] ?? 0"
             :loading="!overview"
+            :color="SERIES_COLORS[index]"
           />
         </div>
-        <q-card flat bordered class="chart-card q-mb-xl">
-          <q-card-section>
+        <q-card flat bordered>
+          <div class="chart-card">
             <DayCountChart
               :series="activitySeries"
               :from="range.from"
               :to="range.to"
               :empty-label="t('admin.stats.noData')"
             />
-          </q-card-section>
+          </div>
         </q-card>
+      </section>
 
-        <!-- ── Usage ── -->
+      <!-- ── Usage ── -->
+      <section class="stats-section">
         <h2 class="section-title">{{ t('admin.stats.usage') }}</h2>
-        <div class="row q-gutter-sm q-mb-md">
+        <div class="tile-grid">
           <StatTile
             :label="t('admin.stats.tiles.views')"
             :value="overview?.usage.totals.views ?? 0"
             :loading="!overview"
+            :color="SERIES_COLORS[0]"
           />
           <StatTile
             :label="t('admin.stats.tiles.downloads')"
             :value="overview?.usage.totals.downloads ?? 0"
             :loading="!overview"
+            :color="SERIES_COLORS[1]"
           />
         </div>
-        <q-card flat bordered class="chart-card q-mb-xl">
-          <q-card-section>
+        <q-card flat bordered>
+          <div class="chart-card">
             <DayCountChart
               :series="usageSeries"
               :from="range.from"
               :to="range.to"
               :empty-label="t('admin.stats.noData')"
             />
-          </q-card-section>
+          </div>
         </q-card>
+      </section>
 
-        <!-- ── Per user ── -->
+      <!-- ── Per user ── -->
+      <section class="stats-section">
         <h2 class="section-title">{{ t('admin.stats.byUser') }}</h2>
         <q-table
           :rows="userStats?.users ?? []"
@@ -96,45 +100,37 @@
           row-key="userId"
           flat
           bordered
-          dense
           hide-pagination
-          :pagination="{ rowsPerPage: 0 }"
+          :pagination="{ rowsPerPage: 0, sortBy: 'total', descending: true }"
           :loading="loading && !userStats"
-          class="stats-table q-mb-xl"
+          class="admin-table users-table"
         >
+          <template #body-cell-displayName="cellProps">
+            <q-td :props="cellProps">
+              <div class="row items-center no-wrap q-gutter-x-sm">
+                <UserAvatar :name="cellProps.value" :size="26" />
+                <span class="text-weight-medium">{{ cellProps.value }}</span>
+              </div>
+            </q-td>
+          </template>
+          <template #body-cell-total="cellProps">
+            <q-td :props="cellProps" class="text-weight-bold">{{ formatCount(cellProps.value) }}</q-td>
+          </template>
           <template #no-data>
-            <div class="full-width text-center q-pa-md text-library-muted">
-              {{ t('admin.stats.usersEmpty') }}
-            </div>
+            <div class="full-width adm-empty">{{ t('admin.stats.usersEmpty') }}</div>
           </template>
         </q-table>
+      </section>
 
-        <!-- ── Top items / files ── -->
+      <!-- ── Top items / files ── -->
+      <section class="stats-section">
         <h2 class="section-title">{{ t('admin.stats.topItems') }}</h2>
-        <div class="row q-col-gutter-md">
-          <div class="col-12 col-md-4">
-            <TopList
-              :title="t('admin.stats.mostViewed')"
-              icon="visibility"
-              :rows="topViewedRows"
-            />
-          </div>
-          <div class="col-12 col-md-4">
-            <TopList
-              :title="t('admin.stats.mostDownloaded')"
-              icon="download"
-              :rows="topDownloadedRows"
-            />
-          </div>
-          <div class="col-12 col-md-4">
-            <TopList
-              :title="t('admin.stats.topFiles')"
-              icon="description"
-              :rows="topFileRows"
-            />
-          </div>
+        <div class="top-grid">
+          <TopList :title="t('admin.stats.mostViewed')" icon="o_visibility" :rows="topViewedRows" />
+          <TopList :title="t('admin.stats.mostDownloaded')" icon="o_download" :rows="topDownloadedRows" />
+          <TopList :title="t('admin.stats.topFiles')" icon="o_description" :rows="topFileRows" />
         </div>
-      </div>
+      </section>
     </div>
   </q-page>
 </template>
@@ -143,6 +139,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useQuasar, type QTableColumn } from 'quasar';
+import { dateLocale, formatCount } from 'src/utils/adminFormat';
 import {
   getStatsOverview,
   getTopItems,
@@ -155,13 +152,15 @@ import {
 import DayCountChart, { type ChartSeries } from 'src/components/admin/DayCountChart.vue';
 import StatTile from 'src/components/admin/StatTile.vue';
 import TopList, { type TopListRow } from 'src/components/admin/TopList.vue';
+import AdminPageHeader from 'src/components/admin/AdminPageHeader.vue';
+import UserAvatar from 'src/components/admin/UserAvatar.vue';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const $q = useQuasar();
 
-// Categorical palette, fixed slot order (validated against the app surface —
-// see docs in the task file). Marks only; text stays in ink tokens.
-const SERIES_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100'];
+// Chart series wear the brand tokens, in a fixed slot order: $primary,
+// $secondary, $accent, $warning. Marks only; text stays in ink tokens.
+const SERIES_COLORS = ['#1F2A52', '#B5652C', '#5C7A63', '#B5862C'];
 
 const ACTIVITY_KEYS = ['created', 'published', 'updated', 'deleted'] as const;
 
@@ -207,7 +206,7 @@ function applyPreset(key: string) {
 
 const rangeLabel = computed(() => {
   const fmt = (day: string) =>
-    new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, {
+    new Date(`${day}T00:00:00Z`).toLocaleDateString(dateLocale(locale.value), {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -215,6 +214,10 @@ const rangeLabel = computed(() => {
     });
   return `${fmt(from.value)} – ${fmt(to.value)}`;
 });
+
+const rangeDays = computed(
+  () => (Date.parse(`${to.value}T00:00:00Z`) - Date.parse(`${from.value}T00:00:00Z`)) / DAY_MS + 1,
+);
 
 /** QDate emits a string for a single-day pick, an object for a range, null mid-selection. */
 function onDatePick(value: string | { from: string; to: string } | null) {
@@ -347,35 +350,72 @@ const topFileRows = computed<TopListRow[]>(() =>
 </script>
 
 <style scoped lang="sass">
-.page-body
-  max-width: 1280px
-  margin: 0 auto
-  padding-bottom: 128px
+.stats-page
+  padding-bottom: 96px
+
+.stats-sections
+  display: flex
+  flex-direction: column
+  gap: 32px
+
+.stats-section
+  display: flex
+  flex-direction: column
+  gap: 16px
 
 .section-title
-  font-size: 1rem
+  margin: 0
+  font-size: 17px
+  line-height: 1.3
   font-weight: 700
-  margin: 0 0 12px
+  letter-spacing: 0
 
-.chart-card,
-.stats-table
-  background: $surface
-  border-radius: $radius
+.tile-grid
+  display: grid
+  grid-template-columns: repeat(4, minmax(0, 1fr))
+  gap: 16px
+
+.top-grid
+  display: grid
+  grid-template-columns: repeat(3, minmax(0, 1fr))
+  gap: 16px
+
+.chart-card
+  padding: 16px 20px 12px
+
+.users-table
+  :deep(tbody td)
+    height: 48px
+    font-variant-numeric: tabular-nums
 
 .preset-toggle
-  background: $surface
+  padding: 3px
+  background: $paper-deep
   border: 1px solid $divider
   border-radius: $radius
   :deep(.q-btn)
-    padding: 4px 14px
-    font-weight: 500
+    min-height: 36px
+    padding: 0 14px
+    border-radius: 6px !important
+    font-size: 13px
+    color: $ink-soft
 
-.range-input
-  width: 250px
-  :deep(.q-field__control)
-    background: $surface
+  :deep(.q-btn.bg-white)
+    font-weight: 700
+    box-shadow: 0 1px 2px rgba(28, 26, 21, 0.12)
+
+.range-btn
+  font-weight: 400
+  color: $ink !important
 
 .refetching
   opacity: 0.55
   transition: opacity 0.2s
+
+@media (max-width: 1100px)
+  .tile-grid
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+
+  .top-grid
+    grid-template-columns: minmax(0, 1fr)
 </style>

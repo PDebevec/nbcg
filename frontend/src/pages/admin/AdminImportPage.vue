@@ -1,126 +1,166 @@
 <template>
-  <q-page class="q-pa-lg">
-    <div class="page-body">
-      <h1 class="text-h5 text-weight-bold q-mt-none q-mb-lg">{{ t('admin.import.title') }}</h1>
+  <q-page class="adm-page">
+    <AdminPageHeader
+      :eyebrow="t('admin.nav.groupCatalogue')"
+      :title="t('admin.import.title')"
+      :caption="t('admin.import.caption')"
+    />
 
-      <div class="row q-col-gutter-lg">
-        <!-- NEW IMPORT -->
-        <div class="col-12 col-md-6">
-          <q-card flat bordered class="panel-card">
-            <q-card-section>
-              <div class="text-subtitle1 text-weight-bold q-mb-md">
-                {{ t('admin.import.newImport') }}
-              </div>
+    <div class="import-grid">
+      <!-- NEW IMPORT -->
+      <q-card flat bordered>
+        <div class="adm-card__body column q-gutter-y-md">
+          <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.import.newImport') }}</h2>
 
-              <q-input
-                v-model="idsText"
-                outlined
-                type="textarea"
-                :label="t('admin.import.idsLabel')"
-                :hint="t('admin.import.idsHint')"
-                input-style="min-height: 140px"
-              />
+          <FormField
+            :label="t('admin.import.idsLabel')"
+            for-id="import-ids"
+            :hint="`${t('admin.import.idsHint')} ${t('admin.import.idsCount', { count: parsedIds.length })}`"
+          >
+            <q-input
+              v-model="idsText"
+              outlined
+              type="textarea"
+              for="import-ids"
+              input-class="adm-mono"
+              input-style="min-height: 132px; font-size: 13px; line-height: 1.6"
+            />
+          </FormField>
 
-              <div class="row q-col-gutter-md q-mt-sm">
-                <div class="col-6">
-                  <q-select
-                    v-model="target"
-                    outlined
-                    :options="targetOptions"
-                    emit-value
-                    map-options
-                    :label="t('admin.import.target')"
-                  />
-                </div>
-                <div class="col-6">
-                  <q-select
-                    v-model="visibility"
-                    outlined
-                    :options="visibilityOptions"
-                    emit-value
-                    map-options
-                    :label="t('admin.items.columns.visibility')"
-                  />
-                </div>
-              </div>
+          <div class="row q-col-gutter-md">
+            <div class="col-6">
+              <FormField :label="t('admin.import.target')" for-id="import-target">
+                <q-select
+                  v-model="target"
+                  outlined
+                  dense
+                  options-dense
+                  for="import-target"
+                  :options="targetOptions"
+                  emit-value
+                  map-options
+                />
+              </FormField>
+            </div>
+            <div class="col-6">
+              <FormField :label="t('admin.items.columns.visibility')" for-id="import-visibility">
+                <q-select
+                  v-model="visibility"
+                  outlined
+                  dense
+                  options-dense
+                  for="import-visibility"
+                  :options="visibilityOptions"
+                  emit-value
+                  map-options
+                >
+                  <template #prepend>
+                    <span class="adm-dot" :class="VISIBILITY_DOT[visibility]" />
+                  </template>
+                </q-select>
+              </FormField>
+            </div>
+          </div>
 
-              <q-btn
-                unelevated
-                no-caps
-                color="primary"
-                icon="cloud_download"
-                :label="t('admin.import.start', { count: parsedIds.length })"
-                :disable="parsedIds.length === 0 || !target"
-                :loading="submitting"
-                class="q-mt-md full-width"
-                @click="onSubmit"
-              />
-            </q-card-section>
-          </q-card>
+          <q-btn
+            unelevated
+            no-caps
+            color="primary"
+            icon="o_cloud_download"
+            :label="t('admin.import.start', { count: parsedIds.length })"
+            :disable="parsedIds.length === 0 || !target"
+            :loading="submitting"
+            @click="onSubmit"
+          />
+        </div>
+      </q-card>
+
+      <!-- JOBS -->
+      <q-card flat bordered>
+        <div class="adm-card__head jobs-head">
+          <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.import.jobs') }}</h2>
+          <span v-if="runningCount > 0" class="text-caption adm-muted">
+            {{ t('admin.import.running', { count: runningCount }) }}
+          </span>
+          <q-space />
+          <q-btn
+            flat
+            dense
+            round
+            icon="o_refresh"
+            color="primary"
+            :aria-label="t('admin.import.refresh')"
+            @click="refreshJobs"
+          />
         </div>
 
-        <!-- JOBS -->
-        <div class="col-12 col-md-6">
-          <q-card flat bordered class="panel-card">
-            <q-card-section>
-              <div class="row items-center q-mb-md">
-                <div class="text-subtitle1 text-weight-bold">{{ t('admin.import.jobs') }}</div>
-                <q-space />
-                <q-btn flat dense round icon="refresh" color="primary" @click="refreshJobs" />
+        <div v-if="jobs.length === 0" class="adm-empty">{{ t('admin.import.noJobs') }}</div>
+
+        <div v-for="job in jobs" :key="job.jobId" class="job">
+          <q-avatar size="36px" :class="`job__icon job__icon--${tone(job)}`">
+            <q-icon :name="stateIcon(job)" size="18px" />
+          </q-avatar>
+          <div class="col column q-gutter-y-sm job__body">
+            <div class="row items-center no-wrap q-gutter-x-sm">
+              <span class="job__title">{{ t('admin.import.job', { id: job.jobId, source: job.source }) }}</span>
+              <q-badge class="badge-soft badge-soft--sm" :class="`badge-soft--${tone(job)}`">
+                {{ stateLabel(job.state) }}
+              </q-badge>
+              <q-space />
+              <span class="text-caption adm-muted">
+                {{ t('admin.import.startedAt', { when: formatDateTime(job.requestedAt, locale) }) }}
+              </span>
+            </div>
+
+            <template v-if="job.progress">
+              <q-linear-progress
+                :value="job.progress.total ? job.progress.processed / job.progress.total : 0"
+                :color="progressColor(job)"
+                track-color="grey-3"
+                rounded
+                size="8px"
+              />
+              <div class="text-caption adm-muted">
+                {{
+                  t('admin.import.progress', {
+                    processed: job.progress.processed,
+                    total: job.progress.total,
+                    succeeded: job.progress.succeeded,
+                    failed: job.progress.failed,
+                  })
+                }}
+                <template v-if="job.progress.warnings?.length">
+                  ·
+                  <span class="job__warn-count">
+                    {{ t('admin.import.withWarnings', { count: job.progress.warnings.length }) }}
+                  </span>
+                </template>
               </div>
 
-              <div v-if="jobs.length === 0" class="text-library-muted text-center q-pa-md">
-                {{ t('admin.import.noJobs') }}
+              <div
+                v-for="err in job.progress.errors"
+                :key="`e-${err.id}`"
+                class="job__error adm-mono"
+              >
+                {{ err.id }}: {{ err.reason }}
               </div>
 
-              <q-list v-else separator>
-                <q-item v-for="job in jobs" :key="job.jobId">
-                  <q-item-section avatar>
-                    <q-icon :name="stateIcon(job)" :color="stateColor(job)" />
-                  </q-item-section>
-                  <q-item-section>
-                    <q-item-label>
-                      #{{ job.jobId }} · {{ job.source }}
-                      <q-badge :color="stateColor(job)" :label="job.state" class="q-ml-xs" />
-                    </q-item-label>
-                    <q-item-label caption>
-                      {{ new Date(job.requestedAt).toLocaleString() }}
-                    </q-item-label>
-                    <template v-if="job.progress">
-                      <q-linear-progress
-                        :value="job.progress.total ? job.progress.processed / job.progress.total : 0"
-                        color="primary"
-                        class="q-mt-xs"
-                        rounded
-                        size="8px"
-                      />
-                      <q-item-label caption class="q-mt-xs">
-                        {{ t('admin.import.progress', {
-                          processed: job.progress.processed,
-                          total: job.progress.total,
-                          succeeded: job.progress.succeeded,
-                          failed: job.progress.failed,
-                        }) }}
-                      </q-item-label>
-                      <q-item-label
-                        v-for="err in job.progress.errors"
-                        :key="err.id"
-                        caption
-                        class="text-negative"
-                      >
-                        {{ err.id }}: {{ err.reason }}
-                      </q-item-label>
-                    </template>
-                    <q-item-label v-if="job.failedReason" caption class="text-negative">
-                      {{ job.failedReason }}
-                    </q-item-label>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </q-card-section>
-          </q-card>
+              <!-- Imported all the same — an import is never blocked by the save check — but worth fixing later -->
+              <div v-if="job.progress.warnings?.length" class="job__warnings" role="note">
+                <span class="text-weight-bold">
+                  {{ t('admin.import.warningsTitle', { count: job.progress.warnings.length }) }}
+                </span>
+                <span v-for="warning in job.progress.warnings" :key="`w-${warning.id}`" class="row no-wrap q-gutter-x-sm">
+                  <span class="adm-mono text-weight-bold">{{ warning.id }}</span>
+                  <span>{{ warning.reason }}</span>
+                </span>
+              </div>
+            </template>
+
+            <div v-if="job.failedReason" class="job__error">{{ job.failedReason }}</div>
+          </div>
         </div>
-      </div>
+      </q-card>
     </div>
   </q-page>
 </template>
@@ -137,14 +177,25 @@ import {
   type ItemType,
   type VisibilityStatus,
 } from 'src/api/admin';
+import { apiErrorMessage } from 'src/api/errors';
 import { useAuthz } from 'src/composables/useAuthz';
+import { formatDateTime } from 'src/utils/adminFormat';
+import AdminPageHeader from 'src/components/admin/AdminPageHeader.vue';
+import FormField from 'src/components/admin/FormField.vue';
 
-const { t } = useI18n();
+const i18n = useI18n();
+const { t, locale } = i18n;
 const $q = useQuasar();
 const { canManageRecords, canManageDrafts } = useAuthz();
 
 // Remember jobs across visits so a running import isn't lost on navigation.
 const STORAGE_KEY = 'nbcg-admin-import-jobs';
+
+const VISIBILITY_DOT: Record<VisibilityStatus, string> = {
+  PUBLIC: 'adm-dot--positive',
+  PRIVATE: 'adm-dot--warning',
+  HIDDEN: '',
+};
 
 const idsText = ref('');
 const target = ref<ItemType | null>(canManageDrafts.value ? 'DRAFT' : canManageRecords.value ? 'RECORD' : null);
@@ -170,31 +221,55 @@ const visibilityOptions = computed(() =>
   VISIBILITY_STATUSES.map((s) => ({ label: t(`admin.visibility.${s}`), value: s })),
 );
 
-function stateColor(job: ImportJobStatus): string {
+// ── How a job reads: one tone for the icon, the badge and the bar ──
+
+type Tone = 'positive' | 'warning' | 'negative' | 'primary' | 'muted';
+
+function isRunning(job: ImportJobStatus): boolean {
+  return job.state === 'active' || job.state === 'waiting' || job.state === 'delayed';
+}
+
+function tone(job: ImportJobStatus): Tone {
   switch (job.state) {
     case 'completed':
-      return job.progress && job.progress.failed > 0 ? 'warning' : 'positive';
+      return job.progress && (job.progress.failed > 0 || job.progress.warnings?.length)
+        ? 'warning'
+        : 'positive';
     case 'failed':
       return 'negative';
     case 'active':
       return 'primary';
     default:
-      return 'library-muted';
+      return 'muted';
   }
+}
+
+function progressColor(job: ImportJobStatus): string {
+  const current = tone(job);
+  return current === 'muted' ? 'grey-6' : current;
 }
 
 function stateIcon(job: ImportJobStatus): string {
   switch (job.state) {
     case 'completed':
-      return job.progress && job.progress.failed > 0 ? 'warning' : 'check_circle';
+      return tone(job) === 'warning' ? 'o_warning_amber' : 'o_check_circle';
     case 'failed':
-      return 'error';
+      return 'o_error_outline';
     case 'active':
-      return 'sync';
+      return 'o_sync';
     default:
-      return 'schedule';
+      return 'o_schedule';
   }
 }
+
+function stateLabel(state: string): string {
+  const key = `admin.import.states.${state}`;
+  return i18n.te(key) ? t(key) : state;
+}
+
+const runningCount = computed(() => jobs.value.filter(isRunning).length);
+
+// ── Jobs: stored ids, status polling ──
 
 function loadStoredJobIds(): string[] {
   try {
@@ -217,9 +292,7 @@ async function refreshJobs() {
   jobs.value = statuses.filter((s): s is ImportJobStatus => s !== null);
 }
 
-const hasActiveJobs = computed(() =>
-  jobs.value.some((j) => j.state === 'active' || j.state === 'waiting' || j.state === 'delayed'),
-);
+const hasActiveJobs = computed(() => jobs.value.some(isRunning));
 
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -252,12 +325,7 @@ async function onSubmit() {
     await refreshJobs();
     startPolling();
   } catch (err) {
-    const detail =
-      (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-    $q.notify({
-      type: 'negative',
-      message: detail ? String(detail) : t('admin.items.actionFailed'),
-    });
+    $q.notify({ type: 'negative', message: apiErrorMessage(err) ?? t('admin.common.actionFailed') });
   } finally {
     submitting.value = false;
   }
@@ -272,11 +340,75 @@ onUnmounted(stopPolling);
 </script>
 
 <style scoped lang="sass">
-.page-body
-  max-width: 1280px
-  margin: 0 auto
+.import-grid
+  display: grid
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr)
+  gap: 24px
+  align-items: start
 
-.panel-card
-  background: $surface
+.jobs-head
+  padding: 10px 12px 10px 20px
+  border-bottom-color: $divider
+
+.job
+  display: flex
+  gap: 14px
+  padding: 16px 20px
+  border-bottom: 1px solid $divider-soft
+  &:last-child
+    border-bottom: none
+
+.job__body
+  min-width: 0
+
+.job__title
+  font-size: 14px
+  font-weight: 600
+
+.job__icon
+  flex: none
+
+.job__icon--positive
+  background: $soft-positive
+  color: $soft-positive-ink
+
+.job__icon--warning
+  background: $soft-warning
+  color: $soft-warning-ink
+
+.job__icon--negative
+  background: $soft-negative
+  color: $negative
+
+.job__icon--primary
+  background: $soft-primary
+  color: $primary
+
+.job__icon--muted
+  background: $soft-muted
+  color: $soft-muted-ink
+
+.job__warn-count
+  font-weight: 600
+  color: $soft-warning-ink
+
+.job__error
+  font-size: 12px
+  color: $negative
+  overflow-wrap: anywhere
+
+.job__warnings
+  display: flex
+  flex-direction: column
+  gap: 6px
+  padding: 10px 12px
+  background: $soft-warning
   border-radius: $radius
+  font-size: 13px
+  line-height: 1.45
+  color: #4A3608
+
+@media (max-width: 1100px)
+  .import-grid
+    grid-template-columns: minmax(0, 1fr)
 </style>

@@ -56,6 +56,19 @@ export interface Publication {
   manufacturerName?: string; // 210/g
 }
 
+/** Numeric extent (schema v2): the unit follows the material type — `pages`, `sheets`, `minutes`, … */
+export interface Extent {
+  value: number;
+  unit: string;
+}
+
+/** One issue of a serial (schema v2). `date` is `YYYY`, `YYYY-MM` or `YYYY-MM-DD`. */
+export interface Issue {
+  volume?: string;
+  number?: string;
+  date?: string;
+}
+
 export interface DomainRecord {
   cobissId?: string;
 
@@ -90,7 +103,8 @@ export interface DomainRecord {
   numberingAndDates?: string; // 207/a
   musicEditionStatement?: string; // 208/a
   publication?: Publication; // 210
-  physicalDescription?: string; // 215/a
+  physicalDescription?: string; // 215/a (free text, "253 str.")
+  extent?: Extent; // schema v2; filled from 215/a on import when the unit fits
   otherPhysicalDetails?: string; // 215/c
   dimensions?: string; // 215/d
   seriesTitle?: string; // 225/a
@@ -101,6 +115,13 @@ export interface DomainRecord {
 
   // 3XX — Notes
   notes?: string[]; // 300/a
+  summaryNote?: string; // 330/a
+
+  // 6XX — Subject
+  keywords?: string[]; // 610/a
+
+  // Not COMARC: one issue of a serial collection (schema v2)
+  issue?: Issue;
 
   // 5XX — Related titles
   titleInOtherScript?: string[]; // 518/a
@@ -185,14 +206,16 @@ export interface SearchParams {
   fullText?: string;
   /** Comma-separated multi-select; each value matched as exact phrase */
   publisher?: string;
-  /** Publication year range start ("YYYY") */
+  /** Publication year range start: 4 digits, inclusive. Anything else is a 400. */
   yearFrom?: string;
-  /** Publication year range end ("YYYY") */
+  /** Publication year range end: 4 digits, inclusive. */
   yearTo?: string;
   /** Comma-separated multi-select of language names (metadata.language.en) */
   language?: string;
   /** Comma-separated multi-select of material type names (metadata.materialType.en) */
   materialType?: string;
+  /** Comma-separated `collectionType` codes (0 = not a collection, 1, 3, 4). */
+  collectionType?: string;
   isbn?: string;
   issn?: string;
   cobissId?: string;
@@ -235,7 +258,14 @@ export type SuggestStringField =
   | 'place'
   | 'firstResponsibility'
   | 'edition'
-  | 'notes';
+  | 'notes'
+  // Added with metadata schema v2 (the schema's `suggest` paths)
+  | 'placeOfManufacture'
+  | 'manufacturerName'
+  | 'physicalDescription'
+  | 'dimensions'
+  | 'keywords'
+  | 'corporateBody';
 
 /** Fields whose suggestions are ResolvedCode objects (enum dropdowns) */
 export type SuggestCodeField =

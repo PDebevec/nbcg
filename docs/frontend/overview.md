@@ -19,8 +19,9 @@ image is built per environment — see
 [infrastructure-cli.md](../infrastructure/infrastructure-cli.md#the-frontend-image-is-environment-specific).
 
 There is **no test runner** (`npm test` is a no-op) — verify with `npm run
-build` (vue-tsc type-check) and by hand. `npm run format` runs prettier over the
-whole tree; use it on specific files only.
+build` (vue-tsc type-check), `npx vue-tsc --noEmit`, `npm run lint` and by
+hand. `npm run format` runs prettier over the whole tree; use it on specific
+files only.
 
 ## Structure
 
@@ -28,51 +29,77 @@ whole tree; use it on specific files only.
 |---|---|
 | `src/boot/` | `axios.ts` (instance with `baseURL: '/api'`, bearer token), `keycloak.ts`, `i18n.ts` |
 | `src/services/keycloak.ts` | login/refresh; exposes `auth.userId`, `auth.roles` (the API scopes) |
-| `src/api/` | one typed client per backend area: `search.ts` (search, suggest, getItem), `admin.ts` (items, files, history, stats, import), `tasks.ts`, `users.ts` — types mirror the backend and the comments explain the contracts |
-| `src/composables/useAuthz.ts` | `canManageRecords`, `canManageDrafts`, `canTransition`, `canImport`, `isStaff`, … (UI shaping only) |
+| `src/api/` | one typed client per backend area: `search.ts` (search, suggest, getItem), `admin.ts` (items, validation dry run, files, history, stats, import), `tasks.ts` (task workflow v2), `users.ts`, `schema.ts` (metadata schema v2, vocabulary search), `errors.ts` (`apiErrorMessage`, `validationFailure`, `openTaskConflict`) — types mirror the backend and the comments explain the contracts |
+| `src/utils/schemaRules.ts` | **verbatim copy** of `backend/src/modules/schema/rules/evaluate.ts` (a backend test fails if the two differ — change it there, then copy) |
+| `src/composables/` | `useAuthz.ts` (`canManageRecords`, `canTransition`, `isStaff`, … — UI shaping only), `useSchemaForm.ts` (evaluated field states + save / publish check), `useItemSummary.ts` (one item's title for a task view) |
+| `src/stores/` | `schema-store.ts` (schema v2, loaded once per session), `task-count-store.ts` (the drawer's open-task count) |
 | `src/router/routes.ts` | public routes (Montenegrin slugs: `/o-nama`, `/napredna-pretraga`, `/kontakt`, `/uslovi-koriscenja`, `/profil`) and `/admin/*` with `meta.scopes` (AND-only guard) |
-| `src/layouts/` | `MainLayout.vue` (public), `AdminLayout.vue` (drawer with task badge) |
+| `src/layouts/` | `MainLayout.vue` (public), `AdminLayout.vue` (navy drawer, no top bar) |
 | `src/pages/` | `IndexPage`, `CatalogPage`, `AdvancedSearchPage`, `RecordDetailPage`, … |
 | `src/pages/admin/` | dashboard, items list (drafts/records), item editor, import, stats, tasks inbox + detail |
-| `src/components/admin/` | the item metadata form (`ItemMetadataForm.vue`; inputs and the form model in `form/`), task dialogs/pickers, history timelines, stats widgets, badges |
-| `src/i18n/en-US`, `src/i18n/me` | UI strings — **every new label goes into both** |
+| `src/components/admin/` | shared pieces (`AdminPageHeader`, `FormField`, badges, `UserAvatar`, `RelativeTime`, dialogs); `editor/` (the sectioned item form), `form/` (inputs, the form model, the field table), `tasks/` (detail pane, action dialogs) |
+| `src/css/admin.sass` | the admin look, scoped under `body.admin-body` (dialogs and menus are teleported to `<body>`) |
+| `src/i18n/en-US`, `src/i18n/me` | UI strings — **every new label goes into both**; the `admin` namespace is split into `admin/*.ts`, one file per page. Field captions of the item editor are not here: they come from the metadata schema (`en` / `cnr`) |
 
-## Admin area in one paragraph
+## Admin area
 
-`/admin/drafts` and `/admin/records` list items from the search index (with an
-"open task" badge per row, bulk publish/delete). `/admin/items/:id` is the
-editor: a hand-written form over every metadata field the API accepts (~40, in
-sections, with COMARC 105/206/207/208 under a collapsible "Advanced"; code lists
-from `GET /api/schema/record` — removed 2026-09-26, see below — and clearing a
-field sends `null`) plus a
-raw-JSON tab, files (upload with OCR text), revision history and the item's task
-history; saves use optimistic concurrency (`expectedVersion`, a 409 opens a
-compare/resolve flow).
-`/admin/tasks` is the inbox; `/admin/tasks/:id` the task with its activity log.
-`/admin/stats` shows activity and usage charts. `/admin/import` runs COBISS
-imports and polls the job.
+Redesigned 2026-09-30 after the design canvas
+(https://claude.ai/artifact/291iYMzbyaTpu1oGcP6gEF): warm paper ground, navy
+drawer with grouped navigation and the open-task count, no top bar — every page
+starts with `AdminPageHeader` (eyebrow, serif title, caption, actions). Source
+Sans 3 / Source Serif 4 are used inside the admin only; the public site keeps
+Inter. Icons are the outlined Material set (`o_*`).
 
-## Known issues (2026-09-24)
+- **Dashboard** (`/admin`): KPI tiles, "Waiting on me", "Waiting for review"
+  (publishers only), "Recently opened" (this browser, `localStorage`), catalogue
+  at a glance, user-directory sync.
+- **Drafts / Records** (`/admin/drafts`, `/admin/records`): a filter rail
+  (material type, collection type, created by me, year — all in the URL) and a
+  slim table from the search index; an "Open task" marker links to the item's
+  Tasks tab; bulk actions float at the bottom (assign task, visibility,
+  publish / return to draft, delete). A refused publish opens
+  `ValidationErrorDialog`.
+- **Item editor** (`/admin/items/:id`, `/admin/items/new?type=`): material type
+  first, then one card per section. The form is hand-laid-out
+  (`editor/ItemMetadataForm.vue`, field table in `form/fields.ts`); the
+  **metadata schema v2** decides per item what is visible / required and what it
+  is called, and the copied evaluator says before any request whether a save or
+  a publish would be refused. A field the schema hides for this item moves to
+  "Other fields" and stays fillable. A draft needs a title and a material type;
+  a record must stay complete (Save is off while a required field is empty).
+  Tabs: JSON, files (upload with OCR text state), revision history, the item's
+  task history. Status card: publish / return to draft. Saves use optimistic
+  concurrency (`expectedVersion`; a 409 is merged when the two sides touched
+  different fields). Leaving with unsaved changes asks first.
+- **Tasks** (`/admin/tasks`, `/admin/tasks/:id`): task workflow v2 — a task is
+  Open, Completed or Cancelled and its kind is the stage it is in. The inbox
+  filters server-side (scope, stage, status, returned) and opens a task in a
+  pane next to the list (`?task=`). Actions: Complete (by stage: finish, hand
+  on, or publish), Return, Reassign, Cancel — one dialog each.
+- **Statistics** (`/admin/stats`) and **COBISS import** (`/admin/import`, with
+  the warnings of a finished job).
+
+## Known issues (2026-09-30)
 
 | Issue | Where | Plan |
 |---|---|---|
-| **Dropdown code lists are gone**: the editor loaded them from v1 `GET /api/schema/record`, removed on 2026-09-26 (backend B7). It now shows its "code lists failed" notice and offers only in-use values for material type, language and country; record type, bibliographic level, illustration, content type, literary form, biography and author role are empty | `AdminItemEditPage.vue`, `metadataForm.ts` (`codeListsFromSchema`) | [web schema v2 plan F2](plans/metadata-schema-v2.md#f2--quick-win-on-the-current-form-s) — read v2 `vocabularies`, search the big ones |
-| No "Summary" (`summaryNote`) field: removed in `cd8e5bd` because the API dropped it on every save | `ItemMetadataForm.vue`, `RecordDetailPage.vue` | the API accepts it since 2026-09-24 (schema v2 B3) — add the field back |
-| **Publishing needs fields the form cannot enter; every save is checked.** Backend validation (schema v2: publish since 2026-09-24, every write since 2026-09-25, on dev) requires a material type on drafts, `extent` for books etc. and `issue.number`/`issue.date` for an issue of a serial on records; the form has no `extent` or `issue` input (JSON tab only). Errors come back as `400 METADATA_VALIDATION_FAILED`; the form and bulk publish show only its `message`, not which fields | `ItemMetadataForm.vue`, `AdminItemsPage.vue` | [web schema v2 plan ⚠](plans/metadata-schema-v2.md#-already-affects-the-current-web-app) — must land before the backend reaches production |
-| Import page lists `progress.errors` but not the new `progress.warnings` (items imported that would fail the check for their state) | `AdminImportPage.vue` | web schema v2 plan |
-| Every field shows for every material type (a book gets ISSN and ISMN, a journal gets ISBN, edition and series) | `ItemMetadataForm.vue` | [material-type field visibility](plans/material-type-field-visibility.md) |
+| **The redesigned admin has not been clicked through in a browser yet** — it type-checks, lints and builds; layout details and the flows against real data need a manual pass in both languages | `src/pages/admin`, `src/components/admin` | manual test script in [task workflow v2](plans/task-workflow-v2.md#manual-test-script-no-frontend-test-runner-exists) plus: create / save / publish a book, a map and an issue of a serial |
+| Task lists show the task title and the item's type, not the item's title: a task carries only `itemId` / `itemType`, and `GET /search/:id` counts an item view, so it is not called per row | `AdminTasksPage.vue`, `AdminDashboardPage.vue` | backend: item title (and material type) on task views, or an `ids` filter on `/api/search` |
+| Records / drafts list has no "Visibility" and "Has an open task" filter and no sort on "Updated" — the API has no such filter or sort | `AdminItemsPage.vue` | [search filters](plans/search-filters.md) |
+| Import warnings name the COBISS id only, so they do not link to the item | `AdminImportPage.vue` | backend: item id in `progress.warnings` |
+| A numeric extent cannot be entered for a material type the schema gives no unit (electronic resources, 3-D objects …) | `editor/MetaField.vue` | a rule change in `record-fields.ts`, if wanted |
 | **Home-page category tiles open an empty catalog**: they filter by `Monograph`, `Serial publication`, `Map`… — not material type labels (found 2026-09-29) | `IndexPage.vue` | [search filters W2](plans/search-filters.md#w2--home-page-category-tiles-match-nothing-s--bug-verified-2026-09-29) |
 | A search the backend rejects (400, e.g. a bad year in the URL) leaves the old results on screen with no message | `CatalogPage.vue` (`fetchItems` has no `catch`) | [search filters W8](plans/search-filters.md#w8--a-rejected-filter-xs) |
-| Open-task badge makes three calls per page (one per active status) | `AdminItemsPage.vue` | [task workflow v2](plans/task-workflow-v2.md) — backend has one open status since 2026-09-25 (dev) |
-| Inbox "hide closed" filters client-side, after pagination | `AdminTasksPage.vue` | task workflow v2 — `status` filter is server-side and has three values |
+| No "Summary" (`summaryNote`) on the public record page | `RecordDetailPage.vue` | [web schema v2 plan F6](plans/metadata-schema-v2.md) |
 | Unused `pm2` dependency (AGPL) | `package.json` | [license audit](../shared/license-audit.md) — remove |
 | Quasar starter leftovers (`EssentialLink.vue`, `ExampleComponent.vue`, `stores/example-store.ts`, `models.ts`) | `src/` | delete when convenient |
 
 ## Plans
 
-- [Schema-driven metadata editor](plans/metadata-schema-v2.md)
-- [Material-type field visibility](plans/material-type-field-visibility.md): static map now, schema v2 rules later
-- [Task workflow v2](plans/task-workflow-v2.md)
+- [Schema-driven metadata editor](plans/metadata-schema-v2.md) — F1, F2, F4, F5 built 2026-09-30
+- [Task workflow v2](plans/task-workflow-v2.md) — built 2026-09-30
+- [Search filters](plans/search-filters.md) — admin list built, public site open
+- [Admin nice-to-have list](plans/admin-nice-to-have.md) — accepted items built 2026-09-30
 - [Collection view types](plans/collection-views.md) — needs input
-- [Admin nice-to-have list](plans/admin-nice-to-have.md) — yes/no per item
+- [Material-type field visibility](plans/material-type-field-visibility.md) — superseded by schema v2
 - Done: [task delegation UI](history/task-delegation.md)

@@ -1,5 +1,6 @@
 import { api } from 'src/boot/axios';
-import type { FileAttachment, RecordMetadata, ResolvedCode } from './search';
+import type { ConstraintViolation, MissingField } from 'src/utils/schemaRules';
+import type { FileAttachment, RecordMetadata } from './search';
 
 // ---------------------------------------------------------------------------
 // Shared enums (mirror backend prisma enums)
@@ -31,12 +32,25 @@ export async function getItemStats(): Promise<ItemStats> {
  */
 export type MetadataPayload = { [K in keyof RecordMetadata]?: RecordMetadata[K] | null };
 
+/** What `POST /items` answers with — the stored item; only the parts the web uses are typed. */
+export interface CreatedItem {
+  id: string;
+  version: number;
+}
+
+/**
+ * Every write is checked against the metadata schema for the state the item
+ * ends up in (a draft needs a title and a material type, a record everything
+ * publishing needs). A failure is `400 METADATA_VALIDATION_FAILED` — see
+ * `validationFailure()` in errors.ts.
+ */
 export async function createItem(params: {
   visibilityStatus: VisibilityStatus;
   targetState: ItemType;
   metadata?: MetadataPayload;
-}): Promise<void> {
-  await api.post('/items', params);
+}): Promise<CreatedItem> {
+  const { data } = await api.post<CreatedItem>('/items', params);
+  return data;
 }
 
 export async function updateItem(
@@ -68,32 +82,34 @@ export async function deleteItems(ids: string[]): Promise<void> {
   await api.delete('/items', { data: { ids } });
 }
 
-export async function transitionItems(ids: string[], targetState: ItemType): Promise<void> {
-  await api.post('/items/transition', { ids, targetState });
+/**
+ * DRAFT ↔ RECORD. All-or-nothing: if any item fails the check for the new
+ * state, nothing moves and the answer is `400 METADATA_VALIDATION_FAILED`
+ * listing the failing items. Publishing closes each item's open review task.
+ */
+export async function transitionItems(
+  ids: string[],
+  targetState: ItemType,
+): Promise<{ id: string; version: number }[]> {
+  const { data } = await api.post<{ id: string; version: number }[]>('/items/transition', {
+    ids,
+    targetState,
+  });
+  return data;
 }
 
-// ---------------------------------------------------------------------------
-// Record schema — mirrors backend schema.controller.ts / schema.types.ts.
-// The single source of the code lists (languages, countries, relator codes …)
-// the editor's dropdowns offer. Cached for a day by the server.
-// ---------------------------------------------------------------------------
-
-export interface FieldDescriptor {
-  key: string;
-  type: 'string' | 'number' | 'boolean' | 'date' | 'enum' | 'array' | 'object';
-  required: boolean;
-  itemType?: 'string' | 'enum' | 'object';
-  allowedValues?: ResolvedCode[];
-  objectShape?: FieldDescriptor[];
-  group: string;
-  order: number;
-  parentInheritable: boolean;
-  issueIdentifying: boolean;
-  levels: ('main' | 'child')[];
+export interface ItemValidation {
+  ok: boolean;
+  missing: MissingField[];
+  violations: ConstraintViolation[];
 }
 
-export async function getRecordSchema(): Promise<{ fields: FieldDescriptor[] }> {
-  const { data } = await api.get<{ fields: FieldDescriptor[] }>('/schema/record');
+/** Dry run of the save check for the STORED item: can it be published (`RECORD`, the default) / kept as a draft? */
+export async function getItemValidation(
+  id: string,
+  target: ItemType = 'RECORD',
+): Promise<ItemValidation> {
+  const { data } = await api.get<ItemValidation>(`/items/${id}/validation`, { params: { target } });
   return data;
 }
 
@@ -297,6 +313,12 @@ export interface ImportJobProgress {
   succeeded: number;
   failed: number;
   errors: { id: string; reason: string }[];
+  /**
+   * Items that WERE imported (counted in `succeeded`) but would not pass the
+   * save check for their state — an import is never blocked by it. Absent on
+   * jobs queued before schema v2.
+   */
+  warnings?: { id: string; reason: string }[];
 }
 
 export interface ImportJobStatus {

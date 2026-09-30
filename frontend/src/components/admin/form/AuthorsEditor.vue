@@ -1,21 +1,22 @@
 <template>
-  <div>
-    <div class="row items-center q-mb-sm">
-      <div class="editor-label">{{ t('admin.edit.fields.authors') }}</div>
-      <q-space />
+  <div class="column q-gutter-y-sm">
+    <div v-if="!readonly" class="row justify-end">
       <q-select
         :model-value="null"
         :options="suggestions"
         outlined
         dense
+        options-dense
         use-input
         hide-selected
+        hide-dropdown-icon
         input-debounce="300"
-        :label="t('admin.edit.authors.find')"
+        :placeholder="t('admin.edit.authors.find')"
         class="find-author"
         @filter="onFilter"
         @update:model-value="addFromSuggestion"
       >
+        <template #prepend><q-icon name="o_search" size="18px" /></template>
         <template #option="{ itemProps, opt }">
           <q-item v-bind="itemProps">
             <q-item-section>
@@ -26,61 +27,51 @@
         </template>
         <template #no-option>
           <q-item>
-            <q-item-section class="text-library-muted">{{
-              t('admin.edit.noMatch')
-            }}</q-item-section>
+            <q-item-section class="adm-muted">{{ t('admin.common.noMatch') }}</q-item-section>
           </q-item>
         </template>
       </q-select>
     </div>
 
-    <q-card v-for="(row, i) in rows" :key="i" flat bordered class="author-row q-mb-sm">
-      <q-card-section class="row q-col-gutter-sm">
-        <div class="col-12 col-md-4">
-          <q-input
-            v-model="row.familyName"
-            outlined
-            dense
-            :label="t('admin.edit.authors.familyName')"
-          />
-        </div>
-        <div class="col-12 col-md-4">
-          <q-input
-            v-model="row.firstName"
-            outlined
-            dense
-            :label="t('admin.edit.authors.firstName')"
-          />
-        </div>
-        <div class="col-6 col-md-2">
-          <q-input v-model="row.prefix" outlined dense :label="t('admin.edit.authors.prefix')" />
-        </div>
-        <div class="col-6 col-md-2">
-          <q-input
-            v-model="row.romanNumerals"
-            outlined
-            dense
-            :label="t('admin.edit.authors.romanNumerals')"
-          />
-        </div>
-        <div class="col-12 col-md-3">
+    <div v-for="(row, i) in rows" :key="i" class="author-row">
+      <div class="author-row__grid author-row__grid--name">
+        <FormField :label="sub('familyName')">
+          <q-input v-model="row.familyName" outlined dense :readonly="readonly" />
+        </FormField>
+        <FormField :label="sub('firstName')">
+          <q-input v-model="row.firstName" outlined dense :readonly="readonly" />
+        </FormField>
+        <FormField :label="sub('dates')">
           <q-input
             v-model="row.dates"
             outlined
             dense
-            :label="t('admin.edit.authors.dates')"
+            :readonly="readonly"
             :placeholder="t('admin.edit.authors.datesPlaceholder')"
           />
-        </div>
-        <div class="col-12 col-md-5">
-          <CodeSelect
-            v-model="row.role"
-            :options="roles"
-            :label="t('admin.edit.authors.role')"
-            dense
+        </FormField>
+        <q-btn
+          v-if="!readonly"
+          flat
+          dense
+          round
+          icon="o_delete"
+          color="negative"
+          class="author-row__remove"
+          :aria-label="t('admin.common.remove')"
+          @click="removeAt(i)"
+        />
+      </div>
+      <div class="author-row__grid author-row__grid--role">
+        <FormField :label="sub('role')">
+          <VocabularySelect
+            :model-value="row.role"
+            vocabulary="relator"
+            :readonly="readonly"
+            @update:model-value="row.role = $event as ResolvedCode | null"
           />
-        </div>
-        <div class="col-10 col-md-3">
+        </FormField>
+        <FormField :label="sub('responsibility')">
           <q-select
             v-model="row.responsibility"
             :options="responsibilityOptions"
@@ -88,33 +79,31 @@
             map-options
             outlined
             dense
+            options-dense
             clearable
-            :label="t('admin.edit.authors.responsibility')"
+            :readonly="readonly"
           />
-        </div>
-        <div class="col-2 col-md-1 row items-center justify-end">
-          <q-btn
-            flat
-            dense
-            round
-            icon="delete"
-            color="negative"
-            :aria-label="t('admin.edit.remove')"
-            @click="removeAt(i)"
-          />
-        </div>
-      </q-card-section>
-    </q-card>
+        </FormField>
+        <FormField :label="sub('prefix')">
+          <q-input v-model="row.prefix" outlined dense :readonly="readonly" />
+        </FormField>
+        <FormField :label="sub('romanNumerals')">
+          <q-input v-model="row.romanNumerals" outlined dense :readonly="readonly" />
+        </FormField>
+      </div>
+    </div>
 
-    <q-btn
-      outline
-      dense
-      no-caps
-      color="primary"
-      icon="person_add"
-      :label="t('admin.edit.authors.add')"
-      @click="add"
-    />
+    <div v-if="!readonly">
+      <q-btn
+        outline
+        dense
+        no-caps
+        color="primary"
+        icon="o_person_add"
+        :label="t('admin.edit.authors.add')"
+        @click="add"
+      />
+    </div>
   </div>
 </template>
 
@@ -123,30 +112,44 @@ import { computed, ref, toRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { suggestValues, type AuthorSuggestion, type ResolvedCode } from 'src/api/search';
 import { useCodeLabel } from 'src/composables/useCodeLabel';
-import CodeSelect from './CodeSelect.vue';
+import { useSchemaLabel } from 'src/composables/useSchemaForm';
+import { useSchemaStore } from 'src/stores/schema-store';
+import FormField from 'src/components/admin/FormField.vue';
+import VocabularySelect from './VocabularySelect.vue';
 import { emptyAuthor, RESPONSIBILITIES, type AuthorForm } from './metadataForm';
 
 // Personal authors (COMARC 700-702). Rows are edited in place on the array
 // the page owns; add / remove replace the array so the parent sees the change.
+// The role comes from the relator vocabulary (searched — 116 codes), the
+// responsibility (700 / 701 / 702) from the schema's short list.
 
 const props = defineProps<{
   modelValue: AuthorForm[];
-  /** Relator codes from the schema. */
-  roles: ResolvedCode[];
+  readonly?: boolean | undefined;
 }>();
 
 const emit = defineEmits<{ (e: 'update:modelValue', value: AuthorForm[]): void }>();
 
 const { t } = useI18n();
 const { codeLabel } = useCodeLabel();
+const { tl } = useSchemaLabel();
+const schemaStore = useSchemaStore();
 
 // Row fields bind straight into the objects; the parent form is a reactive
 // object, so this is the same state, not a copy.
 const rows = toRef(props, 'modelValue');
 
-const responsibilityOptions = computed(() =>
-  RESPONSIBILITIES.map((r) => ({ label: t(`admin.edit.responsibility.${r}`), value: r })),
-);
+/** Captions of the sub-fields come from the schema; the i18n file is the fallback. */
+function sub(key: string): string {
+  return tl(schemaStore.field(`authors.${key}`)?.label) || t(`admin.edit.authors.${key}`);
+}
+
+const responsibilityOptions = computed(() => {
+  const values = schemaStore.values('responsibility');
+  return values.length
+    ? values.map((v) => ({ label: tl(v), value: String(v.code) }))
+    : RESPONSIBILITIES.map((r) => ({ label: t(`admin.edit.responsibility.${r}`), value: r }));
+});
 
 function add() {
   emit('update:modelValue', [...props.modelValue, emptyAuthor()]);
@@ -171,15 +174,13 @@ function suggestionLabel(a: AuthorSuggestion): string {
 function onFilter(input: string, done: (cb: () => void) => void) {
   void (async () => {
     let next: AuthorSuggestion[] = [];
-    try {
-      const result = await suggestValues({
-        field: 'author',
-        ...(input.trim() ? { q: input.trim() } : {}),
-        limit: 10,
-      });
-      next = result.suggestions.map((s) => s.value);
-    } catch {
-      next = [];
+    if (input.trim().length >= 2) {
+      try {
+        const result = await suggestValues({ field: 'author', q: input.trim(), limit: 8 });
+        next = result.suggestions.map((s) => s.value);
+      } catch {
+        next = [];
+      }
     }
     done(() => {
       suggestions.value = next;
@@ -200,15 +201,35 @@ function addFromSuggestion(a: AuthorSuggestion | null) {
 </script>
 
 <style scoped lang="sass">
-.editor-label
-  font-size: 0.8rem
-  font-weight: 600
-  color: $muted
-
 .find-author
-  min-width: 280px
+  width: 320px
+  max-width: 100%
 
 .author-row
-  background: $paper
+  display: flex
+  flex-direction: column
+  gap: 12px
+  padding: 14px 16px
+  background: #FBF8F1
+  border: 1px solid $divider
   border-radius: $radius
+
+.author-row__grid
+  display: grid
+  gap: 12px
+  align-items: end
+
+.author-row__grid--name
+  grid-template-columns: minmax(0, 3fr) minmax(0, 3fr) minmax(0, 2fr) 36px
+
+.author-row__grid--role
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 36px
+
+.author-row__remove
+  margin-bottom: 2px
+
+@media (max-width: 900px)
+  .author-row__grid--name,
+  .author-row__grid--role
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)
 </style>

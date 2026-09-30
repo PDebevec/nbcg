@@ -1,6 +1,12 @@
 # Frontend: search filters
 
-## Status: TODO (2026-09-29) · backend DONE 2026-09-29 (dev)
+## Status: W1 and W4 BUILT 2026-09-30 with the admin redesign (type-check, lint and production build pass; not yet clicked through in a browser) · W2, W3, W5–W8 (public site) TODO · backend DONE 2026-09-29 (dev)
+
+**Admin list (2026-09-30):** the records / drafts list filters by material type, collection type,
+"created by me" and year of publication, all kept in the URL. The design's "Visibility" and "Has
+an open task" filters and a sort on "Updated" are left out: `/api/search` has no `visibilityStatus`
+filter (the field is indexed — one `FILTER_FIELDS` line), tasks are not in the index, and `sort`
+knows only `relevance` / `newest`.
 
 Contract: [shared/plans/search-filters.md](../../shared/plans/search-filters.md) ·
 every param: [backend/reference.md → Search](../../backend/reference.md#search).
