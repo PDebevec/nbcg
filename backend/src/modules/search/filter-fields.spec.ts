@@ -51,6 +51,24 @@ describe('filter registry', () => {
     ]);
   });
 
+  it.each([
+    ['>0', { gt: 0 }],
+    ['>=1', { gte: 1 }],
+    ['<5', { lt: 5 }],
+    ['<=4', { lte: 4 }],
+    ['> 0', { gt: 0 }],
+  ])('turns collectionType=%s into a range', (raw, range) => {
+    expect(buildFilterClauses({ collectionType: raw })).toEqual([{ range: { 'metadata.collectionType': range } }]);
+  });
+
+  it('rejects a comparison inside a list, without an operand, or on a format with no order', () => {
+    expect(() => buildFilterClauses({ collectionType: '>0,1' })).toThrow('a comparison stands alone');
+    expect(() => buildFilterClauses({ collectionType: '1,<=3' })).toThrow('a comparison stands alone');
+    expect(() => buildFilterClauses({ collectionType: '>=' })).toThrow('expected a whole number after >=');
+    expect(() => buildFilterClauses({ collectionType: '>x' })).toThrow('Invalid collectionType "x"');
+    expect(() => buildFilterClauses({ language: '>English' })).toThrow('text cannot be compared');
+  });
+
   it('names the param and the value that did not parse', () => {
     expect(() => buildFilterClauses({ yearTo: '20x0' })).toThrow('Invalid yearTo "20x0": expected a 4-digit year (YYYY)');
     expect(() => buildFilterClauses({ collectionType: '1,3.5' })).toThrow(

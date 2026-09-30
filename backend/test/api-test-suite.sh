@@ -494,8 +494,18 @@ flt_search "collectionType=abc"
 assert_status "collectionType=abc returns 400 (was silently ignored)" "400"
 assert_json_true "…and names the param and the bad value" "d['message'].startswith('Invalid collectionType') and 'abc' in d['message']"
 
+# One comparison instead of a list (%3E is >, %3C is <, %3D is =): no need to know the codes
+flt_search "collectionType=%3E0"
+assert_json_true "collectionType=>0 returns both collections, no plain item" "$FLT_GOT == {'$FLT_COLL_ID','$FLT_SERIAL_ID'}"
+flt_search "collectionType=%3E%3D4"
+assert_json_true "collectionType=>=4 returns only the serial collection" "$FLT_GOT == {'$FLT_SERIAL_ID'}"
+flt_search "collectionType=%3C1"
+assert_json_true "collectionType=<1 returns only the plain items" "$FLT_GOT == {'$FLT_ITEM_ID','$FLT_CHILD_ID'}"
+flt_search "collectionType=%3E0,1"
+assert_status "collectionType=>0,1 returns 400 (a comparison stands alone)" "400"
+
 # The parent picker call: collections only, name + type only
-flt_search "collectionType=1,3,4&fields=metadata.title,metadata.collectionType"
+flt_search "collectionType=%3E0&fields=metadata.title,metadata.collectionType"
 assert_json_true "Picker call returns only id + metadata.title + metadata.collectionType" \
   "d['hits'] and all(set(h['source']) == {'id','metadata'} and set(h['source']['metadata']) == {'title','collectionType'} for h in d['hits'])"
 

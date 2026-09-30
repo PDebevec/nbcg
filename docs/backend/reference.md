@@ -416,8 +416,8 @@ curl 'http://localhost:3000/api/search?title=Montenegro&author=Scherb&yearFrom=1
 # Filter by publisher
 curl 'http://localhost:3000/api/search?publisher=Suppan'
 
-# Collections only, name + type only (the archive app's parent picker)
-curl 'http://localhost:3000/api/search?q=zbirka&collectionType=1,3,4&fields=metadata.title,metadata.collectionType'
+# Collections only, name + type only (the archive app's parent picker); %3E0 is >0
+curl 'http://localhost:3000/api/search?q=zbirka&collectionType=%3E0&fields=metadata.title,metadata.collectionType'
 
 # Filter by ISBN/ISSN (any spelling: dashes and spaces are ignored) or COBISS ID
 curl 'http://localhost:3000/api/search?isbn=978-3-16-148410-0'
@@ -449,7 +449,7 @@ params on `GET /search/:id/children`.
 
 | Param | Value | Keeps items where |
 |---|---|---|
-| `collectionType` | codes, comma-separated: `1,3,4` | `metadata.collectionType` is any of them — `0` not a collection, `1` primary, `3` collection, `4` serial collection, so `1,3,4` = every collection |
+| `collectionType` | codes, comma-separated: `1,3,4` — or one comparison: `>0`, `>=`, `<`, `<=` | `metadata.collectionType` is any of them, or passes the comparison — `0` not a collection, `1` primary, `3` collection, `4` serial collection. `>0` = every collection, including codes added later; `0` = none |
 | `language` | English names, comma-separated: `Slovenian,English` | a `metadata.language[].en` is any of them |
 | `materialType` | English names, comma-separated: `Book` | `metadata.materialType.en` is any of them |
 | `publisher` | comma-separated | `metadata.publication.publisher` contains any of them as a phrase |
@@ -457,6 +457,11 @@ params on `GET /search/:id/children`.
 | `isbn`, `issn` | one number, any spelling | an `isbn[]` / `issn[]` equals it once dashes and spaces are dropped and case is ignored (`978-86…-X` = `97886…x`) |
 | `cobissId` | one ID | `metadata.cobissId` equals it |
 | `createdBy` | one user id | `createdByUserId` equals it |
+
+**Comparisons** (GitHub-search / Lucene style): a list filter whose values
+have an order — today `collectionType` — also takes one `>`, `>=`, `<` or `<=`
+followed by a value, instead of a list. It stands alone: `>0,1` is a 400. HTTP
+clients encode it (`>0` → `%3E0`); by hand, write `collectionType=%3E0`.
 
 A value that does not parse is a 400 `Invalid <param> "<value>": expected
 <format>`; `yearFrom` after `yearTo` is a 400. A **misspelled or unknown param
@@ -466,9 +471,9 @@ unfiltered hits — check the param name before trusting an empty filter.
 The filters are one allowlist, `FILTER_FIELDS` in
 `src/modules/search/filter-fields.ts`: param → index path, kind of match
 (`terms`, `term`, `phrase`, `range`) and value format (`string`, `integer`,
-`year`). A new filter is an entry there plus its param on `SearchQueryDto`
-(`filter-fields.spec.ts` fails if the param is missing); a new kind or format is
-one case or parser in the same file. The path must be indexed the way its kind
+`year`; `ordered` ones take comparisons). A new filter is an entry there plus
+its param on `SearchQueryDto` (`filter-fields.spec.ts` fails if the param is
+missing); a new kind or format is one case or parser in the same file. The path must be indexed the way its kind
 needs (the file header says how): `isbn`/`issn` match their `.normalized`
 sub-field and years their `.years` sub-field, both declared in
 `infrastructure/docker/pgsync/schema.json` (2026-09-29; before, the ISBN filter

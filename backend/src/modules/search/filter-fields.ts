@@ -9,7 +9,8 @@ import { BadRequestException } from '@nestjs/common';
  *   - a filter: an entry here plus its param on `SearchQueryDto`. The global
  *     ValidationPipe strips undeclared params without an error, so a missing
  *     one would be ignored silently (filter-fields.spec.ts fails instead);
- *   - a value format: a `FilterValue` and its parser in `VALUES`;
+ *   - a value format: a `FilterValue` and its parser in `VALUES`, `ordered`
+ *     if it can be compared (`>0`);
  *   - a kind of match: a member of `FilterField` and its case in
  *     `filterClause` (the compiler flags a kind without one).
  *
@@ -31,7 +32,11 @@ interface FilterBase {
   value?: FilterValue;
 }
 
-/** `?param=a,b` — the field equals any of the values. */
+/**
+ * `?param=a,b` — the field equals any of the values. A format with an order
+ * also takes one comparison instead of the list: `>0`, `>=1`, `<5`, `<=4`
+ * (`collectionType=>0` is every collection, including codes added later).
+ */
 interface TermsFilter extends FilterBase {
   kind: 'terms';
 }
@@ -56,7 +61,7 @@ export type FilterField = TermsFilter | TermFilter | PhraseFilter | RangeFilter;
 
 /** Keyed by query param. A `range` is keyed by its name and reads the two params in `params`. */
 export const FILTER_FIELDS: Record<string, FilterField> = {
-  // 0 = not a collection, so `1,3,4` is any collection (vocabulary `collectionType`)
+  // 0 = not a collection, so `>0` is any collection (vocabulary `collectionType`)
   collectionType: { kind: 'terms',  path: 'metadata.collectionType', value: 'integer' },
   // English labels, not codes: the web's filter lists send the label
   language:       { kind: 'terms',  path: 'metadata.language.en.keyword' },
@@ -102,15 +107,21 @@ export function buildFilterClauses(query: object): Clause[] {
 function filterClause(name: string, field: FilterField, params: Record<string, unknown>): Clause | undefined {
   switch (field.kind) {
     case 'terms': {
-      const values = parseList(name, field, params[name]);
-      return values.length ? { terms: { [field.path]: values } } : undefined;
+      const items = splitList(params[name]);
+      if (items.length === 1) {
+        const range = parseComparison(name, field, items[0]);
+        if (range) return { range: { [field.path]: range } };
+      } else if (items.some(isComparison)) {
+        throw new BadRequestException(`Invalid ${name} "${items.join(',')}": a comparison stands alone, not in a list`);
+      }
+      return items.length ? { terms: { [field.path]: items.map((v) => parseValue(name, field, v)) } } : undefined;
     }
     case 'term': {
       const value = parseOne(name, field, params[name]);
       return value === undefined ? undefined : { term: { [field.path]: value } };
     }
     case 'phrase': {
-      const values = parseList(name, field, params[name]);
+      const values = splitList(params[name]).map((v) => parseValue(name, field, v));
       if (!values.length) return undefined;
       return {
         bool: {
@@ -140,12 +151,41 @@ function filterClause(name: string, field: FilterField, params: Record<string, u
   }
 }
 
-const VALUES: Record<FilterValue, { expected: string; parse: (raw: string) => Parsed | undefined }> = {
+/** `ordered`: the format can be compared, so a `terms` filter of it also takes `>0` and the like. */
+const VALUES: Record<FilterValue, { expected: string; ordered?: boolean; parse: (raw: string) => Parsed | undefined }> = {
   string:  { expected: 'text', parse: (raw) => raw },
-  integer: { expected: 'a whole number', parse: (raw) => (/^-?\d+$/.test(raw) ? Number(raw) : undefined) },
+  integer: {
+    expected: 'a whole number',
+    ordered: true,
+    parse: (raw) => (/^-?\d+$/.test(raw) ? Number(raw) : undefined),
+  },
   // Stays a string: `.years` holds 4-digit tokens, which compare as text the way years compare as numbers
-  year:    { expected: 'a 4-digit year (YYYY)', parse: (raw) => (/^\d{4}$/.test(raw) ? raw : undefined) },
+  year:    { expected: 'a 4-digit year (YYYY)', ordered: true, parse: (raw) => (/^\d{4}$/.test(raw) ? raw : undefined) },
 };
+
+/** Longest symbol first, so `>=1` is not read as `>` of "=1". */
+const COMPARISONS = [
+  ['>=', 'gte'],
+  ['<=', 'lte'],
+  ['>', 'gt'],
+  ['<', 'lt'],
+] as const;
+
+function isComparison(item: string): boolean {
+  return COMPARISONS.some(([symbol]) => item.startsWith(symbol));
+}
+
+/** `>0` → `{ gt: 0 }`; undefined when `item` is not a comparison. A format without an order is a 400. */
+function parseComparison(param: string, field: FilterField, item: string): Clause | undefined {
+  const match = COMPARISONS.find(([symbol]) => item.startsWith(symbol));
+  if (!match) return undefined;
+  const [symbol, operator] = match;
+  const { expected, ordered } = VALUES[field.value ?? 'string'];
+  if (!ordered) throw new BadRequestException(`Invalid ${param} "${item}": ${expected} cannot be compared`);
+  const operand = item.slice(symbol.length).trim();
+  if (!operand) throw new BadRequestException(`Invalid ${param} "${item}": expected ${expected} after ${symbol}`);
+  return { [operator]: parseValue(param, field, operand) };
+}
 
 /** A missing or blank param is no filter. */
 function parseOne(param: string, field: FilterField, raw: unknown): Parsed | undefined {
@@ -153,14 +193,13 @@ function parseOne(param: string, field: FilterField, raw: unknown): Parsed | und
   return text ? parseValue(param, field, text) : undefined;
 }
 
-/** Comma-separated values; blanks between commas are skipped. */
-function parseList(param: string, field: FilterField, raw: unknown): Parsed[] {
+/** Comma-separated values, trimmed; blanks between commas are skipped. */
+function splitList(raw: unknown): string[] {
   if (typeof raw !== 'string') return [];
   return raw
     .split(',')
     .map((v) => v.trim())
-    .filter(Boolean)
-    .map((v) => parseValue(param, field, v));
+    .filter(Boolean);
 }
 
 function parseValue(param: string, field: FilterField, text: string): Parsed {

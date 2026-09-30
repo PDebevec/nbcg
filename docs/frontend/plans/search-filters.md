@@ -31,7 +31,7 @@ either year.
 ### W1 — `SearchParams` (XS)
 
 `frontend/src/api/search.ts`: add `collectionType?: string` (comma-separated
-codes); fix the comments on `isbn`/`issn` (any spelling) and `yearFrom`/`yearTo`
+codes, or one comparison — `>0` is every collection); fix the comments on `isbn`/`issn` (any spelling) and `yearFrom`/`yearTo`
 (4 digits, inclusive). This type is the only place the web learns about a new
 filter — there is no generated client, and a param the backend does not know
 is dropped silently.
@@ -59,10 +59,11 @@ Wait for D1 first: with codes it becomes `am`, `as`, … and survives a relabel.
 
 A "Collections" multi-select in `CatalogPage.vue` (and the same field on
 `AdvancedSearchPage.vue`, pushed to `/catalog`), kept in the route query like
-the others: `collectionType=1,3,4`.
+the others: `collectionType=1,3` for chosen types, `collectionType=>0` for all.
 - Options from the schema, not hard-coded: `vocabularies.collectionType.values`
   from `GET /api/schema/v2/record` (codes with `en`/`cnr` labels, already loaded
-  by the metadata editor). "Any collection" = every code except `0`.
+  by the metadata editor). "Any collection" is `collectionType=>0` — axios
+  encodes the `>`; a hand-built URL needs `%3E0`.
 - Read the codes back with `queryList('collectionType')`; they are numbers in
   the vocabulary and strings in the URL.
 
@@ -82,7 +83,7 @@ Waits for that plan's open questions.
 
 There is no such flow today ([metadata schema v2 F5](metadata-schema-v2.md#f5--parent-context-s)).
 When it comes, use the archive app's call —
-`collectionType=<every code but 0>&fields=metadata.title,metadata.collectionType`
+`collectionType=>0&fields=metadata.title,metadata.collectionType`
 ([archive app](../../shared/archive-app.md#what-it-uses-from-the-api)) — and send
 the choice as `parentIds` on `POST /api/items`. The backend does not require a
 parent to be a collection; the filter is the picker's job.

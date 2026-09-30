@@ -2,6 +2,13 @@
 
 ## Status: DONE (reported by the archive app 2026-09-26) — the app runs on v2; v1 removed by backend B7 the same day
 
+> **2026-09-29 — per-item parents.** The archive app now keeps parent links per
+> item (nbcg-dc `docs/superpowers/specs/2026-09-29-per-item-parents-design.md`).
+> Wherever this plan says "the batch's parents", read "the item's parents": the
+> rules run with each item's own parents, a new item is created with its own
+> `parentIds`, and a re-upload links added parents and unlinks removed ones
+> (`POST /api/relations/disconnect`). No backend change.
+
 For the desktop archive application (TypeScript/Vue, runs at the client on
 `nbcg-dc`, source not in this repo). It builds its whole metadata editor from
 `GET /api/schema/record` (v1). This guide says what to change so it uses
