@@ -177,7 +177,7 @@
 
         <!-- ───────────── JSON ───────────── -->
         <q-card v-else-if="tab === 'json'" flat bordered>
-          <div class="adm-card__body column q-gutter-y-md">
+          <div class="adm-card__body adm-card__body--stack">
             <div class="row items-center q-gutter-x-md">
               <span class="col text-caption adm-muted">{{ t('admin.edit.jsonHint') }}</span>
               <q-badge class="badge-soft" :class="jsonValid ? 'badge-soft--positive' : 'badge-soft--negative'">
@@ -321,7 +321,7 @@
 
         <!-- STATUS, and the move between draft and record (nice-to-have A2) -->
         <q-card flat bordered>
-          <div class="adm-card__body column q-gutter-y-md">
+          <div class="adm-card__body adm-card__body--stack">
             <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.edit.status.title') }}</h2>
             <dl class="status-list">
               <dt>{{ t('admin.edit.status.type') }}</dt>
@@ -388,7 +388,7 @@
         </q-card>
 
         <q-card v-if="openTask" flat bordered>
-          <div class="adm-card__body column q-gutter-y-md">
+          <div class="adm-card__body adm-card__body--stack">
             <div class="row items-center justify-between">
               <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.edit.openTask.title') }}</h2>
               <a href="#" class="adm-link side-link" @click.prevent="setTab('tasks')">
@@ -414,7 +414,7 @@
         </q-card>
 
         <q-card v-if="!isNew" flat bordered>
-          <div class="adm-card__body column q-gutter-y-sm">
+          <div class="adm-card__body adm-card__body--stack-sm">
             <div class="row items-center justify-between">
               <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.edit.tabFiles') }}</h2>
               <a href="#" class="adm-link side-link" @click.prevent="setTab('files')">
@@ -465,7 +465,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef } from 'vue';
+import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
@@ -486,7 +486,7 @@ import {
   type MetadataPayload,
   type VisibilityStatus,
 } from 'src/api/admin';
-import { apiErrorMessage, validationFailure, type ValidationFailure } from 'src/api/errors';
+import { apiErrorMessage, apiErrorStatus, validationFailure, type ValidationFailure } from 'src/api/errors';
 import { listTasks, type Task } from 'src/api/tasks';
 import { auth } from 'src/services/keycloak';
 import { useAuthz } from 'src/composables/useAuthz';
@@ -496,7 +496,7 @@ import { useSchemaStore } from 'src/stores/schema-store';
 import { useTaskCountStore } from 'src/stores/task-count-store';
 import { formatDate, formatDateTime, formatFileSize } from 'src/utils/adminFormat';
 import { materialTypeIcon } from 'src/utils/materialType';
-import { rememberItem } from 'src/utils/recentItems';
+import { forgetItem, rememberItem } from 'src/utils/recentItems';
 import type { ItemState, TargetState } from 'src/utils/schemaRules';
 import AdminPageHeader from 'src/components/admin/AdminPageHeader.vue';
 import CreateTaskDialog from 'src/components/admin/CreateTaskDialog.vue';
@@ -941,13 +941,17 @@ function renderJson() {
 // JSON when actually coming FROM the json tab — applying it on any other tab
 // switch (e.g. form → files) would overwrite the form with a stale snapshot.
 let previousTab: Tab = tab.value;
-function onTabChange(next: Tab) {
+function syncJsonForTab(next: Tab) {
   if (next === 'json') {
     renderJson();
   } else if (previousTab === 'json') {
     applyJson(false);
   }
   previousTab = next;
+}
+
+function onTabChange(next: Tab) {
+  syncJsonForTab(next);
   void router.replace({ query: { ...route.query, tab: next === 'form' ? undefined : next } });
 }
 
@@ -955,6 +959,19 @@ function setTab(next: Tab) {
   tab.value = next;
   onTabChange(next);
 }
+
+// A link to `?tab=tasks` from this same page (the open-task card, the item's
+// task list) changes only the query, so the component is not remounted.
+watch(
+  () => route.query.tab,
+  (value) => {
+    const next = TABS.find((name) => name === value) ?? 'form';
+    if (next !== tab.value) {
+      tab.value = next;
+      syncJsonForTab(next);
+    }
+  },
+);
 
 function applyJson(showError = true): boolean {
   try {
@@ -1069,8 +1086,11 @@ onMounted(async () => {
     files.value = await listFiles(id);
     rememberItem(auth.userId, { id, title: form.value.title, itemType: itemType.value });
     void loadOpenTask();
-  } catch {
+  } catch (err) {
     loadError.value = true;
+    takeSnapshot(); // nothing to lose, so no leave guard
+    // Deleted since it was last opened: drop it from "Recently opened"
+    if (apiErrorStatus(err) === 404) forgetItem(auth.userId, id);
   } finally {
     loading.value = false;
   }

@@ -357,6 +357,7 @@ import { useSchemaStore } from 'src/stores/schema-store';
 import { useTaskCountStore } from 'src/stores/task-count-store';
 import { formatCount } from 'src/utils/adminFormat';
 import { materialTypeIcon } from 'src/utils/materialType';
+import { forgetItem } from 'src/utils/recentItems';
 import AdminPageHeader from 'src/components/admin/AdminPageHeader.vue';
 import BulkAssignDialog, { type BulkAssignItem } from 'src/components/admin/BulkAssignDialog.vue';
 import RelativeTime from 'src/components/admin/RelativeTime.vue';
@@ -694,6 +695,18 @@ watch(
   },
 );
 
+// A filter link to this same list (e.g. from the dashboard) changes only the
+// query, so the component is not remounted: re-read the filters from the URL.
+watch(
+  () => route.query,
+  () => {
+    const next = filtersFromRoute();
+    if (JSON.stringify(next) === JSON.stringify(filters)) return;
+    Object.assign(filters, next);
+    void fetchPage(1, pagination.value.rowsPerPage);
+  },
+);
+
 onMounted(() => {
   void schemaStore.load();
   void loadMaterialTypes();
@@ -705,13 +718,13 @@ onMounted(() => {
 // Actions
 // ---------------------------------------------------------------------------
 
-function confirmDialog(message: string): Promise<void> {
+function confirmDialog(message: string, title?: string, okLabel?: string): Promise<void> {
   return new Promise((resolve) => {
     $q.dialog({
-      title: t('admin.common.confirmTitle'),
+      title: title ?? t('admin.common.confirmTitle'),
       message,
       cancel: { flat: true, noCaps: true, color: 'primary', label: t('admin.common.cancel') },
-      ok: { unelevated: true, noCaps: true, color: 'negative', label: t('admin.common.confirm') },
+      ok: { unelevated: true, noCaps: true, color: 'negative', label: okLabel ?? t('admin.common.confirm') },
     }).onOk(() => resolve());
   });
 }
@@ -728,8 +741,18 @@ async function runAction(action: () => Promise<unknown>, successMsg: string) {
 
 async function remove(targets: Row[]) {
   const ids = targets.map((r) => r.id);
-  await confirmDialog(t('admin.items.deleteConfirm', { count: ids.length }));
-  await runAction(() => deleteItems(ids), t('admin.items.deleted', { count: ids.length }));
+  await confirmDialog(
+    t('admin.items.deleteConfirm', { count: ids.length }),
+    t('admin.items.delete'),
+    t('admin.items.delete'),
+  );
+  // The search index lags a little behind a delete, so drop the rows here as well.
+  await runAction(async () => {
+    await deleteItems(ids);
+    rows.value = rows.value.filter((r) => !ids.includes(r.id));
+    pagination.value.rowsNumber = Math.max(0, pagination.value.rowsNumber - ids.length);
+    ids.forEach((id) => forgetItem(auth.userId, id));
+  }, t('admin.items.deleted', { count: ids.length }));
 }
 
 // ── Publish / return to draft ──

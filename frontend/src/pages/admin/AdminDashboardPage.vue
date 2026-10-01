@@ -211,7 +211,7 @@
         </q-card>
 
         <q-card flat bordered>
-          <div class="adm-card__body column q-gutter-y-md">
+          <div class="adm-card__body adm-card__body--stack">
             <h2 class="adm-card__title">{{ t('admin.dashboard.glance') }}</h2>
             <div v-for="row in glanceRows" :key="row.key" class="column q-gutter-y-sm">
               <div class="row justify-between text-caption">
@@ -239,7 +239,7 @@
         <!-- User directory sync. Worth surfacing: a sync failing silently for a
              week is otherwise invisible until the user picker is mysteriously empty. -->
         <q-card v-if="canManageUsers" flat bordered>
-          <div class="adm-card__body column q-gutter-y-md">
+          <div class="adm-card__body adm-card__body--stack">
             <h2 class="adm-card__title">{{ t('admin.users.title') }}</h2>
             <div v-if="syncStatus" class="column">
               <span>{{ syncLine }}</span>

@@ -79,11 +79,12 @@ Inter. Icons are the outlined Material set (`o_*`).
 - **Statistics** (`/admin/stats`) and **COBISS import** (`/admin/import`, with
   the warnings of a finished job).
 
-## Known issues (2026-09-30)
+## Known issues (2026-10-01)
 
 | Issue | Where | Plan |
 |---|---|---|
-| **The redesigned admin has not been clicked through in a browser yet** — it type-checks, lints and builds; layout details and the flows against real data need a manual pass in both languages | `src/pages/admin`, `src/components/admin` | manual test script in [task workflow v2](plans/task-workflow-v2.md#manual-test-script-no-frontend-test-runner-exists) plus: create / save / publish a book, a map and an issue of a serial |
+| **Records imported from COBISS mostly fail the record check** — the import fills the extent statement ("168 str.") but not the numeric `extent`, which the schema requires on a record for books, video and sound; the editor then says "This record cannot be saved yet: Number of pages" and Save stays off until it is typed in. Every one of the 11 dev records is affected | `AdminItemEditPage.vue` (correct behaviour), backend import | backend: parse the number out of the extent statement on import, or make `extent` publish-only for imported records |
+| A headless-Chrome pass on 2026-10-01 clicked through every admin page, the four task dialogs along the whole stage chain, both languages and a 1100 px viewport; what it did not cover: file upload, the JSON tab round-trip, the 409 merge, bulk actions on many rows, and the import itself | `src/pages/admin`, `src/components/admin` | manual: [task workflow v2 test script](plans/task-workflow-v2.md#manual-test-script-no-frontend-test-runner-exists) |
 | Task lists show the task title and the item's type, not the item's title: a task carries only `itemId` / `itemType`, and `GET /search/:id` counts an item view, so it is not called per row | `AdminTasksPage.vue`, `AdminDashboardPage.vue` | backend: item title (and material type) on task views, or an `ids` filter on `/api/search` |
 | Records / drafts list has no "Visibility" and "Has an open task" filter and no sort on "Updated" — the API has no such filter or sort | `AdminItemsPage.vue` | [search filters](plans/search-filters.md) |
 | Import warnings name the COBISS id only, so they do not link to the item | `AdminImportPage.vue` | backend: item id in `progress.warnings` |

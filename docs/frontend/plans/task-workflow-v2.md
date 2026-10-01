@@ -1,6 +1,6 @@
 # Frontend: task workflow v2
 
-## Status: BUILT 2026-09-30 with the admin redesign (type-check, lint and production build pass; not yet clicked through in a browser) · backend DONE 2026-09-25 (dev) — ships together with it
+## Status: BUILT 2026-09-30 with the admin redesign (type-check, lint and production build pass; clicked through in headless Chrome 2026-10-01: every page, the task dialogs, both languages) · backend DONE 2026-09-25 (dev) — ships together with it
 
 **Differences from the plan below (2026-09-30):** no stage stepper in the task header (the canvas
 has none); the four actions are separate dialogs in `src/components/admin/tasks/`

@@ -214,7 +214,7 @@ export interface SearchParams {
   language?: string;
   /** Comma-separated multi-select of material type names (metadata.materialType.en) */
   materialType?: string;
-  /** Comma-separated `collectionType` codes (0 = not a collection, 1, 3, 4). */
+  /** Comma-separated `collectionType` codes (0 = not a collection, 1, 3, 4), or one comparison: `>0` is every collection. */
   collectionType?: string;
   isbn?: string;
   issn?: string;

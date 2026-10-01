@@ -556,6 +556,15 @@ onMounted(() => {
   padding: 12px 16px
   border-bottom: 1px solid $divider
 
+// Below ~1280px the pane has no room next to the list: stack them
+@media (max-width: 1279px)
+  .split
+    flex-direction: column
+    min-height: 0
+  .split__list
+    width: auto
+    max-height: 360px
+
 .mini-row
   display: flex
   gap: 12px

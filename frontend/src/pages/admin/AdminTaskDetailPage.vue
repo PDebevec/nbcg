@@ -71,7 +71,7 @@
         </div>
 
         <q-card v-if="task.description" flat bordered>
-          <div class="adm-card__body column q-gutter-y-sm">
+          <div class="adm-card__body adm-card__body--stack-sm">
             <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.tasks.detail.description') }}</h2>
             <p class="q-ma-none pre-wrap">{{ task.description }}</p>
           </div>
@@ -113,7 +113,7 @@
 
       <aside class="column q-gutter-y-md">
         <q-card flat bordered>
-          <div class="adm-card__body column q-gutter-y-md">
+          <div class="adm-card__body adm-card__body--stack">
             <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.tasks.detail.details') }}</h2>
             <dl class="details">
               <dt>{{ t('admin.tasks.columns.status') }}</dt>
@@ -161,7 +161,7 @@
         </q-card>
 
         <q-card v-if="permissions.canManage" flat bordered>
-          <div class="adm-card__body column q-gutter-y-sm">
+          <div class="adm-card__body adm-card__body--stack-sm">
             <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.tasks.detail.moreActions') }}</h2>
             <q-btn
               outline

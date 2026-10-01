@@ -26,7 +26,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { LOCALE_STORAGE_KEY } from 'src/boot/i18n';
+import { LOCALE_STORAGE_KEY, applyQuasarLang } from 'src/boot/i18n';
 
 const { locale } = useI18n();
 
@@ -41,6 +41,7 @@ const current = computed(
 
 function setLocale(value: string) {
   locale.value = value;
+  applyQuasarLang(value);
   try {
     localStorage.setItem(LOCALE_STORAGE_KEY, value);
   } catch {

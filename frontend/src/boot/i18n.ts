@@ -1,5 +1,8 @@
 import { defineBoot } from '#q-app/wrappers';
 import { createI18n } from 'vue-i18n';
+import { Lang } from 'quasar';
+import quasarLangEn from 'quasar/lang/en-US';
+import quasarLangSr from 'quasar/lang/sr';
 
 import messages from 'src/i18n';
 
@@ -39,6 +42,17 @@ export const i18n = createI18n<{ message: MessageSchema }, MessageLanguages>({
   messages,
 });
 
+// Quasar's own strings (table pagination, date picker, …). There is no Montenegrin pack; Serbian Latin is the closest.
+const QUASAR_LANG: Record<MessageLanguages, typeof quasarLangEn> = {
+  'en-US': quasarLangEn,
+  me: quasarLangSr,
+};
+
+export function applyQuasarLang(locale: string) {
+  Lang.set(QUASAR_LANG[locale as MessageLanguages] ?? quasarLangEn);
+}
+
 export default defineBoot(({ app }) => {
   app.use(i18n);
+  applyQuasarLang(initialLocale());
 });

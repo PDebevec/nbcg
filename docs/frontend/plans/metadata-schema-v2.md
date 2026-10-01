@@ -1,6 +1,6 @@
 # Frontend: schema-driven metadata editor (schema v2)
 
-## Status: F1, F2, F4, F5 BUILT 2026-09-30 with the admin redesign (type-check, lint and production build pass; not yet clicked through in a browser) · F3 decided: hand-written form, no generic renderer · F6 open
+## Status: F1, F2, F4, F5 BUILT 2026-09-30 with the admin redesign (type-check, lint and production build pass; clicked through in headless Chrome 2026-10-01: every page, the task dialogs, both languages) · F3 decided: hand-written form, no generic renderer · F6 open
 
 **What was built (2026-09-30)** — see [overview → Admin area](../overview.md#admin-area):
 `src/api/schema.ts`, `src/stores/schema-store.ts`, `src/utils/schemaRules.ts` (verbatim copy of

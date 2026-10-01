@@ -9,7 +9,7 @@
     <div class="import-grid">
       <!-- NEW IMPORT -->
       <q-card flat bordered>
-        <div class="adm-card__body column q-gutter-y-md">
+        <div class="adm-card__body adm-card__body--stack">
           <h2 class="adm-card__title adm-card__title--sm">{{ t('admin.import.newImport') }}</h2>
 
           <FormField
