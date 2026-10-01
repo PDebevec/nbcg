@@ -1,0 +1,156 @@
+// Public site look (design canvas "NBCG Public Redesign"): the pieces the
+// small pages share — page column, two-column grid, cards, eyebrows, prose.
+// The admin area has its own file (admin.sass); the shell is in MainLayout.vue.
+
+.pub-page
+  padding: 40px 0 72px
+  display: flex
+  flex-direction: column
+  gap: 36px
+
+// Reading column left, sidebar right
+.pub-grid
+  display: grid
+  grid-template-columns: minmax(0, 7fr) minmax(0, 4fr)
+  gap: 56px
+  align-items: start
+  &--wide
+    grid-template-columns: minmax(0, 8fr) minmax(0, 4fr)
+  &--even
+    grid-template-columns: minmax(0, 6fr) minmax(0, 5fr)
+
+@media (max-width: 1023px)
+  .pub-grid,
+  .pub-grid--wide,
+  .pub-grid--even
+    grid-template-columns: minmax(0, 1fr)
+    gap: 32px
+
+.pub-aside
+  display: flex
+  flex-direction: column
+  gap: 20px
+
+.pub-card
+  background: $surface
+  border: 1px solid $divider
+  border-radius: 10px
+  padding: 26px 28px
+  &--navy
+    background: $primary
+    border-color: $primary
+    color: white
+  &--prose
+    padding: 40px 44px
+
+@media (max-width: 599px)
+  .pub-card,
+  .pub-card--prose
+    padding: 22px 18px
+
+.pub-eyebrow
+  font-size: 12px
+  font-weight: 600
+  letter-spacing: 0.1em
+  text-transform: uppercase
+  color: $eyebrow
+  .pub-card--navy &
+    color: $gold
+    font-weight: 700
+
+.pub-h2
+  margin: 0
+  font-family: $serif
+  font-size: 22px
+  font-weight: 600
+  line-height: 1.2
+
+// Body copy: lead paragraph, subheadings, paragraphs
+.pub-prose
+  display: flex
+  flex-direction: column
+  gap: 18px
+  p
+    margin: 0
+    font-size: 15.5px
+    line-height: 1.7
+    color: #3A362E
+  .pub-prose__lead
+    font-size: 18px
+    line-height: 1.6
+    font-weight: 500
+    color: $ink
+  h2
+    margin: 14px 0 0
+    font-family: $serif
+    font-size: 24px
+    font-weight: 600
+    line-height: 1.2
+    color: $ink
+
+// Fact rows: icon box, title, caption (About, Terms "In short", Advanced "How it works")
+.pub-facts
+  list-style: none
+  margin: 0
+  padding: 0
+  display: flex
+  flex-direction: column
+
+.pub-fact
+  display: flex
+  gap: 14px
+  padding: 14px 0
+  border-top: 1px solid $divider-soft
+  .pub-card--navy &
+    border-top-color: rgba($paper, 0.14)
+  &:last-child
+    padding-bottom: 0
+
+.pub-fact__icon
+  width: 40px
+  height: 40px
+  flex-shrink: 0
+  display: flex
+  align-items: center
+  justify-content: center
+  border-radius: 10px
+  background: #F1EADB
+  color: $primary
+  .pub-card--navy &
+    background: rgba($paper, 0.12)
+    color: white
+  &--sm
+    width: 26px
+    height: 26px
+    border-radius: 50%
+    font-size: 13px
+    font-weight: 700
+    margin-top: 1px
+  &--ok
+    background: $soft-positive
+    color: $soft-positive-ink
+  &--no
+    background: $soft-negative
+    color: $soft-negative-ink
+
+.pub-fact__text
+  display: flex
+  flex-direction: column
+  gap: 3px
+  font-size: 15px
+  line-height: 1.5
+
+.pub-fact__title
+  font-weight: 600
+
+.pub-fact__desc
+  font-size: 13.5px
+  line-height: 1.45
+  color: $muted
+  .pub-card--navy &
+    color: $on-navy
+
+// Soft type badge tone the admin set lacks: serials
+.badge-soft.badge-soft--warm
+  background: #F5E1D0
+  color: #7A3F12

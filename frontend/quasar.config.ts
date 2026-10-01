@@ -15,7 +15,7 @@ export default defineConfig((ctx) => {
     boot: ['i18n', 'axios', 'keycloak'],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
-    css: ['app.sass', 'admin.sass'],
+    css: ['app.sass', 'public.sass', 'admin.sass'],
 
     // https://github.com/quasarframework/quasar/tree/dev/extras
     extras: [

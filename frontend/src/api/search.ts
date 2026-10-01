@@ -332,3 +332,12 @@ export async function getItem(id: string): Promise<SearchHit> {
   const { data } = await api.get<SearchHit>(`/search/${id}`);
   return data;
 }
+
+/** Children of a collection or serial (issues of a newspaper, items of a collection); same params as the search. */
+export async function listChildren(
+  parentId: string,
+  params: Pick<SearchParams, 'type' | 'page' | 'limit' | 'fields' | 'sort'> = {},
+): Promise<SearchResult> {
+  const { data } = await api.get<SearchResult>(`/search/${parentId}/children`, { params });
+  return data;
+}

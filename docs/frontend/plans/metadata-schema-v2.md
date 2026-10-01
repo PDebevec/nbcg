@@ -261,7 +261,11 @@ relations UI (if any) must show `METADATA_VALIDATION_FAILED` too.
 
 ### F6 — optional: public record page
 
-`RecordDetailPage.vue` could use the same labels/units (e.g. "253 str.",
+**Partly built 2026-10-01** with the [public redesign](public-redesign.md): the record page shows the numeric
+`extent` with a unit label (`catalog.units.*`, raw unit as fallback) and `summaryNote`; it still uses its own
+field labels (`record.fields.*`), not the schema's.
+
+Original note: `RecordDetailPage.vue` could use the same labels/units (e.g. "253 str.",
 "95 min", the scale for maps). Not required for the editor work.
 
 ---

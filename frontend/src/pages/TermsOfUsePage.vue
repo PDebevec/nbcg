@@ -1,16 +1,35 @@
 <template>
   <q-page>
-    <div class="sub-header q-px-md q-py-lg">
-      <div class="page-body">
-        <div class="header-kicker q-mb-xs">{{ t('common.library') }}</div>
-        <h1 class="text-h4 text-weight-bold text-white q-my-none">{{ t('terms.title') }}</h1>
-      </div>
-    </div>
+    <div class="site-container pub-page">
+      <PageHead :title="t('terms.title')" :lead="t('terms.lead')" :crumb="t('nav.terms')" />
 
-    <div class="page-body q-px-md q-py-xl">
-      <div class="content-card q-pa-xl">
-        <p>{{ t('terms.p1') }}</p>
-        <p>{{ t('terms.p2') }}</p>
+      <div class="pub-grid">
+        <article class="pub-card terms">
+          <section v-for="(section, i) in SECTIONS" :key="section" class="terms__section">
+            <span class="terms__num">{{ i + 1 }}</span>
+            <div class="terms__body">
+              <h2 class="terms__title">{{ t(`terms.${section}Title`) }}</h2>
+              <p class="terms__text">{{ t(`terms.${section}`) }}</p>
+            </div>
+          </section>
+        </article>
+
+        <aside class="pub-aside">
+          <section class="pub-card short" :aria-label="t('terms.shortTitle')">
+            <div class="pub-eyebrow">{{ t('terms.shortKicker') }}</div>
+            <h2 class="pub-h2 short__title">{{ t('terms.shortTitle') }}</h2>
+            <ul class="pub-facts">
+              <li v-for="rule in RULES" :key="rule.key" class="pub-fact short__rule">
+                <span class="pub-fact__icon pub-fact__icon--sm" :class="rule.ok ? 'pub-fact__icon--ok' : 'pub-fact__icon--no'">
+                  <q-icon :name="rule.ok ? 'o_check' : 'o_close'" size="15px" />
+                </span>
+                <span class="pub-fact__text">{{ t(`terms.${rule.key}`) }}</span>
+              </li>
+            </ul>
+          </section>
+
+          <LinkCard navy icon="o_mail" :title="t('terms.consentTitle')" :text="t('terms.consentText')" to="/kontakt" />
+        </aside>
       </div>
     </div>
   </q-page>
@@ -18,37 +37,79 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
+import PageHead from 'components/PageHead.vue';
+import LinkCard from 'components/LinkCard.vue';
 
 const { t } = useI18n();
+
+const SECTIONS = ['p1', 'p2'] as const;
+
+const RULES = [
+  { key: 'can1', ok: true },
+  { key: 'can2', ok: true },
+  { key: 'cannot1', ok: false },
+];
 </script>
 
 <style scoped lang="sass">
-@use 'sass:color'
+.terms
+  padding: 12px 44px 40px
 
-.sub-header
-  background: linear-gradient(90deg, $primary 0%, color.adjust($primary, $lightness: -10%) 100%)
+@media (max-width: 599px)
+  .terms
+    padding: 4px 18px 22px
 
-.header-kicker
-  font-size: 0.72rem
-  font-weight: 700
-  letter-spacing: 0.14em
-  text-transform: uppercase
-  color: rgba($paper, 0.6)
+.terms__section
+  display: flex
+  gap: 22px
+  padding: 28px 0
+  border-bottom: 1px solid $divider-soft
+  &:last-child
+    padding-bottom: 0
+    border-bottom: none
 
-.page-body
-  max-width: 1024px
-  margin: 0 auto
+.terms__num
+  flex-shrink: 0
+  width: 40px
+  height: 40px
+  display: flex
+  align-items: center
+  justify-content: center
+  border-radius: 50%
+  background: #F1EADB
+  color: $primary
+  font-family: $serif
+  font-size: 18px
+  font-weight: 600
 
-.content-card
-  background: $surface
-  border: 1px solid $divider
-  border-radius: $radius
-  box-shadow: 0 4px 20px rgba($dark, 0.06)
-  p
-    font-size: 0.97rem
-    line-height: 1.75
-    color: $ink
-    margin-bottom: 1.1rem
-    &:last-child
-      margin-bottom: 0
+.terms__body
+  display: flex
+  flex-direction: column
+  gap: 8px
+
+.terms__title
+  margin: 0
+  font-family: $serif
+  font-size: 24px
+  font-weight: 600
+  line-height: 1.2
+  color: $ink
+
+.terms__text
+  margin: 0
+  font-size: 15.5px
+  line-height: 1.7
+  color: #3A362E
+
+.short
+  display: flex
+  flex-direction: column
+  gap: 4px
+
+.short__title
+  margin-bottom: 10px
+
+.short__rule
+  padding: 12px 0
+  gap: 12px
 </style>

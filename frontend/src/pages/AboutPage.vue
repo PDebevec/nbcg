@@ -1,22 +1,36 @@
 <template>
   <q-page>
-    <div class="sub-header q-px-md q-py-lg">
-      <div class="page-body">
-        <div class="header-kicker q-mb-xs">{{ t('common.library') }}</div>
-        <h1 class="text-h4 text-weight-bold text-white q-my-none">{{ t('about.title') }}</h1>
-      </div>
-    </div>
+    <div class="site-container pub-page">
+      <PageHead :title="t('about.title')" :lead="t('about.lead')" :crumb="t('nav.about')" />
 
-    <div class="page-body q-px-md q-py-xl">
-      <div class="content-card q-pa-xl">
-        <div class="section-label text-library-muted q-mb-xs">{{ t('about.kicker') }}</div>
-        <h2 class="text-h5 text-weight-bold text-library-primary q-mt-none q-mb-md">
-          {{ t('about.title') }}
-        </h2>
-        <p class="lead">{{ t('index.aboutP1') }}</p>
-        <p>{{ t('index.aboutP2') }}</p>
-        <p>{{ t('index.aboutP3') }}</p>
-        <p>{{ t('index.aboutP4') }}</p>
+      <div class="pub-grid">
+        <article class="pub-card pub-card--prose pub-prose">
+          <p class="pub-prose__lead">{{ t('index.aboutP1') }}</p>
+          <p>{{ t('index.aboutP2') }}</p>
+          <h2>{{ t('about.whereTitle') }}</h2>
+          <p>{{ t('index.aboutP3') }}</p>
+          <h2>{{ t('about.programmeTitle') }}</h2>
+          <p>{{ t('index.aboutP4') }}</p>
+        </article>
+
+        <aside class="pub-aside">
+          <section class="pub-card pub-card--navy glance" :aria-label="t('about.glanceTitle')">
+            <div class="pub-eyebrow">{{ t('about.glanceKicker') }}</div>
+            <h2 class="pub-h2 glance__title">{{ t('about.glanceTitle') }}</h2>
+            <ul class="pub-facts">
+              <li v-for="fact in FACTS" :key="fact.key" class="pub-fact">
+                <span class="pub-fact__icon"><q-icon :name="fact.icon" size="20px" /></span>
+                <span class="pub-fact__text">
+                  <span class="pub-fact__title">{{ t(`index.facts.${fact.key}Title`) }}</span>
+                  <span class="pub-fact__desc">{{ t(`index.facts.${fact.key}Text`) }}</span>
+                </span>
+              </li>
+            </ul>
+          </section>
+
+          <LinkCard icon="o_menu_book" :title="t('about.browseTitle')" :text="t('about.browseText')" to="/catalog" />
+          <LinkCard icon="o_mail" :title="t('about.contactTitle')" :text="t('about.contactText')" to="/kontakt" />
+        </aside>
       </div>
     </div>
   </q-page>
@@ -24,49 +38,25 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
+import PageHead from 'components/PageHead.vue';
+import LinkCard from 'components/LinkCard.vue';
 
 const { t } = useI18n();
+
+// The same three facts as the home page's About block
+const FACTS = [
+  { key: 'since', icon: 'o_calendar_today' },
+  { key: 'titles', icon: 'o_inventory_2' },
+  { key: 'programme', icon: 'o_account_balance' },
+];
 </script>
 
 <style scoped lang="sass">
-@use 'sass:color'
+.glance
+  display: flex
+  flex-direction: column
+  gap: 6px
 
-.sub-header
-  background: linear-gradient(90deg, $primary 0%, color.adjust($primary, $lightness: -10%) 100%)
-
-.header-kicker
-  font-size: 0.72rem
-  font-weight: 700
-  letter-spacing: 0.14em
-  text-transform: uppercase
-  color: rgba($paper, 0.6)
-
-.page-body
-  max-width: 1024px
-  margin: 0 auto
-
-.section-label
-  letter-spacing: 0.08em
-  text-transform: uppercase
-  font-size: 0.72rem
-  font-weight: 700
-
-.content-card
-  background: linear-gradient(180deg, $surface, $paper)
-  border: 1px solid $divider
-  border-radius: $radius
-  box-shadow: 0 4px 20px rgba($dark, 0.06)
-  p
-    font-size: 0.97rem
-    line-height: 1.75
-    color: $ink
-    margin-bottom: 1.1rem
-    &:last-child
-      margin-bottom: 0
-  .lead
-    font-size: 1.12rem
-    line-height: 1.7
-    color: color.adjust($ink, $lightness: 6%)
-    font-weight: 500
-    margin-bottom: 1.4rem
+.glance__title
+  margin-bottom: 8px
 </style>

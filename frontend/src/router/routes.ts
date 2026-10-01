@@ -5,6 +5,8 @@ declare module 'vue-router' {
     requiresAuth?: boolean;
     /** Keycloak scopes the user must ALL hold (checked in router guard). */
     scopes?: string[];
+    /** MainLayout shows a one-line footer instead of the full one. */
+    compactFooter?: boolean;
   }
 }
 
@@ -14,8 +16,8 @@ const routes: RouteRecordRaw[] = [
     component: () => import('layouts/MainLayout.vue'),
     children: [
       { path: '', component: () => import('pages/IndexPage.vue') },
-      { path: 'catalog', component: () => import('pages/CatalogPage.vue') },
-      { path: 'catalog/:id', component: () => import('pages/RecordDetailPage.vue') },
+      { path: 'catalog', component: () => import('pages/CatalogPage.vue'), meta: { compactFooter: true } },
+      { path: 'catalog/:id', component: () => import('pages/RecordDetailPage.vue'), meta: { compactFooter: true } },
       { path: 'o-nama', component: () => import('pages/AboutPage.vue') },
       { path: 'uslovi-koriscenja', component: () => import('pages/TermsOfUsePage.vue') },
       { path: 'napredna-pretraga', component: () => import('pages/AdvancedSearchPage.vue') },

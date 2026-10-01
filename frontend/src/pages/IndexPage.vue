@@ -152,14 +152,14 @@
         <router-link v-for="item in newestItems" :key="item.id" :to="`/catalog/${item.id}`" class="newest__card">
           <span class="newest__cover">
             <img v-if="coverUrl(item)" :src="coverUrl(item)" alt="" loading="lazy" />
-            <q-icon v-else :name="typeIcon(item.source.metadata.materialType)" size="28px" class="newest__cover-icon" />
+            <q-icon v-else :name="materialIcon(item.source.metadata.materialType)" size="28px" class="newest__cover-icon" />
           </span>
           <span class="newest__text">
             <span class="newest__meta">
               <q-badge
                 v-if="item.source.metadata.materialType"
                 class="badge-soft newest__type"
-                :class="`badge-soft--${typeTone(item.source.metadata.materialType)}`"
+                :class="`badge-soft--${materialTone(item.source.metadata.materialType)}`"
               >
                 {{ codeLabel(item.source.metadata.materialType) }}
               </q-badge>
@@ -209,8 +209,9 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { searchItems, suggestValues, type ResolvedCode, type SearchHit } from 'src/api/search';
+import { searchItems, suggestValues, type SearchHit } from 'src/api/search';
 import { useCodeLabel } from 'src/composables/useCodeLabel';
+import { coverUrl, creatorLine, materialIcon, materialTone } from 'src/utils/publicRecord';
 
 const router = useRouter();
 const { t, locale } = useI18n();
@@ -305,35 +306,6 @@ const THEMES: Theme[] = [
 
 // ── Recently added ─────────────────────────────────────────────────────────
 const newestItems = ref<SearchHit[]>([]);
-
-function coverUrl(item: SearchHit): string | undefined {
-  const img = item.source.file_attachments?.find((f) => f.fileType === 'IMAGE');
-  return img ? `/api/files/${img.id}/download` : undefined;
-}
-
-function creatorLine(item: SearchHit): string {
-  const m = item.source.metadata;
-  if (m.firstResponsibility) return m.firstResponsibility;
-  return [m.publication?.place, m.publication?.publisher].filter(Boolean).join(': ');
-}
-
-// COMARC material-type codes: first letter = record type, second = bibliographic level
-function typeTone(type: ResolvedCode): string {
-  const code = type.code ?? '';
-  if (code === 'am') return 'primary';
-  if (code === 'as') return 'warm';
-  if (code.startsWith('e') || code.startsWith('f')) return 'positive';
-  if (code.startsWith('k')) return 'warning';
-  return 'muted';
-}
-
-function typeIcon(type: ResolvedCode | undefined): string {
-  const code = type?.code ?? '';
-  if (code === 'as') return 'o_newspaper';
-  if (code.startsWith('e') || code.startsWith('f')) return 'o_map';
-  if (code.startsWith('k')) return 'o_image';
-  return 'o_menu_book';
-}
 
 // ── About ──────────────────────────────────────────────────────────────────
 const ABOUT_FACTS = [
@@ -786,10 +758,6 @@ onMounted(() => {
   letter-spacing: 0.04em
   font-size: 11.5px
   font-weight: 700
-  // Serials get a warm tone the shared badge set does not have
-  &.badge-soft--warm
-    background: #F5E1D0
-    color: #7A3F12
 
 .newest__year
   font-size: 13px

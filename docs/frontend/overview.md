@@ -91,8 +91,7 @@ are the outlined Material set (`o_*`).
 | Import warnings name the COBISS id only, so they do not link to the item | `AdminImportPage.vue` | backend: item id in `progress.warnings` |
 | A numeric extent cannot be entered for a material type the schema gives no unit (electronic resources, 3-D objects …) | `editor/MetaField.vue` | a rule change in `record-fields.ts`, if wanted |
 | **Home-page category tiles open an empty catalog**: they filter by `Monograph`, `Serial publication`, `Map`… — not material type labels (found 2026-09-29) | `IndexPage.vue` | [search filters W2](plans/search-filters.md#w2--home-page-category-tiles-match-nothing-s--bug-verified-2026-09-29) |
-| A search the backend rejects (400, e.g. a bad year in the URL) leaves the old results on screen with no message | `CatalogPage.vue` (`fetchItems` has no `catch`) | [search filters W8](plans/search-filters.md#w8--a-rejected-filter-xs) |
-| No "Summary" (`summaryNote`) on the public record page | `RecordDetailPage.vue` | [web schema v2 plan F6](plans/metadata-schema-v2.md) |
+| A search the backend rejects (400, e.g. a bad year in the URL) shows the empty state ("Nothing matches these filters"), not the backend's message | `CatalogPage.vue` (`fetchItems` catches and clears) | [search filters W8](plans/search-filters.md#w8--a-rejected-filter-xs) |
 | Unused `pm2` dependency (AGPL) | `package.json` | [license audit](../shared/license-audit.md) — remove |
 | Quasar starter leftovers (`EssentialLink.vue`, `ExampleComponent.vue`, `stores/example-store.ts`, `models.ts`) | `src/` | delete when convenient |
 

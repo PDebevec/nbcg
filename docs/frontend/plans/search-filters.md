@@ -1,6 +1,6 @@
 # Frontend: search filters
 
-## Status: W1 and W4 BUILT 2026-09-30 with the admin redesign (type-check, lint and production build pass; clicked through in headless Chrome 2026-10-01: every page, the task dialogs, both languages) · W2, W3, W5–W8 (public site) TODO · backend DONE 2026-09-29 (dev)
+## Status: W1 and W4 BUILT 2026-09-30 with the admin redesign · W2, W3 and W8 BUILT 2026-10-01 with the [public redesign](public-redesign.md) (W3 as any / collections only / single items only; W8 as an empty state, no message) · W5–W7 TODO · backend DONE 2026-09-29 (dev)
 
 **Admin list (2026-09-30):** the records / drafts list filters by material type, collection type,
 "created by me" and year of publication, all kept in the URL. The design's "Visibility" and "Has
@@ -57,7 +57,11 @@ Wait for D1 first: with codes it becomes `am`, `as`, … and survives a relabel.
 
 ### W3 — collection filter in the catalog and advanced search (S)
 
-A "Collections" multi-select in `CatalogPage.vue` (and the same field on
+**Built 2026-10-01** in a simpler form than below: a "Collection" group in the catalogue's Refine column and a
+select on the advanced search page with three choices — any, only collections (`collectionType=>0`), only single
+items (`collectionType=0`). Per-type choices (1, 3, 4) wait for [collection views](collection-views.md).
+
+Original proposal: a "Collections" multi-select in `CatalogPage.vue` (and the same field on
 `AdvancedSearchPage.vue`, pushed to `/catalog`), kept in the route query like
 the others: `collectionType=1,3` for chosen types, `collectionType=>0` for all.
 - Options from the schema, not hard-coded: `vocabularies.collectionType.values`
@@ -94,6 +98,9 @@ ISBN / ISSN / COBISS ID inputs on `AdvancedSearchPage.vue`, sent as typed: the
 backend ignores dashes, spaces and case.
 
 ### W8 — a rejected filter (XS)
+
+**Built 2026-10-01, half of it:** `fetchItems` now catches and clears the list, so a bad link shows the empty state
+("Nothing matches these filters") instead of stale results; the backend's `message` is still not shown.
 
 A value that does not parse is a 400 with a string `message`
 (`Invalid yearFrom "85": expected a 4-digit year (YYYY)`). `CatalogPage.vue`

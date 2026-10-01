@@ -38,18 +38,6 @@
         <q-space />
 
         <div class="site-header__tools">
-          <q-btn
-            v-if="isCatalog && !searchOpen"
-            flat
-            dense
-            round
-            icon="o_search"
-            class="site-header__icon-btn"
-            @click="searchOpen = true"
-          >
-            <q-tooltip>{{ t('catalog.showSearch') }}</q-tooltip>
-          </q-btn>
-
           <LanguageLinks />
 
           <q-separator vertical class="site-header__sep" />
@@ -132,57 +120,6 @@
           </q-menu>
         </q-btn>
       </q-toolbar>
-
-      <!-- CATALOG SEARCH ROW -->
-      <template v-if="isCatalog">
-        <q-slide-transition>
-          <div v-show="searchOpen" class="site-search-row">
-            <div class="site-container row items-center no-wrap q-py-sm">
-              <q-btn
-                flat dense round
-                icon="o_expand_less"
-                color="library-muted"
-                @click="searchOpen = false"
-              >
-                <q-tooltip>{{ t('catalog.hideSearch') }}</q-tooltip>
-              </q-btn>
-
-              <q-input
-                v-model="searchText"
-                outlined dense
-                debounce="350"
-                :placeholder="t('catalog.searchWithin')"
-                class="col q-mx-md"
-              >
-                <template #prepend>
-                  <q-icon name="o_search" size="18px" color="library-muted" />
-                </template>
-                <template #append>
-                  <q-btn
-                    flat round dense
-                    :icon="fullText ? 'manage_search' : 'text_fields'"
-                    :color="fullText ? 'primary' : 'library-muted'"
-                    size="sm"
-                    @click="fullText = !fullText"
-                  >
-                    <q-tooltip>{{ fullText ? t('catalog.fullTextOn') : t('catalog.fullTextOff') }}</q-tooltip>
-                  </q-btn>
-                </template>
-              </q-input>
-
-              <q-btn
-                flat dense no-caps
-                :round="!$q.screen.gt.sm"
-                icon="backspace"
-                color="library-muted"
-                :label="$q.screen.gt.sm ? t('catalog.clearSearch') : undefined"
-                :disable="!searchText"
-                @click="searchText = ''"
-              />
-            </div>
-          </div>
-        </q-slide-transition>
-      </template>
     </q-header>
 
     <q-page-container>
@@ -193,8 +130,18 @@
       </router-view>
     </q-page-container>
 
-    <!-- FOOTER -->
-    <q-footer class="site-footer">
+    <!-- FOOTER: one line on the catalogue (meta.compactFooter), the full one elsewhere -->
+    <q-footer v-if="compactFooter" class="site-footer">
+      <div class="site-container site-footer__slim">
+        <span>{{ year }} {{ t('footer.copyright') }} · {{ t('footer.address') }}</span>
+        <span class="site-footer__slim-links">
+          <router-link to="/o-nama" class="site-footer__link">{{ t('nav.about') }}</router-link>
+          <router-link to="/uslovi-koriscenja" class="site-footer__link">{{ t('nav.terms') }}</router-link>
+          <router-link to="/kontakt" class="site-footer__link">{{ t('nav.contact') }}</router-link>
+        </span>
+      </div>
+    </q-footer>
+    <q-footer v-else class="site-footer">
       <div class="site-container site-footer__main">
         <div class="site-footer__brand">
           <span class="site-footer__logo">
@@ -263,22 +210,18 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useQuasar } from 'quasar';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import logo from 'src/assets/logoV3_trimmed_white.jpg';
 import LanguageLinks from 'components/LanguageLinks.vue';
 import { auth, login, logout } from 'src/services/keycloak';
 import { useAuthz } from 'src/composables/useAuthz';
-import { useCatalogSearch } from 'src/composables/useCatalogSearch';
 
 const { t } = useI18n();
-const $q = useQuasar();
 const { canAccessAdmin } = useAuthz();
 const route = useRoute();
 
-const { searchText, fullText, searchOpen } = useCatalogSearch();
-const isCatalog = computed(() => route.path === '/catalog');
+const compactFooter = computed(() => route.meta.compactFooter === true);
 
 const displayName = computed(() => auth.fullName || auth.username || t('nav.profile'));
 
@@ -416,14 +359,26 @@ const footerLinks = [
   .site-header__logo img
     height: 38px
 
-.site-search-row
-  border-top: 1px solid $divider
-  background: $surface
-
 // ── Footer ─────────────────────────────────────────────────────────────────
 .site-footer
   background: $navy-deep
   color: $on-navy
+
+.site-footer__slim
+  min-height: 56px
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: 16px
+  flex-wrap: wrap
+  padding-top: 8px
+  padding-bottom: 8px
+  font-size: 13.5px
+  color: #A9B0C7
+
+.site-footer__slim-links
+  display: flex
+  gap: 22px
 
 .site-footer__main
   display: grid
