@@ -9,7 +9,7 @@
   >
     <q-list>
       <q-item
-        v-for="lang in languages"
+        v-for="lang in LANGUAGES"
         :key="lang.value"
         clickable
         v-close-popup
@@ -26,28 +26,16 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { LOCALE_STORAGE_KEY, applyQuasarLang } from 'src/boot/i18n';
+import { LANGUAGES, setLocale } from 'src/boot/i18n';
+
+// Dropdown variant of the language choice (admin drawer, public mobile menu).
+// The public header uses LanguageLinks instead.
 
 const { locale } = useI18n();
 
-const languages = [
-  { value: 'me', label: 'Crnogorski', short: 'CG' },
-  { value: 'en-US', label: 'English', short: 'EN' },
-];
-
 const current = computed(
-  () => languages.find((l) => l.value === locale.value) ?? languages[0]!,
+  () => LANGUAGES.find((l) => l.value === locale.value) ?? LANGUAGES[0]!,
 );
-
-function setLocale(value: string) {
-  locale.value = value;
-  applyQuasarLang(value);
-  try {
-    localStorage.setItem(LOCALE_STORAGE_KEY, value);
-  } catch {
-    // ignore storage errors (private mode etc.)
-  }
-}
 </script>
 
 <style scoped lang="sass">

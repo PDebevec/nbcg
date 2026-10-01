@@ -8,6 +8,11 @@ export default {
     advancedSearch: 'Napredna pretraga',
     contact: 'Kontakt',
     profile: 'Profil',
+    catalog: 'Katalog',
+    main: 'Glavna navigacija',
+    menu: 'Meni',
+    language: 'Jezik',
+    accountMenu: 'Meni naloga, {name}',
   },
 
   common: {
@@ -20,14 +25,40 @@ export default {
   },
 
   index: {
+    heroTitle1: 'Pisana baština Crne Gore,',
+    heroTitle2: 'otvorena za sve.',
     searchPlaceholder: 'Pretraži po naslovu, autoru, temi …',
-    fullTextOn: 'Pretraga cijelog teksta uključena',
-    fullTextOff: 'Pretraga cijelog teksta isključena',
+    fullText: 'Pretraga cijelog teksta',
     searchTypes: {
-      all: 'Sve',
+      all: 'Sva građa',
       books: 'Knjige',
       periodicals: 'Periodika',
-      manuscripts: 'Rukopisi',
+      maps: 'Karte',
+    },
+    oftenSearched: 'Često traženo',
+    factsRecords: '{count} digitalizovanih zapisa',
+    factsTitles: '400+ naslova periodike',
+    factsFree: 'Besplatno čitanje i preuzimanje',
+    browseKicker: 'Pregled',
+    openCatalog: 'Otvori cijeli katalog',
+    records: 'nema zapisa | {count} zapis | {count} zapisa',
+    curatedKicker: 'Izbor',
+    thematicLead: 'Sedam kolekcija koje su sastavili naši bibliotekari — dobro mjesto za početak ako ne znate šta tražiti.',
+    mostVisited: 'Najposjećenije',
+    newKicker: 'Novo',
+    seeAllNew: 'Pogledaj sve novo',
+    aboutShort1:
+      'Digitalna biblioteka Crne Gore je projekat Nacionalne biblioteke Crne Gore „Đurđe Crnojević“ kroz koji su digitalizovani i objavljeni najvredniji primjerci bibliotečke građe iz fondova Nacionalne biblioteke — stare i rijetke knjige, rukopisi, dokumenta, novine, časopisi, karte, plakati i likovna, muzička i video građa.',
+    aboutShort2:
+      'Cilj projekta je zaštita originalnih dokumenata i njihovo predstavljanje u digitalnom obliku, tako da budu dostupni najširem krugu korisnika u čitavom svijetu.',
+    aboutMore: 'Saznaj više o projektu',
+    facts: {
+      sinceTitle: 'Digitalizacija od 2008.',
+      sinceText: 'U Centru za mikrofilmovanje i digitalizaciju Nacionalne biblioteke na Cetinju.',
+      titlesTitle: 'Više od 400 naslova periodike',
+      titlesText: 'Među njima Glas Crnogorca, Crnogorac, Crnogorka i Grlica, uz knjige, rukopise, fotografije i plakate.',
+      programmeTitle: 'Dio Nacionalnog programa za digitalizaciju',
+      programmeText: 'Realizovano uz podršku Ministarstva kulture Crne Gore.',
     },
     collectionsTitle: 'Pretraga po kolekcijama',
     collections: {
@@ -144,8 +175,9 @@ export default {
       'Cilj ovog projekta je zaštita originalnih dokumenata i njihovo predstavljanje u digitalnom obliku, odnosno obezbjeđivanje njihove dostupnosti najširem krugu korisnika u čitavom svijetu putem interneta.',
     navigation: 'Navigacija',
     contact: 'Kontakt',
-    phone: 'Tel: + 382 41 234 243, lokal 13',
-    email: "e-mail: info{'@'}dlib.me",
+    address: 'Nacionalna biblioteka Crne Gore „Đurđe Crnojević“, Cetinje, Crna Gora',
+    phone: '+382 41 234 243, lokal 13',
+    email: "info{'@'}dlib.me",
     copyright: 'Digitalna biblioteka Crne Gore.',
   },
 

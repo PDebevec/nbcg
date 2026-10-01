@@ -12,7 +12,9 @@
 // to match your app's branding.
 // Tip: Use the "Theme Builder" on Quasar's documentation website.
 
-$typography-font-family : 'Inter', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif
+// Public site and admin share the pair (design canvases "NBCG Public Redesign" / "NBCG Admin Redesign")
+$typography-font-family : 'Source Sans 3', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif
+$serif                  : 'Source Serif 4', Georgia, serif
 
 $primary   : #1F2A52
 $secondary : #B5652C
@@ -38,6 +40,13 @@ $divider-soft : #EFE9DC
 $field-border : #CFC7B5
 $eyebrow   : #9A5220
 
+// Navy bands of the public site (footer, home-page hero, catalogue search band)
+$navy-deep       : #1B2447
+$gold            : #D9B37A
+$on-navy         : #C9CEDD
+$on-navy-strong  : #E1E4EE
+$on-navy-muted   : #8E97B3
+
 // Soft badge pairs (background / text) — .badge-soft--* in admin.sass
 $soft-positive    : #E1EDE3
 $soft-positive-ink: #2E5A35
@@ -51,8 +60,8 @@ $soft-muted-ink   : #5A5347
 $soft-negative    : #F3DBD6
 $soft-negative-ink: #7A2A20
 
-$admin-font-family : 'Source Sans 3', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif
-$admin-serif       : 'Source Serif 4', Georgia, serif
+$admin-font-family : $typography-font-family
+$admin-serif       : $serif
 
 // Shared corner radius for cards/panels — kept small for a flatter look
 $radius    : 8px

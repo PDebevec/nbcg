@@ -35,7 +35,8 @@ function initialLocale(): MessageLanguages {
 }
 
 // Module-level instance so plain services (e.g. keycloak) can translate too
-export const i18n = createI18n<{ message: MessageSchema }, MessageLanguages>({
+// The third type argument matches `legacy: false`, so `global.locale` is typed as the ref it is
+export const i18n = createI18n<{ message: MessageSchema }, MessageLanguages, false>({
   locale: initialLocale(),
   fallbackLocale: 'en-US',
   legacy: false,
@@ -50,6 +51,23 @@ const QUASAR_LANG: Record<MessageLanguages, typeof quasarLangEn> = {
 
 export function applyQuasarLang(locale: string) {
   Lang.set(QUASAR_LANG[locale as MessageLanguages] ?? quasarLangEn);
+}
+
+/** The languages the UI offers, in display order. */
+export const LANGUAGES: { value: MessageLanguages; label: string; short: string }[] = [
+  { value: 'me', label: 'Crnogorski', short: 'ME' },
+  { value: 'en-US', label: 'English', short: 'EN' },
+];
+
+/** Switch the UI language: vue-i18n, Quasar's own strings and the stored choice. */
+export function setLocale(value: MessageLanguages) {
+  i18n.global.locale.value = value;
+  applyQuasarLang(value);
+  try {
+    localStorage.setItem(LOCALE_STORAGE_KEY, value);
+  } catch {
+    // ignore storage errors (private mode etc.)
+  }
 }
 
 export default defineBoot(({ app }) => {

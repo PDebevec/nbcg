@@ -8,6 +8,11 @@ export default {
     advancedSearch: 'Advanced search',
     contact: 'Contact',
     profile: 'Profile',
+    catalog: 'Catalogue',
+    main: 'Main navigation',
+    menu: 'Menu',
+    language: 'Language',
+    accountMenu: 'Account menu, {name}',
   },
 
   common: {
@@ -20,14 +25,40 @@ export default {
   },
 
   index: {
+    heroTitle1: 'Montenegro’s written heritage,',
+    heroTitle2: 'open to everyone.',
     searchPlaceholder: 'Search by title, author, subject …',
-    fullTextOn: 'Full-text search on',
-    fullTextOff: 'Full-text search off',
+    fullText: 'Full-text search',
     searchTypes: {
-      all: 'All',
+      all: 'All material',
       books: 'Books',
       periodicals: 'Periodicals',
-      manuscripts: 'Manuscripts',
+      maps: 'Maps',
+    },
+    oftenSearched: 'Often searched',
+    factsRecords: '{count} digitised records',
+    factsTitles: '400+ periodical titles',
+    factsFree: 'Free to read and download',
+    browseKicker: 'Browse',
+    openCatalog: 'Open the full catalogue',
+    records: 'no records | {count} record | {count} records',
+    curatedKicker: 'Curated',
+    thematicLead: 'Seven collections our librarians put together, a good place to start if you do not know what to search for.',
+    mostVisited: 'Most visited',
+    newKicker: 'New',
+    seeAllNew: 'See everything new',
+    aboutShort1:
+      'The Digital Library of Montenegro is a project of the National Library of Montenegro “Đurđe Crnojević”, through which the most valuable examples of library material from the collections of the National Library — old and rare books, manuscripts, documents, newspapers, journals, maps, posters and visual, musical and video material — have been digitised and presented online.',
+    aboutShort2:
+      'The aim of the project is the protection of the original documents and their presentation in digital form, so that they are available to the widest circle of users throughout the world.',
+    aboutMore: 'Read more about the project',
+    facts: {
+      sinceTitle: 'Digitising since 2008',
+      sinceText: 'In the Library’s own Centre for Microfilming and Digitisation in Cetinje.',
+      titlesTitle: 'More than 400 periodical titles',
+      titlesText: 'Glas Crnogorca, Crnogorac, Crnogorka and Grlica among them, plus books, manuscripts, photographs and posters.',
+      programmeTitle: 'Part of the National Programme for Digitisation',
+      programmeText: 'Carried out with the support of the Ministry of Culture of Montenegro.',
     },
     collectionsTitle: 'Search by collection',
     collections: {
@@ -144,8 +175,9 @@ export default {
       'The aim of this project is the protection of the original documents and their presentation in digital form, that is, ensuring their availability to the widest circle of users throughout the world via the internet.',
     navigation: 'Navigation',
     contact: 'Contact',
-    phone: 'Tel: + 382 41 234 243, ext. 13',
-    email: "e-mail: info{'@'}dlib.me",
+    address: 'National Library of Montenegro “Đurđe Crnojević”, Cetinje, Montenegro',
+    phone: '+382 41 234 243, ext. 13',
+    email: "info{'@'}dlib.me",
     copyright: 'Digital Library of Montenegro.',
   },
 

@@ -47,8 +47,9 @@ Redesigned 2026-09-30 after the design canvas
 (https://claude.ai/artifact/291iYMzbyaTpu1oGcP6gEF): warm paper ground, navy
 drawer with grouped navigation and the open-task count, no top bar — every page
 starts with `AdminPageHeader` (eyebrow, serif title, caption, actions). Source
-Sans 3 / Source Serif 4 are used inside the admin only; the public site keeps
-Inter. Icons are the outlined Material set (`o_*`).
+Sans 3 / Source Serif 4 are the fonts of the whole site since the public shell
+redesign (2026-10-01, [plan](plans/public-redesign.md)); Inter is gone. Icons
+are the outlined Material set (`o_*`).
 
 - **Dashboard** (`/admin`): KPI tiles, "Waiting on me", "Waiting for review"
   (publishers only), "Recently opened" (this browser, `localStorage`), catalogue
