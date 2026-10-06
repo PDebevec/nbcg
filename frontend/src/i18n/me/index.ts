@@ -345,8 +345,10 @@ export default {
     siblingsTitle: 'Ostali brojevi: {title}',
     allChildren: 'Svi brojevi | 1 broj | Svih {count} brojeva',
     thisIssue: 'ovaj broj',
-    childrenKicker: 'Sadržaj',
     childrenTitle: 'Nema jedinica u ovoj zbirci | 1 jedinica u ovoj zbirci | {count} jedinica u ovoj zbirci',
+    childrenEmpty: 'Ova zbirka još nema jedinica.',
+    childrenLoadFailed: 'Jedinice ove zbirke nije moguće učitati.',
+    aboutCollection: 'O zbirci',
     volumeShort: 'god.',
     numberShort: 'br.',
     fields: {

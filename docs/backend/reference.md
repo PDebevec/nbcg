@@ -442,7 +442,7 @@ curl 'http://localhost:3000/api/search/<parent_id>/children?page=1&limit=20'
 | `author`       | string | Author family/first name, every word required (fuzzy) |
 | `fullText`     | string | Search extracted PDF text; hits include `matchedFiles` with highlight snippets |
 | `fields`       | string | Comma-separated `_source` projection. **Allowlisted** — see below |
-| `sort`         | string | `relevance` (default) or `newest`          |
+| `sort`         | string | `relevance` (default), `newest`, or `issueDate` (oldest `metadata.issue.date` first, undated last) |
 
 **Filters** — exact, they narrow the hits without changing the score. Same
 params on `GET /search/:id/children`.

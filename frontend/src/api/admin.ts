@@ -98,6 +98,23 @@ export async function transitionItems(
   return data;
 }
 
+/** A parent's state after a relation change: the trigger bumps its version and children counts. */
+export interface ParentState {
+  parentId: string;
+  version: number;
+  childrenInDrafts: number;
+  childrenInRecords: number;
+}
+
+/**
+ * Link children to a collection. All-or-nothing like a transition: each child is
+ * checked with its new parent, and any failure is `400 METADATA_VALIDATION_FAILED`.
+ */
+export async function connectChildren(parentId: string, childIds: string[]): Promise<ParentState> {
+  const { data } = await api.post<ParentState>('/relations/connect', { parentId, childIds });
+  return data;
+}
+
 export interface ItemValidation {
   ok: boolean;
   missing: MissingField[];

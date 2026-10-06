@@ -4,17 +4,20 @@ export default {
     publish: 'Not ready to publish',
     save: 'Cannot save',
     toDraft: 'Cannot return to draft',
+    link: 'Cannot add to the collection',
   },
   batch: {
     publish: '{failed} of {total} items are not ready to publish.',
     save: '{failed} of {total} items cannot be saved.',
     toDraft: '{failed} of {total} items cannot be returned to draft.',
+    link: '{failed} of {total} items cannot be added to the collection.',
   },
   batchNothing: 'Nothing was changed: the whole batch is refused until every item passes.',
   single: {
     publish: 'The item was not published. Fill in what is listed below and try again.',
     save: 'Nothing was saved. Fix what is listed below and save again.',
     toDraft: 'The item was not moved. Fix what is listed below and try again.',
+    link: 'The item was not added. Fix what is listed below and try again.',
   },
   checkedAs: {
     DRAFT: 'checked as a draft',

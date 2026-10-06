@@ -17,8 +17,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', component: () => import('pages/IndexPage.vue') },
       { path: 'catalog', component: () => import('pages/CatalogPage.vue'), meta: { compactFooter: true } },
-      { path: 'catalog/:id', component: () => import('pages/RecordDetailPage.vue'), meta: { compactFooter: true } },
-      { path: 'o-nama', component: () => import('pages/AboutPage.vue') },
+      { path: 'catalog/:id', component: () => import('pages/RecordDetailPage.vue'), meta: { compactFooter: true } },      { path: 'o-nama', component: () => import('pages/AboutPage.vue') },
       { path: 'uslovi-koriscenja', component: () => import('pages/TermsOfUsePage.vue') },
       { path: 'napredna-pretraga', component: () => import('pages/AdvancedSearchPage.vue') },
       { path: 'kontakt', component: () => import('pages/ContactPage.vue') },

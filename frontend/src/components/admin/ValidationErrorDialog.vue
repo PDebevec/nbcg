@@ -83,7 +83,7 @@ import { useSchemaLabel } from 'src/composables/useSchemaForm';
 // (`label: { en, cnr }`), so nothing here knows the schema.
 // ---------------------------------------------------------------------------
 
-export type ValidationAction = 'publish' | 'save' | 'toDraft';
+export type ValidationAction = 'publish' | 'save' | 'toDraft' | 'link';
 
 export interface ValidationItemInfo {
   title: string;

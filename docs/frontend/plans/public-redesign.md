@@ -59,7 +59,8 @@ Corrections to the canvas may still come; they are applied to the page they conc
   links), "Cite this item" with Copy. Sidebar: Files (type box, name, size, download), Part of (parents via
   `parent_relations`, one `GET /search/:id` each), Record (permanent link, COBISS ID, added date, Rights → terms,
   Report a problem → mailto). Bottom: other issues of the same title (`GET /search/:parentId/children`, first 6,
-  current one highlighted, "All N issues" opens the parent) and, on a collection, its first 12 items.
+  current one highlighted, "All N issues" opens the parent). A collection gets its own layout instead (2026-10-06
+  prototype, [collection views](collection-views.md)): title block, "About this collection" and the paginated child list.
   - No page controls for PDFs: the browser's PDF viewer in the iframe has its own. Compact footer like the catalogue.
   - `summaryNote` now shows (Bibliographic details → Summary), which closes the "no Summary on the record page" issue.
 - [x] **5 Small pages** (About, Terms, Contact, Advanced search boards, note s13) — shared `PageHead` (breadcrumb,

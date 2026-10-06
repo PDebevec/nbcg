@@ -68,8 +68,9 @@ are the outlined Material set (`o_*`).
   a publish would be refused. A field the schema hides for this item moves to
   "Other fields" and stays fillable. A draft needs a title and a material type;
   a record must stay complete (Save is off while a required field is empty).
-  Tabs: JSON, files (upload with OCR text state), revision history, the item's
-  task history. Status card: publish / return to draft. Saves use optimistic
+  Tabs: JSON, files (upload with OCR text state), contents (a collection's
+  children, "Add items" — prototype, see [collection views](plans/collection-views.md)),
+  revision history, the item's task history. Status card: publish / return to draft. Saves use optimistic
   concurrency (`expectedVersion`; a 409 is merged when the two sides touched
   different fields). Leaving with unsaved changes asks first.
 - **Tasks** (`/admin/tasks`, `/admin/tasks/:id`): task workflow v2 — a task is
@@ -101,6 +102,6 @@ are the outlined Material set (`o_*`).
 - [Task workflow v2](plans/task-workflow-v2.md) — built 2026-09-30
 - [Search filters](plans/search-filters.md) — admin list built, public site open
 - [Admin nice-to-have list](plans/admin-nice-to-have.md) — accepted items built 2026-09-30
-- [Collection view types](plans/collection-views.md) — needs input
+- [Collection view types](plans/collection-views.md) — prototype built 2026-10-06 (public view, admin Contents tab), design needs input
 - [Material-type field visibility](plans/material-type-field-visibility.md) — superseded by schema v2
 - Done: [task delegation UI](history/task-delegation.md)

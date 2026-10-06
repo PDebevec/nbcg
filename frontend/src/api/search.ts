@@ -227,7 +227,8 @@ export interface SearchParams {
    * fields are only returned to principals holding drafts:manage / records:manage.
    */
   fields?: string;
-  sort?: 'relevance' | 'newest';
+  /** `issueDate`: oldest issue first — the issues of a serial. */
+  sort?: 'relevance' | 'newest' | 'issueDate';
 }
 
 export interface SearchHit {

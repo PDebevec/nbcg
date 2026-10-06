@@ -235,6 +235,16 @@ function buildQuery(dto: SearchQueryDto): Record<string, unknown> {
   return { bool: { ...(must.length ? { must } : {}), ...(filter.length ? { filter } : {}) } };
 }
 
+/** The `sort` body for `?sort=`; relevance is the engine's default order. */
+function buildSort(sort: SearchQueryDto['sort']): Record<string, unknown> {
+  if (sort === 'newest') return { sort: [{ createdAt: 'desc' as const }] };
+  // Items without an issue date go last; `createdAt` keeps the order stable.
+  if (sort === 'issueDate') {
+    return { sort: [{ 'metadata.issue.date': { order: 'asc', missing: '_last' } }, { createdAt: 'asc' }] };
+  }
+  return {};
+}
+
 /**
  * Build `_source` control based on the `fields` query param.
  *
@@ -571,7 +581,7 @@ export class SearchService {
       query,
       track_total_hits: true,
       _source: buildSourceControl(dto.fields, showAttribution),
-      ...(dto.sort === 'newest' ? { sort: [{ createdAt: 'desc' as const }] } : {}),
+      ...buildSort(dto.sort),
     };
 
     const result = await this.opensearch.search(indices, body);
@@ -625,6 +635,7 @@ export class SearchService {
       query,
       track_total_hits: true,
       _source: buildSourceControl(dto.fields, showAttribution),
+      ...buildSort(dto.sort),
     };
     const result = await this.opensearch.search(indices, body);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

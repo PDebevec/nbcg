@@ -112,7 +112,8 @@ export class SearchQueryDto {
   @IsString()
   fields?: string;
 
+  /** `issueDate`: oldest issue first (`metadata.issue.date`) — the issues of a serial. */
   @IsOptional()
-  @IsEnum(['relevance', 'newest'])
-  sort?: 'relevance' | 'newest' = 'relevance';
+  @IsEnum(['relevance', 'newest', 'issueDate'])
+  sort?: 'relevance' | 'newest' | 'issueDate' = 'relevance';
 }

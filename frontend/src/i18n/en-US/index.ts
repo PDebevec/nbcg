@@ -345,8 +345,10 @@ export default {
     siblingsTitle: 'Other issues of {title}',
     allChildren: 'All issues | 1 issue | All {count} issues',
     thisIssue: 'this issue',
-    childrenKicker: 'Contents',
     childrenTitle: 'No items in this collection | 1 item in this collection | {count} items in this collection',
+    childrenEmpty: 'This collection has no items yet.',
+    childrenLoadFailed: 'The items of this collection could not be loaded.',
+    aboutCollection: 'About this collection',
     volumeShort: 'vol.',
     numberShort: 'no.',
     fields: {

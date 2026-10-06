@@ -4,17 +4,20 @@ export default {
     publish: 'Nije spremno za objavu',
     save: 'Čuvanje nije moguće',
     toDraft: 'Vraćanje u nacrt nije moguće',
+    link: 'Dodavanje u zbirku nije moguće',
   },
   batch: {
     publish: '{failed} od {total} zapisa nije spremno za objavu.',
     save: '{failed} od {total} zapisa nije moguće sačuvati.',
     toDraft: '{failed} od {total} zapisa nije moguće vratiti u nacrt.',
+    link: '{failed} od {total} zapisa nije moguće dodati u zbirku.',
   },
   batchNothing: 'Ništa nije promijenjeno: cijela grupa se odbija dok svaki zapis ne prođe provjeru.',
   single: {
     publish: 'Zapis nije objavljen. Popunite navedeno i pokušajte ponovo.',
     save: 'Ništa nije sačuvano. Ispravite navedeno i sačuvajte ponovo.',
     toDraft: 'Zapis nije premješten. Ispravite navedeno i pokušajte ponovo.',
+    link: 'Zapis nije dodat. Ispravite navedeno i pokušajte ponovo.',
   },
   checkedAs: {
     DRAFT: 'provjereno kao nacrt',

@@ -70,6 +70,14 @@
                 {{ files.length }}
               </q-badge>
             </q-tab>
+            <q-tab v-if="!isNew && isCollection" name="contents" icon="o_account_tree" :label="t('admin.edit.tabContents')">
+              <q-badge
+                class="badge-soft badge-soft--sm q-ml-sm"
+                :class="tab === 'contents' ? 'badge-soft--solid' : 'badge-soft--muted'"
+              >
+                {{ childCounts.records + childCounts.drafts }}
+              </q-badge>
+            </q-tab>
             <q-tab v-if="!isNew" name="history" icon="o_history" :label="t('admin.edit.tabHistory')" />
             <q-tab
               v-if="!isNew && isStaff"
@@ -205,6 +213,40 @@
           <div class="adm-card__body">
             <ItemFilesTab v-model:files="files" :item-id="itemId" @changed="historyKey++" />
           </div>
+        </q-card>
+
+        <!-- ───────────── CONTENTS: the members of this collection (prototype) ───────────── -->
+        <q-card v-else-if="tab === 'contents' && itemId" flat bordered>
+          <div class="adm-card__body adm-card__body--stack">
+            <div class="row items-center q-gutter-sm">
+              <q-btn-toggle
+                v-model="contentsType"
+                no-caps
+                unelevated
+                toggle-color="primary"
+                :options="[
+                  { value: 'records', label: t('admin.edit.contents.records', { count: childCounts.records }) },
+                  { value: 'drafts', label: t('admin.edit.contents.drafts', { count: childCounts.drafts }) },
+                ]"
+              />
+              <q-space />
+              <q-btn
+                outline
+                no-caps
+                color="primary"
+                icon="o_add"
+                :label="t('admin.edit.contents.add')"
+                @click="addChildrenOpen = true"
+              />
+            </div>
+            <CollectionChildrenList
+              :key="contentsKey"
+              :parent-id="itemId"
+              :type="contentsType"
+              link-prefix="/admin/items/"
+            />
+          </div>
+          <AddChildrenDialog v-model="addChildrenOpen" :parent-id="itemId" @added="onChildrenAdded" />
         </q-card>
 
         <!-- ───────────── HISTORY ───────────── -->
@@ -484,6 +526,7 @@ import {
   updateItem,
   type ItemType,
   type MetadataPayload,
+  type ParentState,
   type VisibilityStatus,
 } from 'src/api/admin';
 import { apiErrorMessage, apiErrorStatus, validationFailure, type ValidationFailure } from 'src/api/errors';
@@ -499,6 +542,8 @@ import { materialTypeIcon } from 'src/utils/materialType';
 import { forgetItem, rememberItem } from 'src/utils/recentItems';
 import type { ItemState, TargetState } from 'src/utils/schemaRules';
 import AdminPageHeader from 'src/components/admin/AdminPageHeader.vue';
+import AddChildrenDialog from 'src/components/admin/AddChildrenDialog.vue';
+import CollectionChildrenList from 'src/components/collection/CollectionChildrenList.vue';
 import CreateTaskDialog from 'src/components/admin/CreateTaskDialog.vue';
 import HistoryTimeline from 'src/components/admin/HistoryTimeline.vue';
 import ItemTaskHistory from 'src/components/admin/ItemTaskHistory.vue';
@@ -545,8 +590,8 @@ import {
 // to draft live in the Status card; leaving with unsaved changes asks first.
 // ---------------------------------------------------------------------------
 
-type Tab = 'form' | 'json' | 'files' | 'history' | 'tasks';
-const TABS: Tab[] = ['form', 'json', 'files', 'history', 'tasks'];
+type Tab = 'form' | 'json' | 'files' | 'contents' | 'history' | 'tasks';
+const TABS: Tab[] = ['form', 'json', 'files', 'contents', 'history', 'tasks'];
 
 const { t, locale } = useI18n();
 const route = useRoute();
@@ -582,6 +627,17 @@ const visibilityStatus = ref<VisibilityStatus>('PRIVATE');
 // Metadata as loaded — the base every payload is built on, so keys the form
 // does not own (_source, children counters) pass through.
 const metadata = shallowRef<Record<string, unknown>>({});
+
+// The Contents tab follows the saved collection type, not the unsaved form.
+const isCollection = computed(() => Number(metadata.value.collectionType ?? 0) > 0);
+const childCounts = computed(() => ({
+  records: Number(metadata.value.childrenInRecords ?? 0),
+  drafts: Number(metadata.value.childrenInDrafts ?? 0),
+}));
+const contentsType = ref<'records' | 'drafts'>('records');
+const addChildrenOpen = ref(false);
+/** Bumped to reload the Contents list. */
+const contentsKey = ref(0);
 
 // Optimistic concurrency: last version we know of, plus a snapshot of the
 // loaded state so a 409 can be resolved by comparing what changed on each side
@@ -1028,6 +1084,22 @@ function collapseEmptySections() {
   }
   // "Other fields" opens by itself when one of them holds a value, so nothing is hidden.
   editor.open.other = editor.hiddenFields.value.some((path) => isFilled(form.value, path));
+}
+
+// Linking children bumps this item's version and counters (DB trigger). Take
+// them over without touching unsaved edits: the counters go into the snapshot
+// too, so they do not show up as a change, and the next save sends the new version.
+function onChildrenAdded(state: ParentState) {
+  currentVersion.value = state.version;
+  const counters = { childrenInDrafts: state.childrenInDrafts, childrenInRecords: state.childrenInRecords };
+  metadata.value = { ...metadata.value, ...counters };
+  for (const [key, value] of Object.entries(counters)) {
+    if (key in original) original[key] = value;
+  }
+  originalKey.value++;
+  historyKey.value++;
+  // The search index catches up a moment after the write.
+  window.setTimeout(() => contentsKey.value++, 1500);
 }
 
 // The rules for an issue of a serial need the parents' collection type. An

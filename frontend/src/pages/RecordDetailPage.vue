@@ -78,11 +78,38 @@
           </div>
         </div>
 
+        <!-- COLLECTION (prototype): its contents are the page, no viewer -->
+        <template v-if="isCollection">
+          <section v-if="meta.summaryNote || collectionRows.length" class="rec-card" :aria-labelledby="'about-h'">
+            <div class="rec-card__head">
+              <h2 id="about-h" class="rec-card__title">{{ t('record.aboutCollection') }}</h2>
+            </div>
+            <p v-if="meta.summaryNote" class="rec-collection__summary">{{ meta.summaryNote }}</p>
+            <dl v-if="collectionRows.length" class="rec-dl">
+              <template v-for="row in collectionRows" :key="row.label">
+                <dt>{{ row.label }}</dt>
+                <dd>{{ row.value }}</dd>
+              </template>
+            </dl>
+          </section>
+
+          <section class="rec-card rec-card--flush" :aria-labelledby="'children-h'">
+            <div class="rec-card__head">
+              <h2 id="children-h" class="rec-card__title">{{ t('record.childrenTitle', childrenTotal) }}</h2>
+            </div>
+            <CollectionChildrenList
+              :parent-id="item.id"
+              :sort="meta.collectionType === 4 ? 'issueDate' : 'relevance'"
+              @total="childrenTotal = $event"
+            />
+          </section>
+        </template>
+
         <!-- VIEWER -->
-        <FileViewer v-model="selectedFileId" :files="files" />
+        <FileViewer v-else v-model="selectedFileId" :files="files" />
 
         <!-- DETAILS + SIDEBAR -->
-        <div class="rec__grid">
+        <div v-if="!isCollection" class="rec__grid">
           <div class="rec__main">
             <section class="rec-card" :aria-labelledby="'about-h'">
               <div class="rec-card__head">
@@ -230,7 +257,7 @@
         </div>
 
         <!-- SIBLINGS: other issues of the same title -->
-        <section v-if="siblings.length > 1" class="rec-more" :aria-labelledby="'more-h'">
+        <section v-if="!isCollection && siblings.length > 1" class="rec-more" :aria-labelledby="'more-h'">
           <div class="rec-more__head">
             <div>
               <div class="pub-eyebrow">{{ t('record.siblingsKicker') }}</div>
@@ -262,28 +289,6 @@
             </component>
           </div>
         </section>
-
-        <!-- CHILDREN: items of this collection -->
-        <section v-if="children.length" class="rec-more" :aria-labelledby="'children-h'">
-          <div class="rec-more__head">
-            <div>
-              <div class="pub-eyebrow">{{ t('record.childrenKicker') }}</div>
-              <h2 id="children-h" class="rec-more__title">{{ t('record.childrenTitle', childrenTotal) }}</h2>
-            </div>
-          </div>
-          <div class="rec-more__grid">
-            <router-link v-for="hit in children" :key="hit.id" :to="`/catalog/${hit.id}`" class="rec-mini">
-              <span class="rec-mini__cover">
-                <img v-if="coverUrl(hit)" :src="coverUrl(hit)" alt="" loading="lazy" />
-                <q-icon v-else :name="materialIcon(hit.source.metadata.materialType)" size="20px" />
-              </span>
-              <span class="rec-mini__text">
-                <span class="rec-mini__title">{{ issueLabel(hit) }}</span>
-                <span class="rec-mini__meta">{{ issueDate(hit) || creatorLine(hit) }}</span>
-              </span>
-            </router-link>
-          </div>
-        </section>
       </template>
     </div>
   </q-page>
@@ -305,10 +310,11 @@ import {
 } from 'src/api/search';
 import { downloadUrl, formatBytes } from 'src/utils/fileAttachments';
 import { formatDate } from 'src/utils/adminFormat';
-import { coverUrl, creatorLine, materialIcon, materialTone } from 'src/utils/publicRecord';
+import { coverUrl, materialIcon, materialTone } from 'src/utils/publicRecord';
 import { useCodeLabel } from 'src/composables/useCodeLabel';
 import { useExtentLabel } from 'src/composables/useExtentLabel';
 import FileViewer from 'src/components/FileViewer.vue';
+import CollectionChildrenList from 'src/components/collection/CollectionChildrenList.vue';
 
 // The public record page (design canvas, Record board): title block first,
 // the viewer, "About this item" as a label / value list with the rest folded
@@ -326,7 +332,7 @@ const loading = ref(true);
 const parents = ref<SearchHit[]>([]);
 const siblings = ref<SearchHit[]>([]);
 const siblingsTotal = ref(0);
-const children = ref<SearchHit[]>([]);
+/** Reported by the collection's list; the indexed counter until it answers. */
 const childrenTotal = ref(0);
 
 const meta = computed<RecordMetadata>(() => (item.value?.source.metadata as RecordMetadata) ?? ({} as RecordMetadata));
@@ -358,10 +364,10 @@ async function load(id: string) {
   item.value = null;
   parents.value = [];
   siblings.value = [];
-  children.value = [];
   try {
     const hit = await getItem(id);
     item.value = hit;
+    childrenTotal.value = hit.source.metadata.childrenInRecords ?? 0;
     const previewable = files.value.find((f) => f.fileType === 'IMAGE' || f.fileType === 'PDF');
     selectedFileId.value = (previewable ?? files.value[0])?.id ?? null;
   } catch {
@@ -370,7 +376,7 @@ async function load(id: string) {
     loading.value = false;
   }
   if (!item.value) return;
-  await Promise.all([loadParents(item.value), loadChildren(item.value)]);
+  await loadParents(item.value);
 }
 
 // An item normally has one parent; each is one read. Siblings come from the first parent.
@@ -394,17 +400,6 @@ async function loadParents(hit: SearchHit) {
     siblingsTotal.value = result.total;
   } catch {
     siblings.value = [];
-  }
-}
-
-async function loadChildren(hit: SearchHit) {
-  if (!(hit.source.metadata.collectionType > 0)) return;
-  try {
-    const result = await listChildren(hit.id, { type: 'records', limit: 12, fields: RELATED_FIELDS });
-    children.value = result.hits;
-    childrenTotal.value = result.total;
-  } catch {
-    children.value = [];
   }
 }
 
@@ -499,6 +494,24 @@ const mainRows = computed(() => {
     row('record.fields.extent', extentLabel(m.extent) || m.physicalDescription),
     row('record.fields.issn', m.issn?.join(', ')),
     row('record.fields.isbn', m.isbn?.join(', ')),
+  ]);
+});
+
+// ── Collection (prototype) ─────────────────────────────────────────────────
+// A collection shows its contents instead of the record layout; one view per
+// collectionType comes later (docs/frontend/plans/collection-views.md).
+const isCollection = computed(() => (meta.value.collectionType ?? 0) > 0);
+
+const collectionRows = computed(() => {
+  const m = meta.value;
+  const publisher = [m.publication?.publisher, m.publication?.place].filter(Boolean).join(', ');
+  return rows([
+    row('record.fields.responsibility', m.firstResponsibility),
+    row('record.fields.publisher', publisher),
+    row('record.fields.year', yearLine.value),
+    row('record.fields.numbering', m.numberingAndDates),
+    row('record.fields.language', codesLine(m.language)),
+    row('record.fields.issn', m.issn?.join(', ')),
   ]);
 });
 
@@ -826,6 +839,13 @@ function issueDate(hit: SearchHit): string {
   color: $muted
 
 // Label / value list
+.rec-collection__summary
+  margin: 0
+  padding: 6px 22px 4px
+  font-size: 15px
+  line-height: 1.6
+  color: $ink
+
 .rec-dl
   margin: 0
   padding: 6px 22px 10px
