@@ -3,6 +3,7 @@ import { runMenu } from "./scripts/lib/cli-util.js"
 import { handleApps, handleClearENV, handleConfig, handleDocker, handleSetup } from "./scripts/cli-handle.js"
 import { existingPaths, describeArtifacts } from "./scripts/lib/clear-utils.js"
 import { configMatchesTemplate } from "./scripts/lib/config-utils.js"
+import { isStepCurrent, getStep, resolveEnv } from "./scripts/lib/steps.js"
 import { consoleLog } from "./scripts/lib/logger.js"
 
 // Seed state from process.env.ENV once, if state doesn't already know the env
@@ -33,12 +34,12 @@ export async function mainMenu() {
           disabled: !composeReady,
           disabledReason: "run setup first (no compose files)",
           submenu: true,
-          run: () => handleDocker(state.current.docker.initialized ? undefined : "SETUP")
+          run: () => handleDocker(state.isDocker("initialized", resolveEnv()) ? undefined : "SETUP")
         },
         {
           name: "App Menu (frontend/backend)",
           hint: env === "dev" ? "" : "dev only",
-          disabled: env !== "dev" || !state.isStepDone("fbEnd"),
+          disabled: env !== "dev" || !isStepCurrent(getStep("fbEnd"), "dev"),
           disabledReason: env !== "dev" ? "dev environment only" : "run the App env files step first",
           submenu: true,
           run: handleApps

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { __infra } from './path.js';
 
 const MASTER_CONFIG_PATH = path.join(__infra, 'master.config.json');
@@ -172,20 +173,28 @@ export function mergeTemplateDefaults() {
 }
 
 /**
- * Whether the live config is byte-for-byte the template's content.
+ * Whether the live config carries the same content as the template.
  *
- * Key order is significant to this comparison and that is fine: the live file
- * starts life as a copy of the template, and mergeTemplateDefaults() appends
- * rather than reorders, so a difference in order only ever means the file was
- * edited by hand — which is exactly what this reports.
+ * Compared structurally, not by JSON.stringify: the two files are not written
+ * the same way. mergeTemplateDefaults() *appends* a newly added setting to the
+ * live file while the template lists it where it belongs, and stringify is
+ * key-order sensitive, so every freshly merged key read as a difference. That
+ * false "differs from template" is the sort of thing that tempts someone to
+ * reset a configured master.config.json and lose their hostnames and ports over
+ * a cosmetic ordering artefact. isDeepStrictEqual ignores key order.
+ *
+ * Values the operator deliberately changed still count as a difference — this is
+ * a "have you customised anything" hint, not an equality claim.
  */
 export function configMatchesTemplate() {
   if (!fs.existsSync(MASTER_CONFIG_PATH)) return false;
-  try {
-    return JSON.stringify(loadMasterConfig()) === JSON.stringify(loadMasterTemplate());
-  } catch {
-    return false; // unparseable counts as "differs" — resetting is the fix
-  }
+  // Parsing only — deliberately not a blanket try/catch. An earlier version
+  // wrapped the comparison too, which meant a ReferenceError from a missing
+  // import was reported as "the config differs from the template": a bug in
+  // this file masquerading as a legitimate answer, and the reason it read as
+  // "differs" for a config that was byte-identical in content.
+  const live = JSON.parse(fs.readFileSync(MASTER_CONFIG_PATH, 'utf8'));
+  return isDeepStrictEqual(live, loadMasterTemplate());
 }
 
 /**

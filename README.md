@@ -18,11 +18,18 @@ Digital Library for National Library of Montenegro "Đurđe Crnojević"
 # Quick start
 
 ```sh
-make setup ENV=dev    # the whole setup pipeline
-make cli              # or: interactive menus
+make check ENV=dev    # prerequisites
+make setup ENV=dev    # generate .env files + render config
+make up               # containers
+make migrate          # prisma migrations
+make app A=start T=backend
+make app A=start T=frontend
 ```
 
-(`make help` lists every target — see [the infrastructure CLI docs](docs/infrastructure/infrastructure-cli.md). The old `make qs` target no longer exists.)
+The dev stack is then on http://localhost:3080. (`make help` lists every
+target — see [the infrastructure CLI docs](docs/infrastructure/infrastructure-cli.md).
+The old `make qs` target no longer exists; the full sequence and the port map
+are in [docs/shared/dev-environment.md](docs/shared/dev-environment.md).)
 
 # Documentation
 

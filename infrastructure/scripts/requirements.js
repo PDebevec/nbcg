@@ -4,6 +4,7 @@ import { getPublishedPorts } from "./lib/docker-utils.js";
 import {
   checkBinaryNative, checkDns, checkDockerCompose, checkDockerDaemon, checkPortAvailability
 } from "./lib/requirements.js";
+import { UsageError } from "./lib/runner.js";
 
 /**
  * Binaries the CLI itself shells out to.
@@ -32,10 +33,19 @@ export function requirementsFor(env = "dev") {
   // inside the compose network, so checking the rest would report twenty
   // irrelevant conflicts while missing the two that would actually stop the
   // stack from starting.
+  //
+  // Dev then drops the ports docker never binds there at all. The backend runs
+  // as a pm2 host process, so nothing in the dev compose stack claims port
+  // 3000 — there is no conflict to detect, but the port *is* occupied as soon
+  // as the app is running, and reporting that as "already bound by another
+  // process" made `make check` and the Setup menu fail on any dev machine that
+  // had its backend up. Same reasoning as prod_published_ports, inverted: that
+  // list narrows what prod checks, this one carves out what dev cannot check.
   const entries = Object.entries(config.ports || {});
+  const excluded = config.dev_unpublished_ports?.names || [];
   const wanted = env === "prod"
     ? entries.filter(([name]) => (config.prod_published_ports?.names || []).includes(name))
-    : entries;
+    : entries.filter(([name]) => !excluded.includes(name));
 
   const ports = wanted
     .map(([, p]) => Number(p?.external))
@@ -120,8 +130,13 @@ export async function checkRequirements(require, env = "dev") {
   }
 
   const failed = Object.keys(fails);
+  // UsageError, not a bare Error: every individual failure has already been
+  // reported cleanly above, so what is left is a summary line an operator needs
+  // to read — not a crash. runAction and the dispatcher both print a
+  // UsageError's message alone; anything else dumps a stack trace over the top
+  // of it, which buries the useful part.
   if (failed.length > 0)
-    throw new Error(`Unmet prerequisites: ${failed.join(", ")}`);
+    throw new UsageError(`Unmet prerequisites: ${failed.join(", ")} — see the failures listed above`);
 
   return fails;
 }

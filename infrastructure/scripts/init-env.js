@@ -422,6 +422,18 @@ export function confTemplateOutputs() {
     .map(t => path.resolve(__infra, t.output))
 }
 
+/**
+ * Absolute paths of the templates applyConfTemplates() reads — the other half
+ * of confTemplateOutputs(). Declared here rather than in steps.js so the two
+ * cannot drift: a template added to master.config.json is picked up by both.
+ */
+export function confTemplateInputs() {
+  const masterConfig = loadMasterConfig()
+  return (masterConfig.conf_templates || [])
+    .filter(t => t?.template)
+    .map(t => path.resolve(__infra, t.template))
+}
+
 /** Absolute paths of every .env that generateAppEnvs() would write. */
 export function appEnvOutputs() {
   const masterConfig = loadMasterConfig()

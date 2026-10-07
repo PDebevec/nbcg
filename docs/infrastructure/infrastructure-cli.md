@@ -22,7 +22,21 @@ hardcoded list:
 | `pm2` | dev only — dev runs the apps as pm2 processes on the host |
 | `openssl` | prod only — the `certs` step shells out to it |
 | DNS resolution of every hostname | `available_hostnames` |
-| Availability of every published port | dev: the `external` port of every `ports` entry. prod: only `prod_published_ports` (80/443) — everything else is reached inside the compose network, so checking it would report twenty irrelevant conflicts and miss the two that matter |
+| Availability of every published port | dev: the `external` port of every `ports` entry except `dev_unpublished_ports` (currently `BACKEND_PORT`). prod: only `prod_published_ports` (80/443) — everything else is reached inside the compose network, so checking it would report twenty irrelevant conflicts and miss the two that matter |
+
+A port held by one of **this project's own containers** is reported as "in use by
+this project", not a conflict. `dev_unpublished_ports` covers the other case: in
+dev the backend is a pm2 host process, so docker never binds port 3000 — there is
+no conflict to detect, but the port *is* occupied once the app is running. Adding
+it there keeps `make check` and the Setup menu usable on a dev machine that
+already has its backend up. If you add a dev service that runs on the host rather
+than in a container, add its port to that list too.
+
+`configMatchesTemplate()` — which drives the Config menu's "differs from
+template" hint — compares content with **sorted keys**, not raw
+`JSON.stringify()`. Key order is not meaningful: `make config A=merge` appends a
+newly added setting to the live file while the template lists it in place, so an
+order-sensitive comparison reported every freshly merged key as a difference.
 | `master.config.json` matches the template | see below |
 
 A port already published by **this project's own containers** counts as
@@ -390,24 +404,84 @@ menu exits the CLI cleanly.
 
 ## State
 
-`infrastructure/.cli-state.json` (gitignored) persists:
+`infrastructure/.cli-state.json` (gitignored) is versioned internally
+(`version: 2`). It persists:
 
-- `environment` — `"dev"` or `"prod"`
-- `steps` — per-step completion flags, which gate menu visibility
-- `docker` — `initialized` (compose files copied) and `containarized` (containers up)
-- `apps` — per-app one-off setup completion
-- `history` — the last 50 step outcomes
+- `environment` — `"dev"` or `"prod"`, the last one selected
+- `envs.dev` / `envs.prod` — **each environment tracks its own** `steps`,
+  `docker` (`initialized`, `containarized`) and `apps` (per-app one-off setup)
+- `history` — the last 50 step outcomes, each tagged with its environment
 
-`make clear T=state --yes` resets it. **Reset, not delete**: `StateManager` is a
-module-level singleton loaded at import, so deleting the file mid-process would
-be undone by the next `save()` writing the old in-memory data straight back.
+Every flag is recorded with a **fingerprint** of what it was produced from, and
+a step counts as done only when the flag is set *and* the fingerprint still
+matches (see below). `make clear T=state --yes` resets it. **Reset, not
+delete**: `StateManager` is a module-level singleton loaded at import, so
+deleting the file mid-process would be undone by the next `save()` writing the
+old in-memory data straight back. Writes are atomic (temp file + rename), so a
+crash mid-write leaves the previous file intact rather than a truncated one.
 
 The reset keeps one field — `environment`. Everything else is progress that can
 be regenerated, but the target environment is a choice: losing it would make the
 next `make migrate` or `make setup` silently fall back to `dev`.
 
 `ENV=dev make cli` seeds the environment on first run only; the state file is
-otherwise the authority.
+otherwise the authority. `NBCG_CLI_STATE_FILE=<path>` points the state at a
+different file — used by `state.spec.js` so the real one is never touched.
+
+### What "done" means: fingerprints
+
+Before this existed, a step's record was a bare boolean, which made "ran once"
+indistinguishable from "is current". Two failures followed, both silent:
+
+1. **A `git pull` looked like a successful deploy.** Changed compose
+   templates, renderers or config left every step flagged done, so the
+   documented procedure — `git pull` → `make cli` → *Run all remaining steps* —
+   did nothing at all.
+2. **dev and prod shared one set of flags.** `steps.env = true` from a dev run
+   satisfied the check during a prod run, so prod skipped the five shared steps
+   and inherited dev's `.env`, dev's secrets and dev's compose files, reporting
+   success throughout.
+
+Each step now declares the paths it reads (`inputs`) and writes (`outputs`),
+and its fingerprint covers the environment, the step's own implementation, the
+shared library tree, and the contents of its inputs and outputs. So a step goes
+stale when:
+
+| Change | Detected because |
+|---|---|
+| `git pull` brings a modified `docker/docker-compose.yml` | it is an input to `dockerFilesCopied` |
+| the shared CLI library changes | it is in the implementation hash |
+| someone hand-edits `docker-compose.yml` at the repo root | it is an output, content-hashed |
+| someone deletes `frontend/.env` | it is an output of `fbEnd` |
+| `master.config.json` changes | it is an input to four steps |
+| a new migration lands in `backend/prisma/migrations/` | `migrate`'s flag fingerprint covers that tree |
+| the root `.env` changes | `osSecured`'s flag fingerprint covers it |
+
+`make list` and the Setup menu distinguish three states, not two: **done**,
+**stale** (ran before, no longer trustworthy — with the reason spelled out), and
+not run. That reason is the point; "rerun it" is only correct advice for some of
+the cases.
+
+Two deliberate exceptions:
+
+- `env` checks its output for **presence only**, not content. `config` runs
+  immediately after and merges the master config into the same root `.env`, so
+  the content `env` leaves behind does not survive; content-hashing it would
+  leave `env` permanently stale. `config` owns and hashes the final content.
+- `appImages` cannot see a **source-only** change. Editing `frontend/src` or
+  `backend/src` and nothing else leaves its fingerprint untouched, so the step
+  still reads current and a rebuild is not offered. Fingerprinting the source
+  trees would mean re-hashing thousands of files on every menu repaint. **After
+  changing application code, re-run `make step STEP=appImages` explicitly**
+  (or `make app A=build`) rather than relying on staleness.
+
+### Upgrading an existing state file
+
+A v1 file is migrated on first read: its progress is preserved under the
+environment it was recorded for, but every record is marked unverifiable, so
+**every step re-runs once** to establish fingerprints. That is the intended
+cost — a bare boolean cannot be trusted, and re-running regenerates each output
+from its inputs. Nothing needs to be reset by hand.
 
 ## master.config.json
 

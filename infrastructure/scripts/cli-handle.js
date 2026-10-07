@@ -9,7 +9,8 @@ import {
 } from "./lib/cli-util.js"
 import { checkRequirements } from "./requirements.js"
 import {
-  SETUP_STEPS, getStep, getApplicableSteps, getUnmetDeps, executeStep, getStepTitle
+  SETUP_STEPS, getStep, getApplicableSteps, getUnmetDeps, executeStep, getStepTitle,
+  isStepCurrent, stalenessReason, isFlagCurrent
 } from "./lib/steps.js"
 import {
   stopContainers, restartContainers, buildContainers,
@@ -39,13 +40,16 @@ export async function handleSetup() {
     status: () => {
       const env = currentEnv() || "dev"
       const steps = getApplicableSteps(env)
-      const done = steps.filter(s => state.isStepDone(s.key)).length
-      return [`${done}/${steps.length} steps done · env: ${env}`]
+      const done = steps.filter(s => isStepCurrent(s, env)).length
+      const stale = steps.length - done - steps.filter(s => !state.isStepDone(s.key, env)).length
+      const parts = [`${done}/${steps.length} steps current · env: ${env}`]
+      if (stale > 0) parts.push(`${stale} stale — rerun to refresh`)
+      return [parts.join(" · ")]
     },
     build: () => {
       const env = currentEnv() || "dev"
       const steps = getApplicableSteps(env)
-      const remaining = steps.filter(s => !state.isStepDone(s.key))
+      const remaining = steps.filter(s => !isStepCurrent(s, env))
 
       return [
         {
@@ -57,7 +61,7 @@ export async function handleSetup() {
             const chosenEnv = await promptEnvSelection()
             state.setEnvironment(chosenEnv)
 
-            const todo = getApplicableSteps(chosenEnv).filter(s => !state.isStepDone(s.key))
+            const todo = getApplicableSteps(chosenEnv).filter(s => !isStepCurrent(s, chosenEnv))
             for (const step of todo) {
               console.log(`\n=== ${getStepTitle(step, chosenEnv)} ===`)
               await executeStep(step, chosenEnv)
@@ -71,14 +75,17 @@ export async function handleSetup() {
         // running a step out of order, so this mirrors that instead of being
         // strictly more restrictive; it just asks for confirmation first.
         ...steps.map(step => {
-          const unmet = getUnmetDeps(step, env, state)
-          const done = state.isStepDone(step.key)
+          const unmet = getUnmetDeps(step, env)
+          const flagged = state.isStepDone(step.key, env)
+          const current = isStepCurrent(step, env)
           // "stale" = ran successfully before, but something it depends on has
-          // since been cleared or re-run, so its output can't be trusted
-          const status = done ? (unmet.length > 0 ? "stale" : "done") : (unmet.length > 0 ? "" : "ready")
+          // since been cleared or re-run, or its own inputs/outputs moved, so
+          // what it produced can no longer be trusted.
+          const status = current ? "done" : flagged ? "stale" : (unmet.length > 0 ? "" : "ready")
+          const reason = flagged && !current ? stalenessReason(step, env) : null
           return {
             name: `${done ? "✓" : " "} ${getStepTitle(step, env)}`,
-            hint: unmet.length > 0 ? `needs: ${unmet.join(", ")}` : status,
+            hint: unmet.length > 0 ? `needs: ${unmet.join(", ")}` : (reason || status),
             run: async () => {
               if (unmet.length > 0) {
                 const ok = await promptConfirm(
@@ -127,7 +134,10 @@ export async function handleDocker(setupState = "") {
   let services = null
   let states = null
 
-  const filesReady = () => state.isStepDone("dockerFilesCopied")
+  // Current, not merely flagged: a dockerFilesCopied step whose compose
+  // templates have since changed leaves the files at the repo root stale, and
+  // driving docker from those would quietly run last week's configuration.
+  const filesReady = () => isStepCurrent(getStep("dockerFilesCopied"), currentEnv() || "dev")
   const invalidate = () => { states = null }
 
   const loadStates = async () => {
@@ -248,7 +258,7 @@ export async function handleDocker(setupState = "") {
           name: "Configure OpenSearch security",
           disabled: !isProd() || !anyRunning,
           disabledReason: isProd() ? "start the containers first" : "prod only — dev runs OpenSearch unsecured",
-          hint: isProd() ? (state.isStepDone("osSecured") ? "already configured" : "replaces the shipped demo accounts") : "",
+          hint: isProd() ? (isFlagCurrent("osSecured", "prod") ? "already configured" : "replaces the shipped demo accounts") : "",
           pause: true,
           run: async () => {
             const result = await configureSecurity()

@@ -24,7 +24,8 @@ import { startStack } from "./lib/reconcile-utils.js"
 import { CLEAR_TARGETS, describeArtifacts, describeClearTarget } from "./lib/clear-utils.js"
 import { findMissingKeys, findExtraKeys, mergeTemplateDefaults } from "./lib/config-utils.js"
 import {
-  SETUP_STEPS, getStep, getApplicableSteps, getStepDeps, getUnmetDeps, executeStep, getStepTitle
+  SETUP_STEPS, getStep, getApplicableSteps, getStepDeps, getUnmetDeps, executeStep, getStepTitle,
+  isStepCurrent, stalenessReason, resolveEnv
 } from "./lib/steps.js"
 import {
   stopContainers, restartContainers, buildContainers,
@@ -97,18 +98,30 @@ Flags:
 `.trim())
 }
 
+// Three states, not two. A step that ran once but whose inputs, outputs or
+// implementation have moved is "stale" — it is not done, and saying "done"
+// here is exactly what made a git pull look like a successful deploy.
+function stepMarker(step, env) {
+  if (isStepCurrent(step, env)) return "done"
+  return state.isStepDone(step.key, env) ? "stale" : "    "
+}
+
 function cmdList() {
   const env = currentEnv()
   console.log(`Setup steps (env: ${env})\n`)
   for (const step of SETUP_STEPS) {
-    const done = state.isStepDone(step.key) ? "done" : "    "
+    const marker = stepMarker(step, env)
     const tags = [
       step.prodOnly ? "prod-only" : null,
       step.takesEnv ? "takes <env>" : null,
       `after: ${getStepDeps(step, env).join(", ") || "nothing"}`
     ].filter(Boolean).join("; ")
-    console.log(`  [${done}] ${step.key.padEnd(18)} ${step.describe}`)
+    console.log(`  [${marker}] ${step.key.padEnd(18)} ${step.describe}`)
     console.log(`           ${" ".repeat(18)} (${tags})`)
+    if (marker === "stale") {
+      const reason = stalenessReason(step, env)
+      if (reason) console.log(`           ${" ".repeat(18)} stale: ${reason}`)
+    }
   }
   console.log(`\nDocker actions: ${Object.keys(DOCKER_ACTIONS).join(", ")}`)
   console.log(`App actions:    ${Object.keys(APP_ACTIONS).join(", ")}`)

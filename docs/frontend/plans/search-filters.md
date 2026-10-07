@@ -1,6 +1,6 @@
 # Frontend: search filters
 
-## Status: W1 and W4 BUILT 2026-09-30 with the admin redesign · W2, W3 and W8 BUILT 2026-10-01 with the [public redesign](public-redesign.md) (W3 as any / collections only / single items only; W8 as an empty state, no message) · W5–W7 TODO · backend DONE 2026-09-29 (dev)
+## Status: W1 and W4 BUILT 2026-09-30 with the admin redesign · W2, W3 and W8 BUILT 2026-10-01 with the [public redesign](public-redesign.md) (W3 as any / collections only / single items only; W8 as an empty state, no message) · W5–W7 TODO · **W9 found 2026-10-03, a real bug, not started** · backend DONE 2026-09-29 (dev)
 
 **Admin list (2026-09-30):** the records / drafts list filters by material type, collection type,
 "created by me" and year of publication, all kept in the URL. The design's "Visibility" and "Has
@@ -109,6 +109,46 @@ takes every filter from the URL and `fetchItems` has `try/finally` without a
 with no message. Add a `catch` that clears the list and shows "this filter is
 not valid", and pad or drop a bad year before sending (as the advanced page
 does).
+
+### W9 — a comma inside a filter value silently returns nothing (S) — bug, found 2026-10-03
+
+`splitList()` (`backend/src/modules/search/filter-fields.ts:197`) splits on `,`
+with no escaping, and the web joins a multi-select with `,`
+(`frontend/src/utils/catalogQuery.ts:78-79`). So any filter **value** that
+contains a comma arrives at the backend as two values, neither of which matches:
+
+```
+language=Greek, Modern  ->  { terms: { 'metadata.language.en.keyword': ['Greek','Modern'] } }
+```
+
+Eleven labels in `cobiss-code-map.ts` contain a comma, five of them in the
+`language` vocabulary and therefore reachable from the catalogue facet and the
+advanced-search language select:
+
+| code | en label |
+|---|---|
+| `ell`, `gre` | `Greek, Modern` |
+| `cpe` | `Creoles and pidgins, English based` |
+| `cpf` | `Creoles and pidgins, French-based` |
+| `cpp` | `Creoles and pidgins, Portuguese-based` |
+
+The other six (`a`–`f`) are **record-type** labels — `Textual material,
+printed`, `Music, printed`, `Cartographic material, printed`, … — not currently
+filterable, so they are latent rather than live.
+
+`publisher` is also a comma list (`filter-fields.ts:69`) and is free text, so
+**any publisher with a comma in its name is unreachable** through it.
+
+Silent 0 results, no error — the user just sees "Nothing matches these filters".
+`filter-fields.spec.ts:34-38` only tests whitespace trimming, so it does not
+catch this and would not.
+
+Fix options, in order of preference: (a) switch the list encoding to repeated
+params (`?language=a&language=b`), which removes the ambiguity entirely;
+(b) escape `\,` and have both sides unescape; (c) match with a phrase on a
+non-split value — only works for single values, so it does not solve the
+multi-select. Note D1 below removes the language case as a side effect but
+**not** the publisher one.
 
 ## Decisions
 

@@ -23,6 +23,10 @@
     "comment": "Ports the PRODUCTION stack actually publishes to the host.",
     "names": ["HTTP_PORT", "HTTPS_PORT"]
   },
+  "dev_unpublished_ports": {
+    "comment": "Ports the DEV stack does NOT publish through docker, because a host process under pm2 owns them (the backend runs as `make app A=start T=backend`). Docker never binds these, so there is no conflict to detect — but the port is legitimately occupied once the app is running, so checking it would block every re-entry into the setup menu on an established dev machine.",
+    "names": ["BACKEND_PORT"]
+  },
   "certificates": {
     "comment": "Subject of every generated certificate.",
     "subject": { "C": "ME", "ST": "State", "L": "City", "O": "NBCG", "OU": "IT" },

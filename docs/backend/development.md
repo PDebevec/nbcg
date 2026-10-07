@@ -124,6 +124,14 @@ Users `admin`, `editor`, `cataloguer`, `reader` (password = username) — see
 - `rules/evaluate.ts` is copied verbatim to the web frontend
   (`frontend/src/utils/schemaRules.ts`); once that copy exists,
   `evaluate.spec.ts` fails until both are identical. Keep the file import-free.
+  **The guard is conditional** — `evaluate.spec.ts:91` is
+  `existsSync(frontendCopy) ? it : it.skip`, so it silently passes when the
+  frontend is absent. That is the normal case inside `backend/Dockerfile`, which
+  builds from the `backend/` context only. There is no CI, so this guard only
+  ever runs when a human runs `npm test` from a full checkout, and the third
+  copy in the archive app is unguarded entirely. Make the path a hard
+  `readFileSync` (or move the comparison to a repo-root script both Dockerfiles
+  run) or the invariant is decorative.
 - A new `suggest` needs an entry in `src/modules/search/suggest-fields.ts`.
 
 ## OpenSearch mapping changes
