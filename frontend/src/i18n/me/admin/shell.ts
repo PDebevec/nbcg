@@ -6,12 +6,14 @@ export default {
     groupCatalogue: 'Katalog',
     groupWork: 'Rad',
     groupInsight: 'Uvid',
+    groupAdmin: 'Administracija',
     dashboard: 'Pregled',
     drafts: 'Nacrti',
     records: 'Zapisi',
     import: 'Uvoz',
     stats: 'Statistika',
     tasks: 'Zadaci',
+    users: 'Korisnici',
   },
   shell: {
     roles: {
@@ -65,6 +67,25 @@ export default {
     syncQueued: 'Osvježavanje imenika korisnika je pokrenuto.',
     syncFailed: 'Pokretanje osvježavanja imenika korisnika nije uspjelo.',
     statusFailed: 'Učitavanje statusa sinhronizacije nije uspjelo.',
+    // Stranica Korisnici
+    pageTitle: 'Korisnici',
+    caption: 'Nalozi zaposlenih iz Keycloak-a, prema posljednjoj sinhronizaciji imenika. Nalozima se upravlja u Keycloak-u.',
+    searchPlaceholder: 'Pretražite po imenu, korisničkom imenu ili e-pošti …',
+    showInactive: 'Prikaži onemogućene i uklonjene',
+    results: 'korisnika: {count}',
+    loadFailed: 'Spisak korisnika nije moguće učitati.',
+    empty: 'Nema korisnika koji odgovaraju.',
+    columns: {
+      user: 'Korisnik',
+      email: 'E-pošta',
+      role: 'Uloga',
+      status: 'Status',
+    },
+    status: {
+      active: 'Aktivan',
+      disabled: 'Onemogućen',
+      removed: 'Uklonjen',
+    },
   },
   extraction: {
     EXTRACTED: 'Tekst iz PDF-a izdvojen',

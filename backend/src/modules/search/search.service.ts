@@ -542,6 +542,9 @@ function mapAuthorSuggestResult(field: string, raw: any, q: string | undefined, 
   };
 }
 
+/** Upper bound on serials `excludeSerialIssues` looks up — the library has a few dozen. */
+const SERIAL_LOOKUP_LIMIT = 1000;
+
 @Injectable()
 export class SearchService {
   constructor(
@@ -568,10 +571,14 @@ export class SearchService {
 
     const showAttribution = canSeeAttribution(principal);
     const userQuery = buildQuery(dto);
+    const serialIds = dto.excludeSerialIssues ? await this.serialIds() : [];
     const query = {
       bool: {
         must: [userQuery],
         filter: [visibilityClause],
+        ...(serialIds.length > 0
+          ? { must_not: [{ terms: { 'parent_relations.parentId': serialIds } }] }
+          : {}),
       },
     };
 
@@ -598,6 +605,24 @@ export class SearchService {
       pages: Math.ceil(total / limit),
       hits: hits.map((hit) => mapHit(hit, showAttribution)),
     };
+  }
+
+  /**
+   * Ids of every serial (`collectionType` 4), drafts and records alike, for
+   * `excludeSerialIssues`. A child carries only its parent's id, not the
+   * parent's type, so the issues are found by their parents: there are few
+   * serials, and a `terms` filter on their ids is cheap. Visibility does not
+   * matter here — the ids only take documents out.
+   */
+  private async serialIds(): Promise<string[]> {
+    const result = await this.opensearch.search(['records', 'drafts'], {
+      size: SERIAL_LOOKUP_LIMIT,
+      _source: false,
+      query: { term: { 'metadata.collectionType': 4 } },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hits: any[] = (result as any)?.hits?.hits ?? [];
+    return hits.map((hit) => String(hit._id));
   }
 
   async getChildren(id: string, dto: SearchQueryDto, principal: Principal): Promise<SearchResult> {

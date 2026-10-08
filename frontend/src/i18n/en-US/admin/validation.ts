@@ -5,12 +5,14 @@ export default {
     save: 'Cannot save',
     toDraft: 'Cannot return to draft',
     link: 'Cannot add to the collection',
+    unlink: 'Cannot remove from the collection',
   },
   batch: {
     publish: '{failed} of {total} items are not ready to publish.',
     save: '{failed} of {total} items cannot be saved.',
     toDraft: '{failed} of {total} items cannot be returned to draft.',
     link: '{failed} of {total} items cannot be added to the collection.',
+    unlink: '{failed} of {total} items cannot be removed from the collection.',
   },
   batchNothing: 'Nothing was changed: the whole batch is refused until every item passes.',
   single: {
@@ -18,6 +20,7 @@ export default {
     save: 'Nothing was saved. Fix what is listed below and save again.',
     toDraft: 'The item was not moved. Fix what is listed below and try again.',
     link: 'The item was not added. Fix what is listed below and try again.',
+    unlink: 'The item was not removed. Fix what is listed below and try again.',
   },
   checkedAs: {
     DRAFT: 'checked as a draft',

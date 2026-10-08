@@ -288,6 +288,8 @@ async function fetchItems() {
       limit: PAGE_SIZE,
       fields: LIST_FIELDS,
       sort: q.sort,
+      // A journal's issues are reached through the journal, not listed one by one
+      excludeSerialIssues: true,
       // The checkbox switches the text from the metadata to the scanned text
       ...(q.q ? (q.fullText ? { fullText: q.q } : { q: q.q }) : {}),
       ...(q.title ? { title: q.title } : {}),

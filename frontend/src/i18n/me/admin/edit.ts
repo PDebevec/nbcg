@@ -86,6 +86,29 @@ export default {
     serialNote:
       'Autori, vrsta zbirke, ISBN, izdanje i kodirani podaci za tekst nalaze se na nadređenom zapisu, pa ih ovaj obrazac sklanja.',
     open: 'Otvori nadređeni zapis',
+    add: 'Dodaj u zbirku',
+    addTitle: 'Dodavanje u zbirku',
+    searchPlaceholder: 'Pretražite zbirke po naslovu …',
+    alreadyLinked: 'već povezano',
+    onSave: 'Povezuje se kada se zapis sačuva.',
+    remove: 'Ukloni iz zbirke',
+    removeConfirm: 'Ukloniti ovaj zapis iz zbirke „{title}“?',
+    removeOk: 'Ukloni',
+    added: 'Dodato u zbirku.',
+    removed: 'Uklonjeno iz zbirke.',
+  },
+
+  // Novi zapis popunjen iz jednog COBISS zapisa
+  cobiss: {
+    label: 'Popuni iz COBISS-a',
+    placeholder: 'COBISS ID',
+    fill: 'Popuni',
+    hint: 'Popunjava obrazac podacima iz COBISS zapisa. Zapis zadržava COBISS ID, pa kasniji uvoz istog broja ne pravi drugu kopiju.',
+    filled: 'Obrazac je popunjen iz COBISS {id}. Provjerite ga i sačuvajte.',
+    notFound: 'COBISS nema zapis sa ID-jem {id}.',
+    failed: 'COBISS zapis nije moguće učitati.',
+    exists: 'Ovaj COBISS zapis već postoji u katalogu kao {type}.',
+    open: 'Otvori ga',
   },
 
   // Spremnost za čuvanje

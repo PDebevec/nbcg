@@ -68,6 +68,19 @@
             <q-item-section avatar><q-icon name="o_bar_chart" /></q-item-section>
             <q-item-section>{{ t('admin.nav.stats') }}</q-item-section>
           </q-item>
+
+          <template v-if="canManageUsers">
+            <q-item-label header class="admin-drawer__group">{{ t('admin.nav.groupAdmin') }}</q-item-label>
+            <q-item
+              clickable
+              to="/admin/users"
+              active-class="admin-drawer__item--active"
+              class="admin-drawer__item"
+            >
+              <q-item-section avatar><q-icon name="o_group" /></q-item-section>
+              <q-item-section>{{ t('admin.nav.users') }}</q-item-section>
+            </q-item>
+          </template>
         </q-list>
 
         <q-space />

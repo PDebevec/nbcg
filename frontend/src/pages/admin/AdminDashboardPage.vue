@@ -74,7 +74,7 @@
           </span>
         </div>
       </router-link>
-      <div v-if="canManageUsers" class="kpi-tile">
+      <router-link v-if="canManageUsers" to="/admin/users" class="kpi-tile">
         <div class="kpi-tile__head">
           <span>{{ t('admin.users.title') }}</span>
           <q-icon name="o_group" size="18px" />
@@ -86,7 +86,7 @@
         <div class="kpi-tile__legend">
           <span>{{ syncLine }}</span>
         </div>
-      </div>
+      </router-link>
     </div>
 
     <div class="dash-grid">
@@ -235,50 +235,17 @@
             </div>
           </div>
         </q-card>
-
-        <!-- User directory sync. Worth surfacing: a sync failing silently for a
-             week is otherwise invisible until the user picker is mysteriously empty. -->
-        <q-card v-if="canManageUsers" flat bordered>
-          <div class="adm-card__body adm-card__body--stack">
-            <h2 class="adm-card__title">{{ t('admin.users.title') }}</h2>
-            <div v-if="syncStatus" class="column">
-              <span>{{ syncLine }}</span>
-              <span class="text-caption adm-muted">
-                {{ t('admin.users.profileCount', { count: syncStatus.profileCount }) }}
-              </span>
-              <span v-if="syncStatus.lastError" class="text-caption text-negative q-mt-xs">
-                {{
-                  t('admin.users.lastError', {
-                    when: formatDateTime(syncStatus.lastError.at, locale),
-                    message: syncStatus.lastError.message,
-                  })
-                }}
-              </span>
-            </div>
-            <div>
-              <q-btn
-                outline
-                no-caps
-                color="primary"
-                icon="o_sync"
-                :loading="syncTriggering || syncStatus?.running"
-                :label="t('admin.users.refresh')"
-                @click="runUserSync"
-              />
-            </div>
-          </div>
-        </q-card>
       </div>
     </div>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useQuasar } from 'quasar';
 import { getItemStats, VISIBILITY_STATUSES, type ItemStats, type VisibilityStatus } from 'src/api/admin';
-import { getUserSyncStatus, triggerUserSync, type UserSyncStatus } from 'src/api/users';
+import { getUserSyncStatus, type UserSyncStatus } from 'src/api/users';
 import { listTasks, type Task } from 'src/api/tasks';
 import { auth } from 'src/services/keycloak';
 import { useAuthz } from 'src/composables/useAuthz';
@@ -388,11 +355,9 @@ const glanceRows = computed(() =>
     }),
 );
 
-// ── User directory sync ──
+// ── User directory: the tile; the list and the sync live on /admin/users ──
 
 const syncStatus = ref<UserSyncStatus | null>(null);
-const syncTriggering = ref(false);
-let syncPollTimer: ReturnType<typeof setTimeout> | undefined;
 
 const syncLine = computed(() => {
   const status = syncStatus.value;
@@ -411,32 +376,6 @@ async function loadSyncStatus() {
     $q.notify({ type: 'negative', message: t('admin.users.statusFailed') });
   }
 }
-
-// The sync runs in a queue worker; poll until it reports done so the card does
-// not show a stale "last synced" from before the click.
-function pollSyncStatus(attempt = 0) {
-  clearTimeout(syncPollTimer);
-  syncPollTimer = setTimeout(() => {
-    void loadSyncStatus().then(() => {
-      if (syncStatus.value?.running && attempt < 30) pollSyncStatus(attempt + 1);
-    });
-  }, 2000);
-}
-
-async function runUserSync() {
-  syncTriggering.value = true;
-  try {
-    await triggerUserSync();
-    $q.notify({ type: 'positive', message: t('admin.users.syncQueued') });
-    pollSyncStatus();
-  } catch {
-    $q.notify({ type: 'negative', message: t('admin.users.syncFailed') });
-  } finally {
-    syncTriggering.value = false;
-  }
-}
-
-onBeforeUnmount(() => clearTimeout(syncPollTimer));
 
 onMounted(async () => {
   if (canManageUsers.value) void loadSyncStatus();

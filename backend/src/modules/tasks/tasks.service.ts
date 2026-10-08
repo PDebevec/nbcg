@@ -271,6 +271,9 @@ export class TasksService {
    * This is the query the delete asymmetry exists to make possible: `tasks` dies
    * with the item, `task_history` does not, and its rows carry `itemId` so they
    * stay answerable afterwards.
+   *
+   * Oldest first, like a single task's history in `get()`, so both read the
+   * same way; "load more" appends the newer entries.
    */
   async historyForItem(
     itemId: string,
@@ -282,7 +285,7 @@ export class TasksService {
       this.prisma.taskHistory.count({ where }),
       this.prisma.taskHistory.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'asc' },
         take: limit,
         skip: offset,
       }),

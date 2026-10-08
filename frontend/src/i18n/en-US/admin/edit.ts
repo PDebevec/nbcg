@@ -86,6 +86,29 @@ export default {
     serialNote:
       'Authors, collection type, ISBN, edition and the coded text data live on the parent, so this form folds them away.',
     open: 'Open parent',
+    add: 'Add to a collection',
+    addTitle: 'Add to a collection',
+    searchPlaceholder: 'Search collections by title …',
+    alreadyLinked: 'already linked',
+    onSave: 'Linked when the item is saved.',
+    remove: 'Remove from the collection',
+    removeConfirm: 'Remove this item from “{title}”?',
+    removeOk: 'Remove',
+    added: 'Added to the collection.',
+    removed: 'Removed from the collection.',
+  },
+
+  // A new item filled in from one COBISS record
+  cobiss: {
+    label: 'Fill in from COBISS',
+    placeholder: 'COBISS ID',
+    fill: 'Fill in',
+    hint: 'Fills the form with the COBISS record. The item keeps the COBISS ID, so a later import of the same number does not create a second copy.',
+    filled: 'Form filled in from COBISS {id}. Check it and save.',
+    notFound: 'COBISS has no record with ID {id}.',
+    failed: 'The COBISS record could not be loaded.',
+    exists: 'This COBISS record is already in the catalogue as a {type}.',
+    open: 'Open it',
   },
 
   // Save readiness

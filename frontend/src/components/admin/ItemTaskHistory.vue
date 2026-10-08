@@ -37,7 +37,7 @@ import TaskHistoryList from 'src/components/admin/TaskHistoryList.vue';
 
 // ---------------------------------------------------------------------------
 // The audit view of one item: every task-history entry ever written against
-// it, newest first, spanning tasks that no longer exist. Same shape and
+// it, oldest first (as on a task's own page), spanning tasks that no longer exist. Same shape and
 // paging as HistoryTimeline.vue, over the task log instead of revisions.
 // ---------------------------------------------------------------------------
 

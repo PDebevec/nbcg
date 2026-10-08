@@ -25,6 +25,8 @@ export interface UserProfileView {
    * had to reason about.
    */
   email: string | null;
+  /** Effective nbcg-api client roles as of the last sync — for showing a role, not for deciding access. */
+  scopes: string[];
 }
 
 /** What the task assignee guard needs to know about one user. */
@@ -173,6 +175,7 @@ interface UserProfileRow {
   enabled: boolean;
   deletedAt: Date | null;
   email: string | null;
+  scopes: string[];
 }
 
 function toView(row: UserProfileRow): UserProfileView {
@@ -185,5 +188,6 @@ function toView(row: UserProfileRow): UserProfileView {
     enabled: row.enabled,
     deletedAt: row.deletedAt,
     email: row.email,
+    scopes: row.scopes,
   };
 }

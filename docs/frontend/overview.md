@@ -68,6 +68,10 @@ are the outlined Material set (`o_*`).
   a publish would be refused. A field the schema hides for this item moves to
   "Other fields" and stays fillable. A draft needs a title and a material type;
   a record must stay complete (Save is off while a required field is empty).
+  A new item can be filled in from one COBISS ID (`editor/CobissPrefill.vue`, `GET /import/cobiss/preview`;
+  the save keeps `cobissId`, so the server gives the item the import's id and refuses a second copy). "Add to a
+  collection" (`editor/AddParentDialog.vue`) links the item under a collection — sent as `parentIds` on create,
+  `relations/connect` / `disconnect` on a saved item.
   Tabs: JSON, files (upload with OCR text state), contents (a collection's
   children, "Add items" — prototype, see [collection views](plans/collection-views.md)),
   revision history, the item's task history. Status card: publish / return to draft. Saves use optimistic
@@ -80,6 +84,10 @@ are the outlined Material set (`o_*`).
   on, or publish), Return, Reassign, Cancel — one dialog each.
 - **Statistics** (`/admin/stats`) and **COBISS import** (`/admin/import`, with
   the warnings of a finished job).
+- **Users** (`/admin/users`, `users:manage`, "Administration" in the drawer):
+  read-only table of the synced user directory (name, e-mail, role from
+  `scopes`, active / disabled / removed) and the directory sync, moved here
+  from the dashboard. Accounts are managed in Keycloak.
 
 ## Known issues (2026-10-01)
 

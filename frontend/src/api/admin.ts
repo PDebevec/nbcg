@@ -48,6 +48,8 @@ export async function createItem(params: {
   visibilityStatus: VisibilityStatus;
   targetState: ItemType;
   metadata?: MetadataPayload;
+  /** Collections the new item is linked under, in the same transaction; checked with them. */
+  parentIds?: string[];
 }): Promise<CreatedItem> {
   const { data } = await api.post<CreatedItem>('/items', params);
   return data;
@@ -112,6 +114,12 @@ export interface ParentState {
  */
 export async function connectChildren(parentId: string, childIds: string[]): Promise<ParentState> {
   const { data } = await api.post<ParentState>('/relations/connect', { parentId, childIds });
+  return data;
+}
+
+/** Unlink children from a collection. Each child is checked without that parent, like `connectChildren`. */
+export async function disconnectChildren(parentId: string, childIds: string[]): Promise<ParentState> {
+  const { data } = await api.post<ParentState>('/relations/disconnect', { parentId, childIds });
   return data;
 }
 
@@ -354,6 +362,22 @@ export async function importCobiss(params: {
   visibilityStatus: VisibilityStatus;
 }): Promise<{ jobId: string }> {
   const { data } = await api.post<{ jobId: string }>('/import/cobiss', params);
+  return data;
+}
+
+/** One COBISS record, fetched and parsed but not stored — what an import of it would write. */
+export interface CobissPreview {
+  cobissId: string;
+  /** The id an import (or a hand-made item with this `cobissId`) gets — derived from the COBISS ID. */
+  itemId: string;
+  alreadyExists: boolean;
+  existsAs: ItemType | null;
+  metadata: Record<string, unknown>;
+}
+
+/** 404 when COBISS has no record with this ID. Needs `import:execute`. */
+export async function previewCobiss(cobissId: string): Promise<CobissPreview> {
+  const { data } = await api.get<CobissPreview>(`/import/cobiss/preview/${encodeURIComponent(cobissId)}`);
   return data;
 }
 

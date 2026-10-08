@@ -6,12 +6,14 @@ export default {
     groupCatalogue: 'Catalogue',
     groupWork: 'Work',
     groupInsight: 'Insight',
+    groupAdmin: 'Administration',
     dashboard: 'Dashboard',
     drafts: 'Drafts',
     records: 'Records',
     import: 'Import',
     stats: 'Statistics',
     tasks: 'Tasks',
+    users: 'Users',
   },
   shell: {
     roles: {
@@ -65,6 +67,25 @@ export default {
     syncQueued: 'User directory refresh started.',
     syncFailed: 'Could not start the user directory refresh.',
     statusFailed: 'Failed to load the sync status.',
+    // The Users page
+    pageTitle: 'Users',
+    caption: 'Staff accounts from Keycloak, as of the last directory sync. Accounts are managed in Keycloak.',
+    searchPlaceholder: 'Search by name, username or e-mail …',
+    showInactive: 'Show disabled and removed',
+    results: 'users: {count}',
+    loadFailed: 'The user list could not be loaded.',
+    empty: 'No users match.',
+    columns: {
+      user: 'User',
+      email: 'E-mail',
+      role: 'Role',
+      status: 'Status',
+    },
+    status: {
+      active: 'Active',
+      disabled: 'Disabled',
+      removed: 'Removed',
+    },
   },
   extraction: {
     EXTRACTED: 'PDF text extracted',

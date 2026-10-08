@@ -70,9 +70,9 @@ import UserAvatar from 'src/components/admin/UserAvatar.vue';
 
 // ---------------------------------------------------------------------------
 // One chronological stream of comments and events, drawn as a timeline. Purely
-// presentational: the parent owns loading, ordering and pagination, because
-// the task detail (oldest first, appended on comment) and the per-item audit
-// view (newest first, paged) read the same shape differently.
+// presentational: the parent owns loading, ordering and pagination. Both the
+// task detail (appended on comment) and the per-item audit view (paged) list
+// oldest first.
 //
 // Each event reads as a sentence — "Ana handed the task on for Review and
 // publish to Marko" — so a task never looks like it moved by itself.

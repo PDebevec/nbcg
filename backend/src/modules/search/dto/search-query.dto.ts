@@ -1,5 +1,5 @@
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class SearchQueryDto {
   /** General search — fuzzy per-word AND across title, subtitle, authors, notes, filenames */
@@ -104,6 +104,17 @@ export class SearchQueryDto {
   @IsOptional()
   @IsString()
   createdBy?: string;
+
+  /**
+   * `true` leaves out the issues of serials — every item whose parent has
+   * `collectionType` 4. The serial itself still matches. For the public
+   * catalogue, where a journal's hundreds of issues would bury everything else;
+   * off by default, so the admin lists and pickers keep showing them.
+   */
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @IsBoolean()
+  excludeSerialIssues?: boolean;
 
   // ── Response shape ──
 

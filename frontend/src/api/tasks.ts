@@ -119,7 +119,7 @@ export interface TaskListResult {
 
 export interface ItemTaskHistoryResult {
   total: number;
-  /** Sorted by createdAt descending. */
+  /** Sorted by createdAt ascending (oldest first), like a task's own history. */
   history: ItemTaskHistoryEntry[];
 }
 

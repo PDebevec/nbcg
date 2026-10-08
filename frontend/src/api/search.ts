@@ -221,6 +221,8 @@ export interface SearchParams {
   cobissId?: string;
   /** Exact filter on createdByUserId (the picker resolves a person to their UUID and sends that) */
   createdBy?: string;
+  /** Leave out the issues of serials (items whose parent has collectionType 4); the serial itself still matches. */
+  excludeSerialIssues?: boolean;
   /**
    * Comma-separated field names for _source.includes; `id` is always returned.
    * Allowlisted server-side — unknown names are dropped silently, and attribution

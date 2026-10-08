@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createReadStream } from 'fs';
-import { unlink } from 'fs/promises';
+import { open, unlink } from 'fs/promises';
 import {
   ChangeAction,
   FileRole,
@@ -15,8 +15,46 @@ import { SeaweedfsService } from '../../core/seaweedfs/seaweedfs.service';
 const MIME_TO_FILE_TYPE: Record<string, FileType> = {
   'image/jpeg': FileType.IMAGE,
   'image/png': FileType.IMAGE,
+  'image/gif': FileType.IMAGE,
+  'image/webp': FileType.IMAGE,
   'application/pdf': FileType.PDF,
 };
+
+/**
+ * The type of a file by its first bytes, for the formats the viewer shows;
+ * null for anything else. The type a client declares is not trusted: a
+ * `new Blob([bytes])` without a type (the archive app did this) arrives as
+ * `application/octet-stream`, and an image stored that way was never shown.
+ */
+async function sniffMime(path: string): Promise<string | null> {
+  let head: Buffer;
+  const handle = await open(path, 'r');
+  try {
+    head = Buffer.alloc(12);
+    const { bytesRead } = await handle.read(head, 0, 12, 0);
+    head = head.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+  const starts = (bytes: number[], offset = 0) => bytes.every((b, i) => head[offset + i] === b);
+  if (starts([0xff, 0xd8, 0xff])) return 'image/jpeg';
+  if (starts([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png';
+  if (starts([0x47, 0x49, 0x46, 0x38])) return 'image/gif'; // GIF8
+  if (starts([0x52, 0x49, 0x46, 0x46]) && starts([0x57, 0x45, 0x42, 0x50], 8)) return 'image/webp'; // RIFF....WEBP
+  if (starts([0x25, 0x50, 0x44, 0x46])) return 'application/pdf'; // %PDF
+  return null;
+}
+
+/**
+ * The stored MIME type and file type of an upload. The content decides when it
+ * is a format the viewer knows; otherwise the declared type is kept, but such a
+ * file is never IMAGE / PDF, so the viewer does not try to show it inline.
+ */
+async function resolveType(file: Express.Multer.File): Promise<{ mimeType: string; fileType: FileType }> {
+  const sniffed = await sniffMime(file.path).catch(() => null);
+  if (sniffed) return { mimeType: sniffed, fileType: MIME_TO_FILE_TYPE[sniffed] ?? FileType.UNKNOWN };
+  return { mimeType: file.mimetype || 'application/octet-stream', fileType: FileType.UNKNOWN };
+}
 
 @Injectable()
 export class FilesService {
@@ -77,11 +115,11 @@ export class FilesService {
 
     const created = await Promise.all(
       files.map(async (file) => {
-        const fileType = MIME_TO_FILE_TYPE[file.mimetype] ?? FileType.UNKNOWN;
+        const { mimeType, fileType } = await resolveType(file);
         const stream = createReadStream(file.path);
         let fid: string;
         try {
-          fid = await this.seaweedfs.upload(stream, file.originalname, file.mimetype, file.size);
+          fid = await this.seaweedfs.upload(stream, file.originalname, mimeType, file.size);
         } finally {
           stream.destroy();
           await unlink(file.path).catch(() => undefined);
@@ -99,7 +137,7 @@ export class FilesService {
               ...(role ? { role } : {}),
               originalFid: fid,
               filename: file.originalname,
-              mimeType: file.mimetype,
+              mimeType,
               sizeBytes: file.size,
               // If text was supplied, store it immediately and mark extraction status
               ...(hasSuppliedText ? {
@@ -145,11 +183,11 @@ export class FilesService {
       throw new NotFoundException(`File not found: ${fileId}`);
     }
 
-    const fileType = MIME_TO_FILE_TYPE[file.mimetype] ?? FileType.UNKNOWN;
+    const { mimeType, fileType } = await resolveType(file);
     const stream = createReadStream(file.path);
     let fid: string;
     try {
-      fid = await this.seaweedfs.upload(stream, file.originalname, file.mimetype, file.size);
+      fid = await this.seaweedfs.upload(stream, file.originalname, mimeType, file.size);
     } finally {
       stream.destroy();
       await unlink(file.path).catch(() => undefined);
@@ -165,7 +203,7 @@ export class FilesService {
         data: {
           originalFid: fid,
           filename: file.originalname,
-          mimeType: file.mimetype,
+          mimeType,
           sizeBytes: file.size,
           fileType,
           ...(hasSuppliedText ? {

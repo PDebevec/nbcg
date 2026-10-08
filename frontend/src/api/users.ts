@@ -23,6 +23,8 @@ export interface UserProfile {
   deletedAt: string | null;
   /** Always present: the endpoint is staff-only, so there is no conditional branch. */
   email: string | null;
+  /** Effective API scopes as of the last sync — for showing a role, never for deciding access. */
+  scopes: string[];
 }
 
 /** What a picker needs to show and send — lets a prefill (a task's `returnTo`, the current assignee) skip a directory read. */

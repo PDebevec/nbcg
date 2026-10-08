@@ -205,7 +205,8 @@ Hence no FK on `task_history.taskId` — one would either block the delete or
 cascade the audit away with it — and hence the denormalised `itemId`, so
 `GET /api/tasks/item/:itemId/history` still answers "what happened around this
 record" once both the task and the item are gone. Same call, same reasoning, as
-`item_revisions`.
+`item_revisions`. It lists oldest first, like a task's own history in
+`GET /api/tasks/:id`.
 
 **No FK on `assignedToUserId`.** `user_profiles` is written by a daily sync, so a
 user who exists in Keycloak but has not been synced would have their assignment
@@ -443,6 +444,7 @@ curl 'http://localhost:3000/api/search/<parent_id>/children?page=1&limit=20'
 | `fullText`     | string | Search extracted PDF text; hits include `matchedFiles` with highlight snippets |
 | `fields`       | string | Comma-separated `_source` projection. **Allowlisted** — see below |
 | `sort`         | string | `relevance` (default), `newest`, or `issueDate` (oldest `metadata.issue.date` first, undated last) |
+| `excludeSerialIssues` | boolean | `true` leaves out every item whose parent is a serial (`collectionType` 4); the serial itself still matches. The public catalogue sends it; off by default. The serials' ids are looked up first, then excluded with `must_not terms parent_relations.parentId` |
 
 **Filters** — exact, they narrow the hits without changing the score. Same
 params on `GET /search/:id/children`.
@@ -931,7 +933,7 @@ because grouping by a snapshot would split a renamed person into several rows.
 # The staff list. Requires drafts:manage OR records:manage; a reader gets 403
 # and anonymous gets 401.
 curl "$API/users" -H "Authorization: Bearer $TOKEN"
-# -> { total, users: [ { userId, username, displayName, canPublish, isActive, enabled, deletedAt, email } ] }
+# -> { total, users: [ { userId, username, displayName, canPublish, isActive, enabled, deletedAt, email, scopes } ] }
 
 # Who can publish — records:manage AND drafts:manage. Includes editor, EXCLUDES
 # cataloguer. This is what an assignee picker for a REVIEW_PUBLISH task reads.

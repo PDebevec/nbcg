@@ -118,6 +118,9 @@
             </span>
           </div>
 
+          <!-- A new item can start from one COBISS record -->
+          <CobissPrefill v-if="isNew && canImport" @fill="onCobissFill" />
+
           <!-- PARENT: the context the rules need -->
           <div v-for="parent in parents" :key="parent.id" class="parent-band">
             <q-avatar square size="40px" class="parent-band__icon">
@@ -133,6 +136,7 @@
                 <template v-if="parent.children"> · {{ t('admin.edit.parent.children', { count: parent.children }) }}</template>
               </span>
               <span v-if="parent.serial" class="parent-band__note">{{ t('admin.edit.parent.serialNote') }}</span>
+              <span v-if="isNew" class="parent-band__note">{{ t('admin.edit.parent.onSave') }}</span>
             </div>
             <q-btn
               outline
@@ -141,6 +145,30 @@
               color="primary"
               :label="t('admin.edit.parent.open')"
               :to="`/admin/items/${parent.id}`"
+            />
+            <q-btn
+              v-if="isStaff"
+              flat
+              round
+              dense
+              color="primary"
+              icon="o_link_off"
+              :aria-label="t('admin.edit.parent.remove')"
+              :disable="linking"
+              @click="removeParent(parent)"
+            >
+              <q-tooltip>{{ t('admin.edit.parent.remove') }}</q-tooltip>
+            </q-btn>
+          </div>
+          <div v-if="isStaff" class="row">
+            <q-btn
+              flat
+              dense
+              no-caps
+              color="primary"
+              icon="o_add_link"
+              :label="t('admin.edit.parent.add')"
+              @click="addParentOpen = true"
             />
           </div>
 
@@ -485,6 +513,14 @@
       @created="onTaskCreated"
     />
 
+    <AddParentDialog
+      v-model="addParentOpen"
+      :item-id="itemId"
+      :linked-ids="parents.map((parent) => parent.id)"
+      :busy="linking"
+      @pick="onParentPicked"
+    />
+
     <ValidationErrorDialog
       v-model="validationOpen"
       :failure="validation"
@@ -516,10 +552,13 @@ import {
   type FileAttachment,
   type IndexedRecord,
   type ResolvedCode,
+  type SearchHit,
 } from 'src/api/search';
 import {
   conflictCurrentVersion,
+  connectChildren,
   createItem,
+  disconnectChildren,
   isVersionConflict,
   listFiles,
   transitionItems,
@@ -553,6 +592,8 @@ import ValidationErrorDialog, {
   type ValidationItemInfo,
 } from 'src/components/admin/ValidationErrorDialog.vue';
 import VisibilityBadge from 'src/components/admin/VisibilityBadge.vue';
+import AddParentDialog from 'src/components/admin/editor/AddParentDialog.vue';
+import CobissPrefill from 'src/components/admin/editor/CobissPrefill.vue';
 import ItemFilesTab from 'src/components/admin/editor/ItemFilesTab.vue';
 import ItemMetadataForm from 'src/components/admin/editor/ItemMetadataForm.vue';
 import UnsavedChangesDialog, {
@@ -597,7 +638,7 @@ const { t, locale } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const $q = useQuasar();
-const { isStaff, canTransition } = useAuthz();
+const { isStaff, canTransition, canImport } = useAuthz();
 const { codeLabel } = useCodeLabel();
 const schemaStore = useSchemaStore();
 const taskCount = useTaskCountStore();
@@ -1104,28 +1145,95 @@ function onChildrenAdded(state: ParentState) {
 
 // The rules for an issue of a serial need the parents' collection type. An
 // item normally has one parent; each is one read.
+async function parentInfo(parentId: string): Promise<ParentInfo | null> {
+  try {
+    const hit = await getItem(parentId);
+    const m = (hit.source.metadata as unknown as Record<string, unknown>) ?? {};
+    const issn = Array.isArray(m.issn) && typeof m.issn[0] === 'string' ? m.issn[0] : '';
+    return {
+      id: parentId,
+      title: typeof m.title === 'string' ? m.title : '',
+      metadata: m,
+      serial: m.collectionType === 4,
+      issn,
+      children: Number(m.childrenInDrafts ?? 0) + Number(m.childrenInRecords ?? 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function loadParents(source: IndexedRecord) {
   const relations = source.parent_relations ?? [];
-  const loaded = await Promise.all(
-    relations.map(async (relation): Promise<ParentInfo | null> => {
-      try {
-        const hit = await getItem(relation.parentId);
-        const m = (hit.source.metadata as unknown as Record<string, unknown>) ?? {};
-        const issn = Array.isArray(m.issn) && typeof m.issn[0] === 'string' ? m.issn[0] : '';
-        return {
-          id: relation.parentId,
-          title: typeof m.title === 'string' ? m.title : '',
-          metadata: m,
-          serial: m.collectionType === 4,
-          issn,
-          children: Number(m.childrenInDrafts ?? 0) + Number(m.childrenInRecords ?? 0),
-        };
-      } catch {
-        return null;
-      }
-    }),
-  );
+  const loaded = await Promise.all(relations.map((relation) => parentInfo(relation.parentId)));
   parents.value = loaded.filter((parent): parent is ParentInfo => parent !== null);
+}
+
+// ── Linking to a collection ──
+// A new item keeps the chosen parents and sends them with the create; a saved
+// one is linked / unlinked at once. Either way the server checks the item with
+// its new set of parents.
+
+const addParentOpen = ref(false);
+const linking = ref(false);
+
+async function onParentPicked(hit: SearchHit) {
+  linking.value = true;
+  try {
+    if (!isNew.value) await connectChildren(hit.id, [itemId.value!]);
+    const parent = await parentInfo(hit.id);
+    if (parent) parents.value = [...parents.value, parent];
+    addParentOpen.value = false;
+    if (!isNew.value) {
+      historyKey.value++;
+      $q.notify({ type: 'positive', message: t('admin.edit.parent.added') });
+    }
+  } catch (err) {
+    showFailure(err, 'link');
+  } finally {
+    linking.value = false;
+  }
+}
+
+function removeParent(parent: ParentInfo) {
+  const drop = () => {
+    parents.value = parents.value.filter((p) => p.id !== parent.id);
+  };
+  if (isNew.value) {
+    drop();
+    return;
+  }
+  $q.dialog({
+    title: t('admin.common.confirmTitle'),
+    message: t('admin.edit.parent.removeConfirm', { title: parent.title || parent.id }),
+    cancel: { flat: true, noCaps: true, color: 'primary', label: t('admin.common.cancel') },
+    ok: { unelevated: true, noCaps: true, color: 'negative', label: t('admin.edit.parent.removeOk') },
+  }).onOk(() => {
+    void (async () => {
+      linking.value = true;
+      try {
+        await disconnectChildren(parent.id, [itemId.value!]);
+        drop();
+        historyKey.value++;
+        $q.notify({ type: 'positive', message: t('admin.edit.parent.removed') });
+      } catch (err) {
+        showFailure(err, 'unlink');
+      } finally {
+        linking.value = false;
+      }
+    })();
+  });
+}
+
+// ── A new item filled in from COBISS ──
+// The preview is what an import would store, so it becomes the base metadata:
+// keys the form does not own pass through, and `cobissId` makes the server give
+// the item the import's id.
+function onCobissFill(fetched: Record<string, unknown>) {
+  metadata.value = fetched;
+  form.value = metadataToForm(fetched);
+  collapseEmptySections();
+  if (tab.value === 'json') renderJson();
 }
 
 // pgsync → OpenSearch indexing is eventually consistent: an item created a
@@ -1235,6 +1343,7 @@ async function save(): Promise<boolean> {
         visibilityStatus: visibilityStatus.value,
         targetState: targetState.value,
         metadata: meta,
+        ...(parents.value.length ? { parentIds: parents.value.map((parent) => parent.id) } : {}),
       });
       $q.notify({ type: 'positive', message: t('admin.edit.saved') });
       // The new item has its own route; the index may need a moment to show it.
