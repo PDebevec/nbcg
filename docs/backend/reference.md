@@ -313,7 +313,10 @@ Both `records` and `drafts` indices mirror the database tables via PGSync:
 - Root fields: `id`, `visibilityStatus`, `metadata` (object), `createdAt`, `updatedAt`, `createdByUserId`, `createdByName`, `updatedByUserId`, `updatedByName`
   - the two `…ByName` fields are mapped `keyword`, not `text`: sorting and terms aggregations on the creator name are the whole reason they are indexed. Full-text search over creator names is not a requirement — the picker resolves a name to a UUID and filters on `createdByUserId`. They are **stripped** for principals below the attribution bar (see [Attribution](#attribution)).
 - Nested `file_attachments[]`: `id`, `fileType`, `role`, `filename`, `mimeType`, `sizeBytes`, `textExtractionStatus`, `extractedText`, `createdAt`
-- `parent_relations[]` (object, not nested): `parentId`, `parentType`
+- `parent_relations[]` (object, not nested): `parentId`, `parentType`. pgsync cannot route an
+  `item_relations` change to the child's document by itself, so the trigger
+  `trg_item_relations_reindex_child` (migration `20261008150000`) sends the notification an update of the
+  child row would; pgsync then re-reads the child, relations included
 - `metadata` is mapped dynamically (strings → `text` + `.keyword`), with one
   declared exception: `metadata.issue.date` is `keyword`, so a partial date
   (`1905`, `1905-03`) never depends on which document happened to be indexed

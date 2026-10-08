@@ -41,8 +41,12 @@ Known gaps of the prototype:
 - Children must pass the record check with their new parent; most COBISS-imported books currently fail on a missing
   `extent`, so they cannot be added until that is filled in.
 - The list reloads 1.5 s after a connect to let pgsync catch up; it is not guaranteed to show the new children yet.
-- Local dev: pgsync did not index `parent_relations` for any document until it was force-recreated (full resync).
-  If new links do not show up again, check the incremental sync of `item_relations`.
+- ~~pgsync did not index a link made after the initial sync~~ — fixed 2026-10-08 by the migration
+  `20261008150000_reindex_child_on_relation_change`: pgsync 7 cannot map an `item_relations` change back to the
+  child's document (it looks the document up by the table's key names, `parentId` / `childId`, which only works for
+  a table keyed `id`), so a trigger now sends the notification an update of the child row would, and pgsync re-reads
+  the child. Existing links were reindexed with a no-op `UPDATE item_relations SET "childType" = "childType"`; run
+  that once on any environment that had links before the migration.
 
 ## Open Questions (ask user)
 
