@@ -5,4 +5,7 @@ docker-compose.ext.yml
 
 config.yml
 
+# Backup storage (snapshot tarballs, RESTIC repository, log) — never committed.
+backups/
+
 lib-data/*

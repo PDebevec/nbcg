@@ -23,3 +23,6 @@ docker/pgadmin/servers.json
 
 # Generated production credentials — never commit.
 .secrets.prod.json
+
+# Example SMTP config (not to be committed — see nbcg-realm.conf.json).
+docker/keycloak/smtp.example.json
