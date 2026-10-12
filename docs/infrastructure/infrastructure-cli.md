@@ -640,15 +640,34 @@ summarise as `N/N running · N healthy · …`.
   there now (pgAdmin rebuilds URLs from `X-Script-Name`; Dashboards needs
   `server.basePath` to agree with nginx). Expect broken links inside them until
   that is finished.
-- **Keycloak's `resetPasswordAllowed` is on, but `smtpServer` is `{}`** — the
-  password-reset flow will fail at the point of sending mail. Configure SMTP in
-  the realm or turn the feature off.
+- **Keycloak password reset is currently disabled** (`resetPasswordAllowed: false`
+  in `docker/keycloak/nbcg-realm.json`); the `smtpServer` field is an empty
+  object and `smtp.example.json` in the same directory shows exactly which
+  fields to fill when an external SMTP service is available — enable the
+  feature and restart Keycloak to use it.
 - **The backend logs every query** (`log: ['query', …]` in
   [`prisma.service.ts`](../../backend/src/core/prisma/prisma.service.ts)), which is
   very noisy for production.
 - **Volumes are plain docker volumes.** `config.template.yml` describes a ZFS
   dataset (`zfs.base`) for prod data; nothing implements that yet.
-- **There is no backup mechanism.** `scripts/backup.sh`/`restore.sh` were
-  removed when the CLI was rewritten and never rebuilt — `RESTIC_REPO`/
-  `RESTIC_PASSWORD` (`.env.prod`) and the Makefile's `cron-backup`/
-  `cron-restore` targets currently point at nothing.
+- **Backups are now supported** via `infrastructure/scripts/backup.sh` and
+  `infrastructure/scripts/restore.sh`, wired to the Makefile targets
+  `make cron-backup` and `make cron-restore`. A backup stops the stack
+  briefly, tarballs every runtime volume, snapshots the runtime configuration
+  and secrets, and writes a versioned, verified RESTIC repository. Snapshots
+  live in `backups/<env>/` (gitignored); run with `ENV=prod make cron-backup`.
+  `RESTIC_REPO` (default: `backups/<env>/.repo`) can point to an off-box
+  destination (S3, SSH, etc.). A restore wipes and refills all volumes and
+  config from a snapshot and brings the stack back up.
+- **Restore note for certificates:** `backup.sh` snapshots
+  `docker/certs/` (CA + all leaves + `.issued.json`) and `restore.sh` restores
+  them, so TLS material survives a full restore. For a real production deploy
+  only **nginx** needs a trusted certificate: drop the authority's
+  `fullchain.pem` → `docker/certs/nginx/server.crt` and `privkey.pem` →
+  `docker/certs/nginx/server.key`, set `certificates.nginx_external: true` in
+  `master.config.json`, then rebuild (`make docker A=build`). **Keycloak and
+  OpenSearch can remain self-signed**: Keycloak sits on the internal `auth`
+  network behind nginx and uses its auto-generated keystore; OpenSearch
+  node/admin certificates are always issued by this project's own self-signed
+  CA, trusted via `NODE_EXTRA_CA_CERTS` in the backend. No real certificate is
+  strictly required for the stack to run.
