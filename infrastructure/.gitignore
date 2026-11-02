@@ -1,5 +1,7 @@
 node_modules/
 .cli-state.json
+.cli-lock
+.config-history/
 master.config.json
 log/
 

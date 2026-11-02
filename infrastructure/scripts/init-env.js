@@ -3,6 +3,7 @@ import fsp from "node:fs/promises"
 import fs from "node:fs"
 import crypto from "node:crypto"
 import path from "node:path"
+import { isIP } from "node:net"
 import { loadMasterConfig } from "./lib/config-utils.js"
 import { APP_USER, DASHBOARDS_USER } from "./lib/opensearch-utils.js"
 import { consoleLog } from "./lib/logger.js"
@@ -142,15 +143,20 @@ function deriveOrigins(masterConfig, env, frontendPort) {
 
   // In prod the canonical hostname has to resolve to nginx from INSIDE the
   // compose network: the backend fetches Keycloak's JWKS over the same public
-  // URL a browser uses, and reaches it through nginx's network alias. A
-  // loopback name can never do that — every container resolves "localhost" to
-  // itself via /etc/hosts, and no alias overrides that — so the backend would
-  // fail to validate every token, with "fetch failed" as the only clue.
-  if (env === "prod" && ["localhost", "127.0.0.1", "::1"].includes(canonicalHost))
+  // URL a browser uses, and reaches it through nginx's network alias. Neither
+  // a loopback name NOR a bare IP can do that — every container resolves
+  // "localhost" to itself via /etc/hosts, and docker never DNS-resolves an IP
+  // literal to the nginx alias — so the backend would fail to validate every
+  // token, with "fetch failed" as the only clue. Loopback has always been
+  // rejected here; bare IPs (10.x/192.168.x on a LAN) fail the same way and
+  // are now rejected too.
+  if (env === "prod" && (["localhost", "127.0.0.1", "::1"].includes(canonicalHost) || isIP(canonicalHost) !== 0))
     throw new Error(
       `available_hostnames starts with "${canonicalHost}", which cannot work in prod.\n` +
-      `Containers resolve loopback names to themselves, so the backend could not reach Keycloak.\n` +
-      `Put a real hostname first in master.config.json (a /etc/hosts entry on the host is enough for testing).`
+      `Containers resolve loopback names to themselves, and never resolve a bare IP to nginx's alias,\n` +
+      `so the backend could not reach Keycloak. Put a real hostname first in master.config.json\n` +
+      `(a /etc/hosts entry on the host is enough for testing). LAN IPs are fine in later positions\n` +
+      `for direct browser access.`
     )
 
   // In dev, loopback is always reachable regardless of which LAN address
@@ -387,14 +393,19 @@ export async function applyConfTemplates() {
       throw new Error(`${template}: no value in root .env for ${missing.map(k => `$(${k})`).join(", ")}`)
 
     // ADMIN_UI_HTPASSWD is only ever non-empty in prod (deriveAdminHtpasswd()
-    // needs ADMIN_UI_PASSWORD, a generated-secrets-only value) — an empty
-    // substitution passes renderConfTemplate's "missing" check since the key
-    // does exist in rootEnv, just as "". In dev that silently writes a
-    // credential-less htpasswd; harmless today (dev's compose defines no
-    // nginx service to read it) but worth surfacing the same way
-    // generateAppEnvs() already warns on an empty value elsewhere.
-    if (template.includes("htpasswd") && rootEnv.ADMIN_UI_HTPASSWD === "")
+    // needs ADMIN_UI_PASSWORD, a generated-secrets-only value). In dev an
+    // empty substitution silently writes a credential-less htpasswd; harmless
+    // there (dev's compose defines no nginx service to read it). In prod the
+    // same file is the ONLY gate in front of pgAdmin and Dashboards — an
+    // empty one exposes both, so the render refuses instead of writing it.
+    if (template.includes("htpasswd") && rootEnv.ADMIN_UI_HTPASSWD === "") {
+      if ((rootEnv.ENV || "dev") === "prod")
+        throw new Error(
+          `${template}: ADMIN_UI_HTPASSWD is empty — refusing to write a credential-less htpasswd in prod.\n` +
+          `ADMIN_UI_PASSWORD must be present in .secrets.prod.json (it is in secrets_to_generate); run the "env" step first.`
+        )
       consoleLog("WARN", `${template}: ADMIN_UI_HTPASSWD is empty — wrote a credential-less htpasswd (expected outside prod)`)
+    }
 
     await fsp.mkdir(path.dirname(outputPath), { recursive: true })
 

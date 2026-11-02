@@ -210,8 +210,10 @@ export async function handleDocker(setupState = "") {
             // credentials after secrets are regenerated, instead of relying
             // on someone remembering to also run "Configure OpenSearch
             // security". See reconcile-utils.js.
-            await startStack(target, currentEnv())
-            if (isProd()) state.setStep("osSecured", true)
+            const result = await startStack(target, currentEnv())
+            // Only when security was genuinely applied during this up — a
+            // scoped up (or opensearch down) must not mark it done.
+            if (result?.securityApplied) state.setStep("osSecured", true)
           })
         },
         { name: "Stop", ...needsRunning, run: dockerRun("stop", stopContainers) },
@@ -237,7 +239,9 @@ export async function handleDocker(setupState = "") {
           pause: true,
           run: async () => {
             const result = await runHealthChecks()
-            state.setStep("health", true)
+            // Record health only when the verdict passed — same rule as the
+            // dispatcher (run.js): an empty or failing stack is not "done".
+            if (result.ok === true) state.setStep("health", true)
             return result
           }
         },

@@ -125,6 +125,14 @@ async function runProdMigrations() {
 /**
  * Reports the state and health of every compose service, using the
  * healthchecks already declared in the compose files.
+ *
+ * Returns an explicit verdict alongside the human summary:
+ *   ok     — every container running, none unhealthy, none still starting,
+ *            and at least one container exists
+ *   noop   — no containers exist yet (never a passing verdict: recording
+ *            "health done" from an empty stack made `make list` claim
+ *            health while the stack was down)
+ * Callers gate the state flag on `ok === true`.
  */
 export async function runHealthChecks() {
   let states
@@ -137,7 +145,7 @@ export async function runHealthChecks() {
   }
 
   if (states.length === 0)
-    return { message: "no containers exist yet", noop: true }
+    return { message: "no containers exist yet", noop: true, ok: false }
 
   const nameWidth = Math.max(...states.map(s => s.service.length), 10)
   console.log(`  ${"SERVICE".padEnd(nameWidth)}  ${"STATE".padEnd(10)}  HEALTH`)
@@ -161,7 +169,15 @@ export async function runHealthChecks() {
     noCheck ? `${noCheck} without healthcheck` : null,
   ].filter(Boolean)
 
+  // Verdict: everything up, everything past its start grace, nothing failing.
+  // A container in a restart/crash state is never running, so `running ===
+  // total` already covers it; states like "created" are spelled out too so
+  // the ok=false reason is never ambiguous.
+  const badStates = ["restarting", "exited", "dead", "created", "paused"]
+  const bad = states.filter(s => badStates.includes(String(s.state).toLowerCase()))
+  const ok = total > 0 && running === total && unhealthy === 0 && starting === 0 && bad.length === 0
+
   // The table above is the detail; the summary is the reported result, shown
   // once by whichever caller ran this (menu banner or dispatcher echo).
-  return { message: parts.join(" · ") }
+  return { message: parts.join(" · "), ok, noop: false, total, running, unhealthy, starting }
 }

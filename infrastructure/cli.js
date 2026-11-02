@@ -5,6 +5,8 @@ import { existingPaths, describeArtifacts } from "./scripts/lib/clear-utils.js"
 import { configMatchesTemplate } from "./scripts/lib/config-utils.js"
 import { isStepCurrent, getStep, resolveEnv } from "./scripts/lib/steps.js"
 import { consoleLog } from "./scripts/lib/logger.js"
+import { tryAcquireLock } from "./scripts/lib/lock.js"
+import { syncDockerFlags } from "./scripts/lib/truth.js"
 
 // Seed state from process.env.ENV once, if state doesn't already know the env
 if (process.env.ENV && !state.current.environment) {
@@ -12,6 +14,18 @@ if (process.env.ENV && !state.current.environment) {
     consoleLog("WARN", `Ignoring ENV="${process.env.ENV}" — expected "dev" or "prod"`)
   else
     state.setEnvironment(process.env.ENV)
+}
+
+// Derive the docker flags from live compose state once at startup (A3): the
+// menus already display live state, but the flags in .cli-state.json must not
+// drift from it either. Best effort — if a dispatcher run holds the lock or
+// compose is unqueryable, the menus still gate on live queries anyway.
+{
+  const syncLock = await tryAcquireLock()
+  if (syncLock) {
+    try { await syncDockerFlags() } catch { /* best effort */ }
+    syncLock.release()
+  }
 }
 
 export async function mainMenu() {

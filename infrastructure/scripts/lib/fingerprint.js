@@ -194,7 +194,17 @@ function sharedImplHash() {
     //   fingerprint.js — a change here alters the digest, so every recorded
     //                  fingerprint stops matching on the next check anyway.
     //   path.js      — only path constants; a change alters the hashed paths.
-    //   state.spec.js — tests must not invalidate production steps.
+    //   state.spec.js / lock.spec.js — tests must not invalidate production steps.
+    //   lock.js      — run mutual exclusion; reaching no step output, an edit
+    //                  must not make the pipeline look stale.
+    //   truth.js     — derives docker state flags from live compose; writes
+    //                  .cli-state.json records, never a step's files.
+    //   wait-healthy.js — post-`up` waiting/reporting; affects no step output.
+    //   probe-utils.js / probe-utils.spec.js — verification probes read the
+    //                  stack; they produce no step artifact to invalidate.
+    //   doctor-utils.js — repair orchestration; calls steps, defines none.
+    //   doctor-utils.spec.js — tests, same reason as the others.
+    //   config-history.js — snapshots/restores files; renders nothing itself.
     //   cli-handle.js, cli-util.js — presentation and prompts; they change no
     //                  step's output, and invalidating on a UI tweak would
     //                  make the pipeline re-run for nothing.

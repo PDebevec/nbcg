@@ -36,6 +36,30 @@ set -euo pipefail
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 INFRA="$ROOT/infrastructure"
 
+# Run lock — same protocol as backup.sh and lib/lock.js (see there).
+LOCKFILE="${NBCG_CLI_LOCK_FILE:-$INFRA/.cli-lock}"
+acquire_cli_lock() {
+  local owner_pid owner_cmd attempt
+  for attempt in 1 2 3; do
+    if (set -o noclobber; printf '{"pid":%s,"host":"%s","at":"%s","token":"shell-%s","command":"%s"}' \
+          "$$" "$(hostname)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$" "${0##*/}" > "$LOCKFILE") 2>/dev/null; then
+      trap 'rm -f "$LOCKFILE"' EXIT
+      return 0
+    fi
+    owner_pid=$(sed -n 's/.*"pid":\([0-9][0-9]*\).*/\1/p' "$LOCKFILE" 2>/dev/null | head -1) || owner_pid=""
+    owner_cmd=$(sed -n 's/.*"command":"\([^"]*\)".*/\1/p' "$LOCKFILE" 2>/dev/null | head -1) || owner_cmd="?"
+    if [ -n "$owner_pid" ] && [ "$owner_pid" != "$$" ] && kill -0 "$owner_pid" 2>/dev/null; then
+      echo "[ERROR] Another operation holds the run lock (pid $owner_pid: ${owner_cmd:-?})." >&2
+      echo "        Wait for it to finish and retry." >&2
+      return 1
+    fi
+    rm -f "$LOCKFILE" 2>/dev/null || true
+  done
+  echo "[ERROR] Could not acquire $LOCKFILE after 3 attempts." >&2
+  return 1
+}
+acquire_cli_lock
+
 ENV="${ENV:-}"
 if [ -z "$ENV" ] && [ -f "$ROOT/.env" ]; then
   ENV=$(sed -n 's/^ENV=//p' "$ROOT/.env" | head -1)

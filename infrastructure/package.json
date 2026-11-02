@@ -10,12 +10,15 @@
     "cli": "node cli.js",
     "list": "node scripts/run.js list",
     "check": "node scripts/run.js check",
+    "verify": "node scripts/run.js verify",
+    "doctor": "node scripts/run.js doctor",
     "setup": "node scripts/run.js setup",
     "step": "node scripts/run.js step",
     "docker": "node scripts/run.js docker",
     "app": "node scripts/run.js app",
     "clear": "node scripts/run.js clear",
-    "config": "node scripts/run.js config"
+    "config": "node scripts/run.js config",
+    "test": "node scripts/lib/state.spec.js && node scripts/lib/lock.spec.js && node scripts/lib/probe-utils.spec.js && node scripts/lib/doctor-utils.spec.js && node scripts/lib/config-history.spec.js"
   },
   "dependencies": {
     "inquirer": "^14.0.2",

@@ -237,3 +237,61 @@ export function getConfigValue(pathKey, defaultValue = undefined) {
 
   return current;
 }
+// ---------------------------------------------------------------------------
+// Secrets audit (config audit / preflight for config apply)
+// ---------------------------------------------------------------------------
+
+/** Keys whose names look like secrets, from a parsed env object. Pure. */
+export function collectSecretKeys(parsedEnv = {}) {
+  return Object.keys(parsedEnv).filter((key) => /(PASSWORD|SECRET|TOKEN|APIKEY|_KEY$)/i.test(key));
+}
+
+/**
+ * Audits where every secret-looking value comes from: the shared/env files
+ * (static committed values, fine in dev, a finding in prod) versus
+ * master.config.json's secrets_to_generate (minted once into
+ * .secrets.prod.json and shared by CLI and Ansible).
+ *
+ * Returns { env, generated: [...], findings: [{ key, source, generated }] }.
+ * Only KEY NAMES are reported — values never leave the env files.
+ */
+export function auditSecrets(env = 'dev') {
+  return auditSecretSources(env);
+}
+
+/** Same as auditSecrets but with injectable sources for tests. */
+export function auditSecretSources(env, sources) {
+  const envDir = path.join(__infra, 'env');
+  const files = sources ?? [
+    { label: 'env/.env.shared', file: path.join(envDir, '.env.shared') },
+    { label: `env/.env.${env}`, file: path.join(envDir, `.env.${env}`) },
+  ];
+
+  let generated = [];
+  try { generated = loadMasterConfig().secrets_to_generate || []; } catch { generated = []; }
+  const generatedSet = new Set(generated);
+
+  const byKey = new Map();
+  for (const { label, file } of files) {
+    for (const key of parseEnvFileLenient(file)) {
+      byKey.set(key, { key, source: label, generated: generatedSet.has(key) });
+    }
+  }
+
+  // Also report generated-in-prod keys that are missing from the static
+  // sources entirely? No — those are exactly the ones vault/secrets own;
+  // the audit's job is flagging STATIC secrets, not listing the generated set.
+  const findings = [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
+  return { env, generated: [...generatedSet].sort(), findings };
+}
+
+/** Tiny lenient KEY extractor (names only — values never leave the file). */
+function parseEnvFileLenient(file) {
+  if (!fs.existsSync(file)) return [];
+  const names = new Set();
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=/);
+    if (m) names.add(m[1]);
+  }
+  return [...names].filter((key) => /(PASSWORD|SECRET|TOKEN|APIKEY|_KEY$)/i.test(key));
+}

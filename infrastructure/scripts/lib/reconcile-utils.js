@@ -38,13 +38,16 @@ import { UsageError } from './runner.js';
  * @param {"dev"|"prod"} env
  */
 export async function startStack(services, env) {
-  if (env !== "prod") return upContainers(services);
+  if (env !== "prod") {
+    await upContainers(services);
+    return { securityApplied: false };
+  }
 
   try {
     await upContainers(services);
-    await reconcileProdCredentials();
+    const result = await reconcileProdCredentials();
     await restartUnhealthy();
-    return;
+    return result;
   } catch (err) {
     // Nothing here is optional: reconcile whatever came up regardless of the
     // failure, restart whatever that leaves unhealthy, then retry once.
@@ -54,8 +57,9 @@ export async function startStack(services, env) {
   await reconcileProdCredentials();
   await restartUnhealthy();
   await upContainers(services);
-  await reconcileProdCredentials(); // e.g. opensearch-node only just became healthy
+  const result = await reconcileProdCredentials(); // e.g. opensearch-node only just became healthy
   await restartUnhealthy();
+  return result;
 }
 
 /**
@@ -106,6 +110,7 @@ export async function reconcileProdCredentials() {
   const rootEnv = fs.existsSync(ROOT_ENV_PATH) ? parseEnvFile(ROOT_ENV_PATH) : {};
   const states = await getContainerStates().catch(() => []);
   const isUp = (service) => states.some(s => s.service === service && s.running);
+  let securityApplied = false;
 
   const postgresServices = [
     { service: 'db', userKey: 'POSTGRES_USER', dbKey: 'POSTGRES_DB', passKey: 'POSTGRES_PASSWORD' },
@@ -123,11 +128,19 @@ export async function reconcileProdCredentials() {
     consoleLog('INFO', `${service}: password reconciled with the current .env`);
   }
 
-  if (isUp('opensearch-node')) await configureSecurity();
+  if (isUp('opensearch-node')) {
+    await configureSecurity();
+    securityApplied = true;
+  }
   if (isUp('keycloak')) {
     await reconcileKeycloakClient(rootEnv);
     await reconcileKeycloakWorkerSecret(rootEnv);
   }
+
+  // securityApplied reports whether OpenSearch security was genuinely
+  // applied in THIS call — the caller (startStack → run.js) uses it to set
+  // the osSecured flag honestly, instead of on every prod `up`.
+  return { securityApplied };
 }
 
 const KEYCLOAK_REALM = 'nbcg';

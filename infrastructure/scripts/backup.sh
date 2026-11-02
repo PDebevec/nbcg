@@ -48,6 +48,36 @@ set -euo pipefail
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 INFRA="$ROOT/infrastructure"
 
+# ---------------------------------------------------------------------------
+# Run lock — same protocol as infrastructure/scripts/lib/lock.js: an
+# exclusively-created JSON file holding {pid,host,at,command}. A live pid
+# means held; a dead one means stale and safe to steal. Serialises this
+# script against the CLI dispatcher (and vice versa) so they never mutate the
+# stack or .cli-state.json concurrently. Released on EXIT, including failures.
+# ---------------------------------------------------------------------------
+LOCKFILE="${NBCG_CLI_LOCK_FILE:-$INFRA/.cli-lock}"
+acquire_cli_lock() {
+  local owner_pid owner_cmd attempt
+  for attempt in 1 2 3; do
+    if (set -o noclobber; printf '{"pid":%s,"host":"%s","at":"%s","token":"shell-%s","command":"%s"}' \
+          "$$" "$(hostname)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$" "${0##*/}" > "$LOCKFILE") 2>/dev/null; then
+      trap 'rm -f "$LOCKFILE"' EXIT
+      return 0
+    fi
+    owner_pid=$(sed -n 's/.*"pid":\([0-9][0-9]*\).*/\1/p' "$LOCKFILE" 2>/dev/null | head -1) || owner_pid=""
+    owner_cmd=$(sed -n 's/.*"command":"\([^"]*\)".*/\1/p' "$LOCKFILE" 2>/dev/null | head -1) || owner_cmd="?"
+    if [ -n "$owner_pid" ] && [ "$owner_pid" != "$$" ] && kill -0 "$owner_pid" 2>/dev/null; then
+      echo "[ERROR] Another operation holds the run lock (pid $owner_pid: ${owner_cmd:-?})." >&2
+      echo "        Wait for it to finish and retry." >&2
+      return 1
+    fi
+    rm -f "$LOCKFILE" 2>/dev/null || true
+  done
+  echo "[ERROR] Could not acquire $LOCKFILE after 3 attempts." >&2
+  return 1
+}
+acquire_cli_lock
+
 ENV="${ENV:-}"
 if [ -z "$ENV" ] && [ -f "$ROOT/.env" ]; then
   ENV=$(sed -n 's/^ENV=//p' "$ROOT/.env" | head -1)
@@ -139,7 +169,11 @@ resolve_restic_password() {
 }
 resolve_restic_password
 if [ -z "${RESTIC_PASSWORD:-}" ]; then
-  echo "[ERROR] RESTIC_PASSWORD is not set. Set it in the environment or in .env.${ENV}." >&2
+  if [ "$ENV" = "prod" ]; then
+    echo "[ERROR] RESTIC_PASSWORD is not set. Set it in the environment or in $INFRA/env/.env.prod." >&2
+  else
+    echo "[ERROR] RESTIC_PASSWORD is not set. Set it in the environment or in $ROOT/.env." >&2
+  fi
   exit 1
 fi
 export RESTIC_PASSWORD
@@ -297,12 +331,12 @@ docker compose "${COMPOSE_FLAGS[@]}" up -d >/dev/null 2>&1 || {
 
 log "[INFO] Waiting for all services to become healthy (timeout 600s) ..."
 WAITED=0
+down="ok"
 while [ $WAITED -lt 600 ]; do
-  down=0
-  unhealthy=0
-  down=$(docker compose "${COMPOSE_FLAGS[@]}" ps --format json 2>/dev/null \
+  down=$(docker compose "${COMPOSE_FLAGS[@]}" ps -a --format json 2>/dev/null \
     | python3 -c '
-import json,sys
+import json, sys
+bad = []
 for line in sys.stdin:
     line = line.strip()
     if not line:
@@ -313,19 +347,21 @@ for line in sys.stdin:
         continue
     state = (s.get("State") or "").lower()
     health = (s.get("Health") or "").lower()
-    if state == "unhealthy" or health == "unhealthy":
-        print("unhealthy", s.get("Name"))
-        sys.exit(0)
-print("ok")
+    name = s.get("Name") or s.get("Service") or "?"
+    if state in ("restarting", "exited", "dead", "created", "paused") or health == "unhealthy":
+        bad.append((name, state, health or "-"))
+if bad:
+    for name, state, health in bad:
+        print("bad", name, state, health)
+else:
+    print("ok")
 ')
   if [ "$down" = "ok" ]; then
     log "[INFO] All services are running."
     break
   fi
-  if [ "$down" != "ok" ]; then
-    echo "$down" | sed 's/^unhealthy /\n  unhealthy: /' | sed 's/ unhealthy: /,/g' | tr ',' '\n' | sed 's/^/  - /'
-    log "[INFO] Waiting for services to become healthy ..."
-  fi
+  echo "$down" | awk '/^bad /{printf "  - %s (state=%s, health=%s)\n", $2, $3, $4}'
+  log "[INFO] Waiting for services to become healthy ..."
   sleep 5
   WAITED=$((WAITED + 5))
 done

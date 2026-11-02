@@ -70,8 +70,10 @@ make step STEP=fbEnd FLAGS=--force # ignore unmet dependencies
 make step STEP=env ENV=prod FLAGS=--rotate   # force new prod secrets
 make up SVC="db redis"             # shortcut for a docker action
 make docker A=logs SVC=keycloak    # any docker action, optionally per service
+make docker A=up FLAGS=--dry-run   # print what would happen, change nothing
+make up SVC=db FLAGS=--no-wait     # return as soon as compose exits
 make migrate                       # apply database migrations
-make health                        # per-service state + health
+make health                        # per-service state + health (exit 1 if failing)
 make app A=start T=backend         # pm2 actions for frontend/backend
 make clear T=list                  # what generated artifacts exist
 make clear T=templates             # remove one category
@@ -79,6 +81,32 @@ make clear T=state FLAGS=--yes     # destructive targets need --yes
 make config A=diff                 # master.config.json vs the template
 make config A=merge                # add settings the template gained
 ```
+
+**Flags** (accepted by the command they belong to; `FLAGS=` passes them through
+make):
+
+- `--dry-run` — print the exact plan (steps and their staleness reasons, the
+  compose command, which artifacts a clear target would remove, which keys a
+  config merge would add) and exit without changing anything. Works on
+  destructive targets without `--yes`, so it is safe to inspect first.
+- `--wait` — if another operation holds the run lock, queue behind it for up
+  to 60s instead of failing immediately.
+- `--no-wait` — `docker up` only: return as soon as compose exits instead of
+  waiting for the target services to become healthy (see below).
+- `--force`, `--yes`, `--rotate` — as before.
+
+**Verified `up`.** `docker compose up -d` exiting is not the same as the
+stack working, so `make up` (and `docker A=up`) now waits until the target
+services are *running and healthy* — the same criteria `backup.sh` uses
+(fails on `restarting`/`exited`/`dead`/`created`/`paused`/`unhealthy`) — and
+reports either `N service(s) healthy after Xs` or the services still failing,
+exiting non-zero in the case of a timeout. Scope it with `SVC=`, skip it with
+`FLAGS=--no-wait`.
+
+**Gating.** `up`/`create`/`build` from the dispatcher refuse to run when
+`dockerFilesCopied` is stale (hand-edited or outdated root compose files),
+naming the reason and the repair command — the same gate the interactive menu
+has always applied. `FLAGS=--force` proceeds against the stale copies anyway.
 
 The Makefile targets are thin calls into the npm scripts in
 [`package.json`](../../infrastructure/package.json), which are themselves aliases for
@@ -409,7 +437,11 @@ menu exits the CLI cleanly.
 
 - `environment` — `"dev"` or `"prod"`, the last one selected
 - `envs.dev` / `envs.prod` — **each environment tracks its own** `steps`,
-  `docker` (`initialized`, `containarized`) and `apps` (per-app one-off setup)
+  `docker` (`initialized`, `containarized`) and `apps` (per-app one-off setup).
+  `containarized` is not trusted from the file: every entry point recomputes
+  it from live `docker compose ps` (`lib/truth.js`), so out-of-band
+  `docker compose up/down/stop` can never leave it lying. It means "this
+  project's containers exist" (running or stopped).
 - `history` — the last 50 step outcomes, each tagged with its environment
 
 Every flag is recorded with a **fingerprint** of what it was produced from, and
@@ -474,6 +506,29 @@ Two deliberate exceptions:
   trees would mean re-hashing thousands of files on every menu repaint. **After
   changing application code, re-run `make step STEP=appImages` explicitly**
   (or `make app A=build`) rather than relying on staleness.
+
+### The run lock
+
+Concurrent mutating runs used to race on `.cli-state.json` (each process
+loads it once and writes the whole file back — last writer wins) and on the
+stack itself. Every mutating dispatcher command and both shell scripts now
+take a single advisory lock (`infrastructure/.cli-lock`, gitignored):
+
+- **Protocol:** a file created exclusively, containing
+  `{pid, host, at, command, token}`. A same-host owner whose pid is alive
+  means held; a dead pid (or malformed content) means stale and safe to
+  steal; a foreign-host lock expires after 60 minutes. Release only removes
+  the record we created, never someone else's replacement.
+- **Who takes it:** `run.js` for `setup`, `step`, `clear <target>`,
+  `config merge`, and every `docker`/`app` action except the read-only ones
+  (`ps`, `logs`, `services`, `app logs/list`); `backup.sh` and `restore.sh`
+  for their whole run, so a cron backup can never interleave with a manual
+  `make up`. Read-only commands take it briefly around the truth sync only.
+- **Contention:** fail fast naming the holder, or queue with `--wait`
+  (60s max). Interactive menus (`make cli`) do not hold a long-lived lock —
+  a menu open across a backup must not block cron.
+- A crash that skips the normal release leaves the lock to the staleness
+  rules above; it never wedges the machine permanently.
 
 ### Upgrading an existing state file
 
@@ -626,7 +681,12 @@ point at the step to run when `backend/.env` or Prisma itself is missing.
 
 **Health checks** read `docker compose ps` and print each service's state and
 health, using the healthchecks already declared in the compose files, then
-summarise as `N/N running · N healthy · …`.
+summarise as `N/N running · N healthy · …` and return an explicit verdict:
+`ok` only when every container is running, past its start grace and not
+unhealthy (`no containers` is never a passing verdict). From the dispatcher
+(`make health`) a failing verdict exits non-zero, so it is usable from
+scripts and cron; the `health` state flag is only set when the verdict
+passed. `docker up` runs the same waiting criteria before reporting success.
 
 ## Known gaps
 
@@ -656,6 +716,8 @@ summarise as `N/N running · N healthy · …`.
   briefly, tarballs every runtime volume, snapshots the runtime configuration
   and secrets, and writes a versioned, verified RESTIC repository. Snapshots
   live in `backups/<env>/` (gitignored); run with `ENV=prod make cron-backup`.
+  `RESTIC_PASSWORD` must be set before a run (root `.env` for dev,
+  `infrastructure/env/.env.prod` for prod).
   `RESTIC_REPO` (default: `backups/<env>/.repo`) can point to an off-box
   destination (S3, SSH, etc.). A restore wipes and refills all volumes and
   config from a snapshot and brings the stack back up.

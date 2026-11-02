@@ -399,10 +399,10 @@ test('every lib file is either hashed or explicitly excluded', () => {
     }
   `)
   assert.deepEqual(r.absent, [], `hash list names files that do not exist: ${r.absent.join(', ')}`)
-  // These four are excluded on purpose; fingerprint.js documents why for each.
+  // These are excluded on purpose; fingerprint.js documents why for each.
   assert.deepEqual(
     r.unaccounted,
-    ['fingerprint.js', 'path.js', 'state.js', 'state.spec.js'],
+    ['config-history.js', 'config-history.spec.js', 'doctor-utils.js', 'doctor-utils.spec.js', 'fingerprint.js', 'lock.js', 'lock.spec.js', 'path.js', 'probe-utils.js', 'probe-utils.spec.js', 'state.js', 'state.spec.js', 'truth.js', 'wait-healthy.js'],
     `neither hashed nor documented as excluded: ${r.unaccounted.join(', ')}`
   )
 })

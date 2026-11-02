@@ -74,7 +74,7 @@ services:
 
 ##### REDIS #####
   redis:
-    image: redis:8.6.1
+    image: valkey/valkey:9.2
     restart: unless-stopped
     logging: *default-logging
     volumes:
@@ -162,6 +162,44 @@ services:
     volumes:
       - ./infrastructure/docker/pgsync/schema.json:/app/schema.json
     command: -c schema.json -d -b
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - |
+          python3 -c "
+          import glob, json, os
+          running = any(open(os.path.join(p, 'comm'), 'rb').read().strip() == b'pgsync' for p in glob.glob('/proc/[0-9]*'))
+          def checkpoint_ok(r, key):
+              try:
+                  v = r.get(key)
+              except Exception:
+                  v = None
+              if v is not None:
+                  try:
+                      return 'txid_current' in json.loads(v)
+                  except Exception:
+                      return False
+              try:
+                  h = r.hgetall(key) or {}
+              except Exception:
+                  return False
+              return (b'checkpoint' in h) or ('checkpoint' in h)
+          try:
+              from redis import Redis
+              r = Redis(host='redis', port=6379, socket_connect_timeout=5, socket_timeout=5)
+              redis_ok = bool(r.ping())
+              meta_ok = all(checkpoint_ok(r, key) for key in ('queue:nbcg_records:meta', 'queue:nbcg_drafts:meta'))
+          except Exception:
+              redis_ok = False
+              meta_ok = False
+          import sys
+          ok = running and redis_ok and meta_ok
+          print('healthy' if ok else 'unhealthy')
+          sys.exit(0 if ok else 1)"
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
 
 ##### OPENSEARCH #####
   opensearch-node:
