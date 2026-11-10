@@ -199,7 +199,8 @@ export function recordXmlToJson(xml: string, cobissId?: string): DomainRecord {
     isbn: all(raw, '010', 'a'),
 
     // 011 – ISSN (field is repeatable; each carries one ISSN in /a)
-    issn: all(raw, '011', 'a'),
+    // COBISS-specific: the verified ISSN is in subfield /e ("Veljavni ISSN*")
+    issn: [...all(raw, '011', 'a'), ...all(raw, '011', 'e')],
 
     // 013 – ISMN (field is repeatable; each carries one ISMN in /a)
     ismn: all(raw, '013', 'a'),
